@@ -7,11 +7,17 @@
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
     "servers": {
-      // GitHub's official remote MCP server. Uses OAuth: run /mcps and sign
-      // in on first use.
+      // GitHub's official remote MCP server, authenticated with a personal
+      // access token. Set GITHUB_MCP_TOKEN in the environment before
+      // connecting (classic PAT with repo/workflow scopes or fine-grained
+      // equivalent).
       "github": {
         "type": "remote",
-        "url": "https://api.githubcopilot.com/mcp/"
+        "url": "https://api.githubcopilot.com/mcp/",
+        "oauth": false,
+        "headers": {
+          "Authorization": "Bearer {env:GITHUB_MCP_TOKEN}"
+        }
       },
       // Official Playwright MCP server for browser-driven checks against the
       // deployed app. Append "--headless" to the command when no display is
@@ -20,15 +26,11 @@
         "type": "local",
         "command": ["npx", "-y", "@playwright/mcp@latest"]
       },
-      // Roslyn-powered C# analysis and refactoring. Stub: install a server
-      // first, for example `dotnet tool install -g RoslynMcp.Server` (MIT,
-      // provides the `roslyn-mcp` command), or use the Visual Studio /
-      // VS Code Roslyn MCP extensions.
+      // Roslyn-powered C# analysis and refactoring, using the locally
+      // installed madq-roslynmcp tool (dotnet tool install -g madq-roslynmcp).
       "roslyn": {
         "type": "local",
-        "command": ["roslyn-mcp"],
-        "cwd": "backend",
-        "disabled": true
+        "command": ["/home/tadbit/.dotnet/tools/madq-roslynmcp"]
       },
       // Docker MCP Toolkit / Gateway. Stub until the `docker mcp` CLI is
       // available on the workstation (Docker Desktop feature).
