@@ -9,6 +9,7 @@ Tooling:
 - Backend: xUnit v3 with FluentAssertions
 - PostgreSQL integration tests: Testcontainers
 - Frontend: Vitest with Testing Library
+- Frontend lint/format/types: ESLint, Prettier, tsc
 - End-to-end: Playwright against a running stack
 
 Note: FluentAssertions v8+ is licensed by Xceed (free for non-commercial

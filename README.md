@@ -71,6 +71,7 @@ cd frontend
 npm install
 npm run dev         # Vite dev server on :5173, proxies /api to :8000
 npm run lint
+npm run format:check
 npm run typecheck
 npm run test        # Vitest unit tests
 npm run test:e2e    # Playwright smoke tests (needs a running stack)

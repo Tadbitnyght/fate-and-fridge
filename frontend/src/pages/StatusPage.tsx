@@ -48,16 +48,13 @@ export function StatusPage() {
           <dd role="status">
             {database.isPending && <span>Checking…</span>}
             {database.isError && <StatusBadge ok={false} label="Unreachable" />}
-            {database.isSuccess && (
-              <StatusBadge ok={databaseOk} label={database.data.database} />
-            )}
+            {database.isSuccess && <StatusBadge ok={databaseOk} label={database.data.database} />}
           </dd>
         </div>
       </dl>
 
       <p className="status-note">
-        Milestone 0 application shell. Planning, recipes, and groceries arrive in later
-        milestones.
+        Milestone 0 application shell. Planning, recipes, and groceries arrive in later milestones.
       </p>
     </section>
   )
