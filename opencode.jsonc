@@ -20,13 +20,14 @@
         }
       },
       // Official Playwright MCP server for browser-driven checks against the
-      // deployed app. Launched through a wrapper in ~/.local/bin so it works
-      // even when the background service was started without nvm's node bin
-      // directory on PATH (e.g. from cron). Append "--headless" to the
-      // wrapper's npx arguments when no display is available.
+      // deployed app. Launched through a wrapper in ~/.local/bin that loads
+      // nvm and points Chromium at the private NSS/ALSA libraries, so it
+      // works even when the background service was started without nvm's
+      // node bin directory on PATH (e.g. from cron). --headless is required
+      // because the service may start with no display.
       "playwright": {
         "type": "local",
-        "command": ["/home/tadbit/.local/bin/playwright-mcp"]
+        "command": ["/home/tadbit/.local/bin/playwright-mcp", "--headless", "--browser", "chromium"]
       },
       // Roslyn-powered C# analysis and refactoring, using the locally
       // installed madq-roslynmcp tool (dotnet tool install -g madq-roslynmcp).
@@ -35,9 +36,15 @@
         "command": ["/home/tadbit/.dotnet/tools/madq-roslynmcp"]
       },
       // Docker MCP Toolkit gateway (Docker CLI with the docker-mcp plugin).
+      // DOCKER_CONTEXT points it at the TrueNAS daemon over SSH (see
+      // docs/DEPLOYMENT.md section 9). Use "default" for the local WSL
+      // daemon instead.
       "docker": {
         "type": "local",
-        "command": ["docker", "mcp", "gateway", "run"]
+        "command": ["docker", "mcp", "gateway", "run"],
+        "environment": {
+          "DOCKER_CONTEXT": "truenas"
+        }
       }
     }
   }

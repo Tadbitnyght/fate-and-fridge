@@ -240,7 +240,42 @@ The database is untouched by rebuilds; it only changes through migrations.
   is owned by non-container users. Non-root execution needs a documented UID
   mapping strategy.
 
-## 9. Generic Docker host
+## 9. Workstation Docker access (TrueNAS Docker context)
+
+The workstation can drive the NAS Docker daemon over SSH. This is what the
+Docker MCP gateway uses (`DOCKER_CONTEXT=truenas` in `opencode.jsonc`).
+
+The socket itself is root-only, so `CPlanner` runs it through its
+`NOPASSWD: /usr/bin/docker` rule via a small wrapper on the NAS:
+
+```sh
+# /mnt/Data/calendarplanner/home/CPlanner/bin/docker
+#!/bin/sh
+exec sudo -n /usr/bin/docker "$@"
+```
+
+with `export PATH="$HOME/bin:$PATH"` in `~/.zshenv` so the wrapper is used by
+non-interactive SSH commands (`docker system dial-stdio`).
+
+On the workstation the context is:
+
+```bash
+docker context create truenas \
+  --description "TrueNAS SCALE (PlexNAS) via SSH" \
+  --docker "host=ssh://fatefridge"
+
+docker --context truenas ps        # NAS containers
+docker context use truenas         # make it the default (optional)
+docker context use default         # back to the local WSL daemon
+```
+
+Notes:
+- Containers started through this context (including MCP gateway containers)
+  run on the NAS, not locally.
+- If commands fail with `permission denied ... docker API`, re-check the
+  wrapper and the sudo rule (`sudo -n -l` on the NAS).
+
+## 10. Generic Docker host
 
 On any other Docker host, the standard flow applies:
 
