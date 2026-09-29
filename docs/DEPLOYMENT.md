@@ -14,6 +14,7 @@ Docker host path described at the end.
 | WSL mount | `/mnt/y` |
 | SSH host alias | `fatefridge` → `CPlanner@192.168.0.2` |
 | SSH key | `~/.ssh/fatefridge_deploy` |
+| GitHub remote | `https://github.com/Tadbitnyght/fate-and-fridge` (private) |
 | App URL | `http://192.168.0.2:8080/` (port configurable via `HOST_PORT`) |
 
 The repository **is** the dataset: there is no separate copy on the NAS and no
@@ -75,6 +76,22 @@ scripts/deploy.sh check
 Expected output: the NAS hostname, the login name `CPlanner`, and
 `Docker Compose version v2.x`. If SSH fails with `Permission denied
 (publickey)`, the key from step 2.2 is missing.
+
+### 2.5 Git notes on this share (SMB/9p quirks)
+
+The SMB mount does not support `chmod`, which affects a few git commands:
+
+- The repository was initialized on a local filesystem and its `.git`
+  directory copied onto the share, because `git init` performs a `chmod`
+  probe that the mount rejects.
+- This workstation already has `safe.directory=/mnt/y` (files report as
+  owned by `root` over 9p) and the repo uses `core.filemode=false`.
+- `git add`, `commit`, `push`, `fetch`, `log`, `status` work normally.
+- Commands that rewrite `.git/config` (`git remote add`, `git config`,
+  `git push -u`) fail with `chmod on .git/config.lock failed`. Edit
+  `.git/config` directly, or run those commands on the NAS side.
+- `.gitattributes` normalizes all text to LF; `PLAN.md` still has CRLF in
+  the working tree and will convert to LF the next time git touches it.
 
 ## 3. Configuration
 
