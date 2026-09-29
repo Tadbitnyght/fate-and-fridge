@@ -201,8 +201,20 @@ midclt call pool.snapshottask.create \
     "enabled": true}'
 ```
 
-The `CPlanner` deploy account only has `NOPASSWD: /usr/bin/docker`; creating
-snapshot tasks requires the `SNAPSHOT_TASK_WRITE` role (or an admin account).
+The `CPlanner` deploy account manages snapshot tasks through `sudo midclt`
+(sudo runs as root, which satisfies the API's `SNAPSHOT_TASK_WRITE`
+requirement). A `SNAPSHOT_TASK_WRITE` role grant is the alternative for
+non-sudo access.
+
+To trigger the task immediately (useful for verification), call it without
+`-j` — `midclt call -j pool.snapshottask.run <id>` keeps the SSH session open
+after the job completes:
+
+```bash
+midclt call pool.snapshottask.run <task-id>
+# then confirm the new snapshot:
+zfs list -t snapshot -o name,creation | grep calendarplanner
+```
 
 Application-level encrypted backups are a later milestone
 (see `docs/MILESTONES.md`, Milestone 13).
