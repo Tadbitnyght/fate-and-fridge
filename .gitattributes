@@ -1,0 +1,30 @@
+# Normalize all text files to LF in the repository and working tree.
+# This project is edited from both Windows and WSL over an SMB share,
+# so a single canonical line ending avoids CRLF/LF churn.
+* text=auto eol=lf
+
+# Windows-only scripts keep CRLF so they behave in native shells.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary assets should never be normalized.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.avif binary
+*.ico binary
+*.pdf binary
+*.sqlite binary
+*.sqlite3 binary
+*.gz binary
+*.zip binary
+*.tar binary
+*.woff binary
+*.woff2 binary
+
+# Generated files: collapse in diffs / reviews.
+frontend/package-lock.json linguist-generated=true
+backend/migrations/versions/** linguist-generated=true

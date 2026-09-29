@@ -1,0 +1,156 @@
+:root {
+  color-scheme: light dark;
+
+  --bg: #f6f5f2;
+  --surface: #ffffff;
+  --text: #1f2421;
+  --muted: #5c6660;
+  --border: #d9ddd8;
+  --ok-bg: #e3f2e6;
+  --ok-text: #1c5a2c;
+  --bad-bg: #fbe7e4;
+  --bad-text: #8a2a1d;
+
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    sans-serif;
+  line-height: 1.5;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14181a;
+    --surface: #1e2427;
+    --text: #edf0ee;
+    --muted: #a3ada8;
+    --border: #333c40;
+    --ok-bg: #17391f;
+    --ok-text: #9fdcae;
+    --bad-bg: #40201b;
+    --bad-text: #f0a79b;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem;
+  gap: 1.5rem;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.9rem;
+  letter-spacing: -0.01em;
+}
+
+.app-subtitle {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+}
+
+.app-main {
+  flex: 1;
+}
+
+.status-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+}
+
+.status-panel h2 {
+  margin: 0 0 1rem;
+  font-size: 1.15rem;
+}
+
+.status-grid {
+  margin: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.status-grid .status-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 1rem;
+}
+
+.status-grid dt {
+  min-width: 8rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.status-grid dd {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.status-badge--ok {
+  background: var(--ok-bg);
+  color: var(--ok-text);
+}
+
+.status-badge--bad {
+  background: var(--bad-bg);
+  color: var(--bad-text);
+}
+
+.status-detail {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.status-note {
+  margin: 1.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.app-footer p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+@media (max-width: 30rem) {
+  .status-grid dt {
+    min-width: 100%;
+  }
+}

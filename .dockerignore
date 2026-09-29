@@ -1,0 +1,37 @@
+# Fate & Fridge — Docker build context exclusions.
+# Keep the image context small and never leak secrets or runtime state.
+
+# Version control / editors
+.git
+.github
+.vscode
+.idea
+
+# Secrets and environment files
+.env
+.env.*
+
+# Runtime data and NAS service-account home (see docs/DEPLOYMENT.md)
+data
+backups
+home
+
+# Python
+**/__pycache__
+**/*.py[cod]
+**/*.egg-info
+.venv
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# Node
+**/node_modules
+frontend/dist
+**/*.tsbuildinfo
+
+# Not needed inside the image
+docs
+scripts
+backend/tests
+*.md
