@@ -60,12 +60,18 @@ deployment. Password authentication is disabled for it; pubkey only.
 
 ### 2.3 Grant Docker access
 
-`CPlanner` is not an administrator by default and cannot reach the Docker
-socket. In the same user edit screen, enable administrative/sudo privileges for
-`CPlanner` (TrueNAS UI wording varies by version; enable sudo / admin role).
+`CPlanner` is not an administrator and cannot reach the Docker socket by
+default. It holds passwordless sudo for the Docker binary only:
 
-`scripts/deploy.sh` invokes `sudo docker compose`. It works with passwordless
-sudo or with an interactive password prompt.
+```text
+(ALL) NOPASSWD: /usr/bin/docker
+```
+
+`scripts/deploy.sh` relies on exactly that (`sudo docker compose ...`) and
+needs no further privileges. Confirm the rule on the NAS with `sudo -n -l`.
+
+Additional TrueNAS roles (for example `SNAPSHOT_TASK_WRITE`, needed to create
+periodic snapshot tasks) are separate and optional — see section 5.
 
 ### 2.4 Verify
 
@@ -171,8 +177,34 @@ All of it is one ZFS dataset (`Data/calendarplanner`, 20.9 TB free).
 `docker compose exec postgres psql ...` on the NAS.
 
 **Snapshots:** configure a periodic snapshot task for the dataset to get
-point-in-time protection (TrueNAS UI → Data Protection → Periodic Snapshot
-Tasks). Application-level encrypted backups are a later milestone
+point-in-time protection. Recommended values for this dataset:
+
+| Setting | Value |
+| --- | --- |
+| Dataset | `Data/calendarplanner` |
+| Recursive | off |
+| Lifetime | 14 days |
+| Naming schema | `auto-%Y-%m-%d_%H-%M` |
+| Schedule | daily at 03:00 |
+| Enabled | yes |
+
+TrueNAS UI: **Data Protection → Periodic Snapshot Tasks → Add**.
+
+Equivalent one-liner (run as an admin, from the NAS shell or with sudo):
+
+```bash
+midclt call pool.snapshottask.create \
+  '{"dataset": "Data/calendarplanner", "recursive": false,
+    "lifetime_value": 14, "lifetime_unit": "DAY",
+    "naming_schema": "auto-%Y-%m-%d_%H-%M",
+    "schedule": {"minute": "00", "hour": "03", "dom": "*", "month": "*", "dow": "*"},
+    "enabled": true}'
+```
+
+The `CPlanner` deploy account only has `NOPASSWD: /usr/bin/docker`; creating
+snapshot tasks requires the `SNAPSHOT_TASK_WRITE` role (or an admin account).
+
+Application-level encrypted backups are a later milestone
 (see `docs/MILESTONES.md`, Milestone 13).
 
 ## 6. Updating

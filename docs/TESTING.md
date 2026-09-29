@@ -11,6 +11,10 @@ Tooling:
 - Frontend: Vitest with Testing Library
 - End-to-end: Playwright against a running stack
 
+Note: FluentAssertions v8+ is licensed by Xceed (free for non-commercial
+use). If this project ever needs a permissive license, AwesomeAssertions is
+a drop-in MIT-licensed fork of the v7 API.
+
 The most dangerous areas are:
 - randomization
 - dates/timezones
