@@ -15,7 +15,7 @@ Docker host path described at the end.
 | SSH host alias | `fatefridge` → `CPlanner@192.168.0.2` |
 | SSH key | `~/.ssh/fatefridge_deploy` |
 | GitHub remote | `https://github.com/Tadbitnyght/fate-and-fridge` (private) |
-| App URL | `http://192.168.0.2:8080/` (port configurable via `HOST_PORT`) |
+| App URL | `http://192.168.0.2:50080/` (port configurable via `HOST_PORT`) |
 
 The repository **is** the dataset: there is no separate copy on the NAS and no
 file sync step. Deploying means running `docker compose` over SSH against this
@@ -117,7 +117,7 @@ Set at minimum:
   URL-safe (letters, digits, `-`, `_`) so it embeds cleanly in the
   PostgreSQL connection string compose builds.
 - `HOST_DATA_DIR=/mnt/Data/calendarplanner/data` — absolute path, persistent.
-- `HOST_PORT` — change if another service occupies 8080.
+- `HOST_PORT` — change if another service occupies 50080.
 - `TZ` — household timezone (IANA name), used for calendar-day semantics.
 
 ## 4. Deploying and operating
@@ -145,15 +145,15 @@ Migrations run automatically at container start
 (`Database__MigrateOnStartup=true` in `compose.yaml`, with retries while
 PostgreSQL warms up). Health endpoints:
 
-- App: `http://192.168.0.2:8080/api/v1/health`
-- Database: `http://192.168.0.2:8080/api/v1/health/db`
+- App: `http://192.168.0.2:50080/api/v1/health`
+- Database: `http://192.168.0.2:50080/api/v1/health/db`
 
 End-to-end smoke tests can run against the live deployment:
 
 ```bash
 cd frontend
 npx playwright install chromium            # first time only
-E2E_BASE_URL=http://192.168.0.2:8080 npm run test:e2e
+E2E_BASE_URL=http://192.168.0.2:50080 npm run test:e2e
 ```
 
 ## 5. Data layout and persistence
@@ -233,7 +233,7 @@ The database is untouched by rebuilds; it only changes through migrations.
 | `permission denied ... docker API` over SSH | `CPlanner` lacks sudo/admin rights (step 2.3) |
 | `Permission denied (publickey)` | Key from step 2.2 not installed, or wrong user in `~/.ssh/config` |
 | `POSTGRES_PASSWORD is required` from compose | `.env` missing or the password line is empty |
-| Port 8080 already in use | Change `HOST_PORT` in `.env`, then `deploy.sh up` |
+| Port 50080 already in use | Change `HOST_PORT` in `.env`, then `deploy.sh up` |
 | `password authentication failed for user` | `POSTGRES_PASSWORD` changed after the database volume was created; restore the old password or rotate it inside PostgreSQL |
 | Migrations never finish | `deploy.sh logs`; check the `ConnectionStrings__Default` host/credentials and password URL-safety |
 | App unhealthy in `deploy.sh ps` | `deploy.sh logs`; `/api/v1/health/db` shows database reachability |

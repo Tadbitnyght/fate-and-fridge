@@ -150,7 +150,7 @@ Application port is configurable through Docker configuration.
 Example:
 
 ```text
-HOST_PORT=8080
+HOST_PORT=50080
 ```
 
 Persistent mounts should conceptually include:

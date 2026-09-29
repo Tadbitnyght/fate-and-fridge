@@ -92,7 +92,7 @@ jobs:
       - name: Wait for a healthy application
         run: |
           for i in $(seq 1 90); do
-            if curl -fsS http://localhost:8080/api/v1/health >/dev/null; then
+            if curl -fsS http://localhost:50080/api/v1/health >/dev/null; then
               echo "Application is healthy."
               break
             fi
@@ -103,8 +103,8 @@ jobs:
             fi
             sleep 5
           done
-          curl -fsS http://localhost:8080/api/v1/health
-          curl -fsS http://localhost:8080/api/v1/health/db
+          curl -fsS http://localhost:50080/api/v1/health
+          curl -fsS http://localhost:50080/api/v1/health/db
       - name: Verify startup migrations ran
         run: docker compose logs app | grep -i "migrations applied"
       - uses: actions/setup-node@v7
@@ -121,7 +121,7 @@ jobs:
       - name: Playwright smoke tests
         working-directory: frontend
         env:
-          E2E_BASE_URL: http://localhost:8080
+          E2E_BASE_URL: http://localhost:50080
         run: npm run test:e2e
       - name: Stop stack
         if: always()

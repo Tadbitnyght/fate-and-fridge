@@ -33,6 +33,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Default published port is now **50080** (`HOST_PORT` in `.env`, default in
+  `compose.yaml`, CI, Playwright, and docs). The container-internal port
+  remains 8080.
 - Backend stack decision: Python/FastAPI replaced by .NET 10 / ASP.NET Core
   (the Python scaffold remains in git history)
 
