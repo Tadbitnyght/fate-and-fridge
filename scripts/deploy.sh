@@ -53,7 +53,7 @@ case "$command" in
     run_remote "sudo docker compose logs -f --tail=200 app"
     ;;
   migrate)
-    run_remote "sudo docker compose exec app alembic upgrade head"
+    run_remote "sudo docker compose exec app dotnet FateAndFridge.Api.dll --migrate"
     ;;
   down)
     run_remote "sudo docker compose down"

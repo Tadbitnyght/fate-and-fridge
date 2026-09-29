@@ -23,12 +23,12 @@ Browser / Mobile Browser
         |
         v
       REST API
-   FastAPI Backend
+ ASP.NET Core Backend
         |
         +---------------------+
         |                     |
         v                     v
- Domain Services         WebSocket Hub
+ Domain Services         SignalR Hub
         |
         +-------------------------------+
         |        |        |             |
@@ -37,7 +37,7 @@ Browser / Mobile Browser
  Service    Service    Service       Services
         |
         v
-   SQLAlchemy ORM
+    EF Core ORM
         |
         v
     PostgreSQL
@@ -49,9 +49,9 @@ Browser / Mobile Browser
 
 ### Application
 Contains:
-- FastAPI backend
+- ASP.NET Core backend (minimal APIs)
 - frontend static assets/build
-- WebSocket endpoint
+- SignalR hub (live sync)
 - migration runner
 - update checker
 - import services
@@ -87,41 +87,46 @@ Secrets required before DB access or during restore belong in mounted persistent
 Suggested:
 
 ```text
-backend/app/
-  api/
-  auth/
-  domain/
-  models/
-  schemas/
-  repositories/
-  services/
-  imports/
-  websocket/
-  admin/
+backend/
+  src/FateAndFridge.Api/
+    Program.cs
+    Endpoints/
+    Auth/
+    Domain/
+    Data/
+    Repositories/
+    Services/
+    Imports/
+    Hubs/
+    Admin/
+  tests/FateAndFridge.Api.Tests/
 ```
 
-### api/
-Route definitions and HTTP concerns only.
+### Endpoints/
+Minimal API route groups and HTTP concerns only.
 
-### auth/
+### Auth/
 Authentication, session/token validation, rate limiting hooks.
 
-### domain/
+### Domain/
 Business concepts and enums.
 
-### repositories/
+### Data/
+DbContext, EF Core migrations, and persistence plumbing.
+
+### Repositories/
 Database access abstraction.
 
-### services/
+### Services/
 Application business logic.
 
-### imports/
+### Imports/
 Website recipe parsing and normalization.
 
-### websocket/
-Connection management and event broadcasting.
+### Hubs/
+SignalR hubs and event broadcasting.
 
-### admin/
+### Admin/
 Historical correction, destructive workflows, backups, audit query.
 
 ---
@@ -364,7 +369,7 @@ Before destructive restore:
 ---
 
 ## 19. Migrations
-Use Alembic.
+Use EF Core migrations (Npgsql provider).
 
 Every schema change:
 - migration required

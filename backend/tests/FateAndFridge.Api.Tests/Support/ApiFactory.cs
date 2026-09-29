@@ -1,0 +1,23 @@
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
+
+namespace FateAndFridge.Api.Tests.Support;
+
+/// <summary>
+/// In-memory test host for the API. The connection string is a dummy by
+/// default; only the Testcontainers integration test points it at a real
+/// database (and enables startup migrations).
+/// </summary>
+public sealed class ApiFactory(
+    string connectionString = ApiFactory.DummyConnectionString,
+    bool migrateOnStartup = false) : WebApplicationFactory<Program>
+{
+    public const string DummyConnectionString =
+        "Host=localhost;Port=5432;Database=fatefridge_tests;Username=fatefridge;Password=fatefridge";
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        builder.UseSetting("ConnectionStrings:Default", connectionString);
+        builder.UseSetting("Database:MigrateOnStartup", migrateOnStartup ? "true" : "false");
+    }
+}

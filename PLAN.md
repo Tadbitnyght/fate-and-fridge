@@ -52,7 +52,7 @@ Multiple independent households should run separate installations.
 
 ## Backend
 
-**Python + FastAPI**
+**.NET 10 (LTS) + ASP.NET Core (C# 14, minimal APIs)**
 
 Responsibilities:
 
@@ -90,8 +90,8 @@ PostgreSQL is preferred over SQLite because Fate & Fridge includes:
 
 Use:
 
-- SQLAlchemy
-- Alembic
+- Entity Framework Core (Npgsql provider)
+- EF Core migrations
 
 All database changes must be implemented through migrations.
 
@@ -113,7 +113,7 @@ Do not directly couple React components to database concepts.
 
 ## Live synchronization
 
-Use WebSockets.
+Use SignalR over WebSockets.
 
 Changes should propagate between logged-in clients for:
 
@@ -2352,7 +2352,8 @@ fate-and-fridge/
 ├── AGENTS.md
 ├── README.md
 ├── CHANGELOG.md
-├── docker-compose.yml
+├── compose.yaml
+├── Dockerfile
 ├── .env.example
 │
 ├── docs/
@@ -2363,22 +2364,24 @@ fate-and-fridge/
 │   ├── RANDOMIZER.md
 │   ├── SECURITY.md
 │   ├── TESTING.md
+│   ├── DEPLOYMENT.md
 │   └── V2_BACKLOG.md
 │
 ├── backend/
-│   ├── app/
-│   │   ├── api/
-│   │   ├── domain/
-│   │   ├── models/
-│   │   ├── schemas/
-│   │   ├── services/
-│   │   ├── repositories/
-│   │   ├── auth/
-│   │   ├── imports/
-│   │   ├── websocket/
-│   │   └── admin/
-│   ├── migrations/
-│   └── tests/
+│   ├── src/FateAndFridge.Api/
+│   │   ├── Program.cs
+│   │   ├── Endpoints/
+│   │   ├── Auth/
+│   │   ├── Domain/
+│   │   ├── Data/
+│   │   ├── Repositories/
+│   │   ├── Services/
+│   │   ├── Imports/
+│   │   ├── Hubs/
+│   │   └── Admin/
+│   ├── tests/FateAndFridge.Api.Tests/
+│   ├── FateAndFridge.slnx
+│   └── Directory.Build.props
 │
 ├── frontend/
 │   ├── src/
@@ -2528,9 +2531,9 @@ It is finished when:
 
 Deliver:
 
-- Repository
+- `Repository`
 - Docker Compose
-- FastAPI service
+- ASP.NET Core service
 - React frontend
 - PostgreSQL
 - Health checks

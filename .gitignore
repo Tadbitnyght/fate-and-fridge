@@ -25,9 +25,20 @@ venv/
 coverage.xml
 htmlcov/
 
+# --- .NET ---
+bin/
+obj/
+*.user
+*.suo
+.vs/
+TestResults/
+artifacts/
+
 # --- Node / frontend ---
 node_modules/
 frontend/dist/
+frontend/playwright-report/
+frontend/test-results/
 *.tsbuildinfo
 npm-debug.log*
 .eslintcache

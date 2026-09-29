@@ -5,10 +5,10 @@ Goal: working repo and Docker stack.
 
 Issues:
 1. Initialize monorepo layout.
-2. Add FastAPI backend shell.
+2. Add ASP.NET Core backend shell (.NET 10, minimal APIs).
 3. Add React/TypeScript/Vite frontend shell.
 4. Add PostgreSQL service.
-5. Add SQLAlchemy + Alembic.
+5. Add EF Core (Npgsql) + migrations baseline.
 6. Add Docker Compose.
 7. Add app health endpoint.
 8. Add frontend health/status screen.

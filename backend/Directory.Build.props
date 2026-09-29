@@ -1,0 +1,27 @@
+<Project>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
+  <!--
+    This repository can live on an SMB/9p share (docs/DEPLOYMENT.md). MSBuild
+    cannot set file timestamps there, so builds from such locations must keep
+    intermediate/output files on a local filesystem. Set the environment
+    variable to a local directory before running dotnet commands:
+
+        export FATE_ARTIFACTS_PATH=/tmp/fate-and-fridge-artifacts
+
+    CI and Docker builds run on filesystems that support timestamps and simply
+    use the default bin/obj layout.
+  -->
+  <PropertyGroup Condition="'$(FATE_ARTIFACTS_PATH)' != ''">
+    <UseArtifactsOutput>true</UseArtifactsOutput>
+    <ArtifactsPath>$(FATE_ARTIFACTS_PATH)</ArtifactsPath>
+  </PropertyGroup>
+
+</Project>

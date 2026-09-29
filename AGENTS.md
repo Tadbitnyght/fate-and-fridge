@@ -95,15 +95,16 @@ Before major implementation, agents must consult:
 
 ## Tech Stack
 Preferred V1 stack:
-- Backend: Python + FastAPI
-- ORM: SQLAlchemy
-- Migrations: Alembic
+- Backend: .NET 10 (LTS) + ASP.NET Core, C# 14, minimal APIs
+- ORM: Entity Framework Core (Npgsql provider)
+- Migrations: EF Core migrations
 - Database: PostgreSQL
 - Frontend: React + TypeScript + Vite
 - Query/state: TanStack Query
-- Live sync: WebSockets
+- Live sync: SignalR over WebSockets
+- Testing: xUnit, FluentAssertions, Testcontainers, Playwright
 - Deployment: Docker Compose
-- Password hashing: Argon2id
+- Password hashing: Argon2id via a vetted library
 
 Do not add infrastructure such as Redis unless a demonstrated need exists.
 

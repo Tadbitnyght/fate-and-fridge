@@ -1,0 +1,42 @@
+{
+  // OpenCode project configuration for Fate & Fridge.
+  //
+  // Servers marked "disabled": true are stubs — remove the flag and adjust the
+  // command once the prerequisite is installed on the workstation, then run
+  // /mcps in OpenCode to connect and authenticate.
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      // GitHub's official remote MCP server. Uses OAuth: run /mcps and sign
+      // in on first use.
+      "github": {
+        "type": "remote",
+        "url": "https://api.githubcopilot.com/mcp/"
+      },
+      // Official Playwright MCP server for browser-driven checks against the
+      // deployed app. Append "--headless" to the command when no display is
+      // available.
+      "playwright": {
+        "type": "local",
+        "command": ["npx", "-y", "@playwright/mcp@latest"]
+      },
+      // Roslyn-powered C# analysis and refactoring. Stub: install a server
+      // first, for example `dotnet tool install -g RoslynMcp.Server` (MIT,
+      // provides the `roslyn-mcp` command), or use the Visual Studio /
+      // VS Code Roslyn MCP extensions.
+      "roslyn": {
+        "type": "local",
+        "command": ["roslyn-mcp"],
+        "cwd": "backend",
+        "disabled": true
+      },
+      // Docker MCP Toolkit / Gateway. Stub until the `docker mcp` CLI is
+      // available on the workstation (Docker Desktop feature).
+      "docker": {
+        "type": "local",
+        "command": ["docker", "mcp", "gateway", "run"],
+        "disabled": true
+      }
+    }
+  }
+}

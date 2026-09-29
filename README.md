@@ -26,20 +26,20 @@ This documentation pack defines the intended V1 before implementation begins.
 Do not allow agents to treat the V2 backlog as current scope.
 
 ## V1 Stack
-- FastAPI
+- .NET 10 / ASP.NET Core (C# 14, minimal APIs)
 - PostgreSQL
-- SQLAlchemy
-- Alembic
+- Entity Framework Core (Npgsql)
 - React
 - TypeScript
 - Vite
 - TanStack Query
-- WebSockets
+- SignalR
+- Playwright
 - Docker Compose
 
 ## Repository Layout
 ```text
-backend/        FastAPI application, Alembic migrations, pytest suite
+backend/        ASP.NET Core application, EF Core migrations, xUnit tests
 frontend/       React + TypeScript + Vite application
 scripts/        Operational scripts (TrueNAS deploy helper)
 docs/           Product, architecture, and operations specifications
@@ -48,17 +48,21 @@ Dockerfile      Single application image (API + built frontend)
 ```
 
 ## Local Development
-Backend (Python 3.13+):
+Backend (.NET 10 SDK):
 
 ```bash
 cd backend
-python -m venv .venv && . .venv/bin/activate
-pip install -e ".[dev]"
-pytest              # tests (no database required)
-ruff check .        # lint
-ruff format .       # format
-mypy app            # type check
+dotnet restore
+dotnet build
+dotnet test -- --filter-not-trait Category=Integration   # unit tests (no Docker needed)
+dotnet format --verify-no-changes                        # formatting check
+dotnet run --project src/FateAndFridge.Api               # http://localhost:8000
 ```
+
+Integration tests use Testcontainers and need a running Docker daemon; CI runs
+the full suite (`dotnet test`). When working from the SMB share (WSL), export
+`FATE_ARTIFACTS_PATH=/tmp/fate-and-fridge-artifacts` before dotnet commands —
+see `docs/DEPLOYMENT.md` §2.5.
 
 Frontend (Node 24+):
 
@@ -68,12 +72,12 @@ npm install
 npm run dev         # Vite dev server on :5173, proxies /api to :8000
 npm run lint
 npm run typecheck
-npm run test
+npm run test        # Vitest unit tests
+npm run test:e2e    # Playwright smoke tests (needs a running stack)
 ```
 
-Run the backend for development with `uvicorn app.main:app --reload --port 8000`
-(from `backend/`). Without a built frontend the API root returns a small JSON
-index; the Vite dev server serves the UI.
+The API root returns a small JSON index when no built frontend is present; the
+Vite dev server serves the UI during development.
 
 ## Deployment
 The household deployment target is TrueNAS SCALE; the repository lives on the

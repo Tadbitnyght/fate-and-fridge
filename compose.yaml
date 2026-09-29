@@ -18,12 +18,12 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      APP_ENV: ${APP_ENV:-production}
-      LOG_LEVEL: ${LOG_LEVEL:-info}
+      ASPNETCORE_ENVIRONMENT: ${APP_ENV:-production}
+      ASPNETCORE_URLS: http://+:8080
       TZ: ${TZ:-UTC}
-      DATA_DIR: /data
-      STATIC_DIR: /app/static
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-fatefridge}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-fatefridge}
+      DataDir: /data
+      Database__MigrateOnStartup: "true"
+      ConnectionStrings__Default: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-fatefridge};Username=${POSTGRES_USER:-fatefridge};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
     ports:
       - "${HOST_PORT:-8080}:8080"
     volumes:
@@ -31,11 +31,7 @@ services:
       - ${HOST_DATA_DIR:-./data}/images:/data/images
       - ${HOST_DATA_DIR:-./data}/backups:/data/backups
     healthcheck:
-      test:
-        - CMD
-        - python
-        - -c
-        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/v1/health', timeout=5)"
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api/v1/health"]
       interval: 30s
       timeout: 10s
       retries: 3

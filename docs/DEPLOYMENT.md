@@ -92,6 +92,9 @@ The SMB mount does not support `chmod`, which affects a few git commands:
   `.git/config` directly, or run those commands on the NAS side.
 - `.gitattributes` normalizes all text to LF; `PLAN.md` still has CRLF in
   the working tree and will convert to LF the next time git touches it.
+- MSBuild cannot set file timestamps on the share either. Export
+  `FATE_ARTIFACTS_PATH=/tmp/fate-and-fridge-artifacts` before running
+  `dotnet` commands so build outputs stay on a local filesystem.
 
 ## 3. Configuration
 
@@ -105,7 +108,8 @@ cp .env.example .env
 Set at minimum:
 
 - `POSTGRES_PASSWORD` — generate with `openssl rand -hex 24`; keep it
-  URL-safe (letters, digits, `-`, `_`) so the `DATABASE_URL` stays valid.
+  URL-safe (letters, digits, `-`, `_`) so it embeds cleanly in the
+  PostgreSQL connection string compose builds.
 - `HOST_DATA_DIR=/mnt/Data/calendarplanner/data` — absolute path, persistent.
 - `HOST_PORT` — change if another service occupies 8080.
 - `TZ` — household timezone (IANA name), used for calendar-day semantics.
@@ -131,11 +135,20 @@ sudo docker compose up -d --build     # first run: cp .env.example .env first
 sudo docker compose ps
 ```
 
-Migrations run automatically at container start (`docker-entrypoint.sh`, with
-retries while PostgreSQL warms up). Health endpoints:
+Migrations run automatically at container start
+(`Database__MigrateOnStartup=true` in `compose.yaml`, with retries while
+PostgreSQL warms up). Health endpoints:
 
 - App: `http://192.168.0.2:8080/api/v1/health`
 - Database: `http://192.168.0.2:8080/api/v1/health/db`
+
+End-to-end smoke tests can run against the live deployment:
+
+```bash
+cd frontend
+npx playwright install chromium            # first time only
+E2E_BASE_URL=http://192.168.0.2:8080 npm run test:e2e
+```
 
 ## 5. Data layout and persistence
 
@@ -147,7 +160,7 @@ retries while PostgreSQL warms up). Health endpoints:
 │   ├── images/       imported recipe images
 │   └── backups/      application backup archives
 ├── docs/             project documentation
-├── backend/          FastAPI backend
+├── backend/          ASP.NET Core backend
 ├── frontend/         React frontend
 └── compose.yaml, Dockerfile, .env, ...
 ```
@@ -178,7 +191,7 @@ The database is untouched by rebuilds; it only changes through migrations.
 | `POSTGRES_PASSWORD is required` from compose | `.env` missing or the password line is empty |
 | Port 8080 already in use | Change `HOST_PORT` in `.env`, then `deploy.sh up` |
 | `password authentication failed for user` | `POSTGRES_PASSWORD` changed after the database volume was created; restore the old password or rotate it inside PostgreSQL |
-| Migrations never finish | `deploy.sh logs`; check `DATABASE_URL` correctness and password URL-safety |
+| Migrations never finish | `deploy.sh logs`; check the `ConnectionStrings__Default` host/credentials and password URL-safety |
 | App unhealthy in `deploy.sh ps` | `deploy.sh logs`; `/api/v1/health/db` shows database reachability |
 
 ## 8. Security notes and known limitations

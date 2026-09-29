@@ -10,48 +10,36 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+  DOTNET_NOLOGO: '1'
+
 jobs:
   backend:
-    name: Backend (lint, types, migrations, tests)
+    name: Backend (format, build, migrations, tests)
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: backend
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_DB: fatefridge
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -d fatefridge"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
-    env:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/fatefridge
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-dotnet@v6
         with:
-          python-version: '3.13'
-          cache: pip
-          cache-dependency-path: backend/pyproject.toml
-      - name: Install dependencies
-        run: pip install -e ".[dev]"
-      - name: Lint
-        run: ruff check .
+          dotnet-version: '10.0.x'
+      - name: Restore
+        run: dotnet restore
       - name: Format check
-        run: ruff format --check .
-      - name: Type check
-        run: mypy app
-      - name: Apply migrations
-        run: alembic upgrade head
-      - name: Tests
-        run: pytest
+        run: dotnet format --verify-no-changes --no-restore
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+      - name: Check EF Core model matches migrations
+        run: |
+          dotnet tool restore
+          dotnet ef migrations has-pending-model-changes \
+            --project src/FateAndFridge.Api \
+            --startup-project src/FateAndFridge.Api
+      - name: Tests (unit + PostgreSQL integration via Testcontainers)
+        run: dotnet test --configuration Release
 
   frontend:
     name: Frontend (lint, types, tests, build)
@@ -86,7 +74,7 @@ jobs:
         run: POSTGRES_PASSWORD=ci-placeholder docker compose config -q
 
   stack:
-    name: Docker stack acceptance
+    name: Docker stack acceptance + Playwright
     runs-on: ubuntu-latest
     needs: [backend, frontend, compose]
     steps:
@@ -101,12 +89,12 @@ jobs:
         run: docker compose up -d
       - name: Wait for a healthy application
         run: |
-          for i in $(seq 1 60); do
+          for i in $(seq 1 90); do
             if curl -fsS http://localhost:8080/api/v1/health >/dev/null; then
               echo "Application is healthy."
               break
             fi
-            if [ "$i" -eq 60 ]; then
+            if [ "$i" -eq 90 ]; then
               echo "Application did not become healthy in time."
               docker compose logs
               exit 1
@@ -115,8 +103,24 @@ jobs:
           done
           curl -fsS http://localhost:8080/api/v1/health
           curl -fsS http://localhost:8080/api/v1/health/db
-      - name: Verify migrations were applied
-        run: docker compose exec -T app alembic current
+      - name: Verify startup migrations ran
+        run: docker compose logs app | grep -i "migrations applied"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Install Playwright Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Playwright smoke tests
+        working-directory: frontend
+        env:
+          E2E_BASE_URL: http://localhost:8080
+        run: npm run test:e2e
       - name: Stop stack
         if: always()
         run: docker compose down -v

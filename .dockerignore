@@ -16,22 +16,20 @@ data
 backups
 home
 
-# Python
-**/__pycache__
-**/*.py[cod]
-**/*.egg-info
-.venv
-.pytest_cache
-.mypy_cache
-.ruff_cache
+# .NET
+**/bin
+**/obj
+**/TestResults
+backend/tests
 
 # Node
 **/node_modules
 frontend/dist
+frontend/playwright-report
+frontend/test-results
 **/*.tsbuildinfo
 
 # Not needed inside the image
 docs
 scripts
-backend/tests
 *.md

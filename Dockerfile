@@ -4,10 +4,11 @@
 #
 # Stages:
 #   frontend-build  builds the React/Vite frontend
-#   backend-build   installs the FastAPI backend into a virtualenv
+#   backend-build   restores and publishes the ASP.NET Core backend
 #   runtime         serves the API and the built frontend
 #
-# The container applies Alembic migrations on startup, then runs uvicorn.
+# Migrations are applied by the application at startup when
+# Database__MigrateOnStartup=true (set by compose.yaml).
 
 # --------------------------------------------------------------- frontend ---
 FROM node:24-alpine AS frontend-build
@@ -17,36 +18,37 @@ RUN npm ci --no-audit --no-fund
 COPY frontend/ ./
 RUN npm run build
 
-# ----------------------------------------------------------- backend deps ---
-FROM python:3.13-slim AS backend-build
-ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PIP_NO_CACHE_DIR=1
-RUN python -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
+# ----------------------------------------------------------- backend build ---
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS backend-build
+ENV DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+    DOTNET_NOLOGO=1
 WORKDIR /src
-COPY backend/pyproject.toml ./
-COPY backend/app ./app
-RUN pip install .
+COPY backend/Directory.Build.props backend/global.json ./
+COPY backend/src/FateAndFridge.Api/FateAndFridge.Api.csproj src/FateAndFridge.Api/
+RUN dotnet restore src/FateAndFridge.Api/FateAndFridge.Api.csproj
+COPY backend/src/FateAndFridge.Api/ src/FateAndFridge.Api/
+RUN dotnet publish src/FateAndFridge.Api/FateAndFridge.Api.csproj \
+    --configuration Release \
+    --output /app/publish \
+    --no-restore
 
 # ---------------------------------------------------------------- runtime ---
-FROM python:3.13-slim AS runtime
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PATH="/opt/venv/bin:$PATH" \
-    DATA_DIR=/data \
-    STATIC_DIR=/app/static
-
-COPY --from=backend-build /opt/venv /opt/venv
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY backend/alembic.ini ./
-COPY backend/migrations ./migrations
-COPY backend/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-COPY --from=frontend-build /build/dist ./static
+COPY --from=backend-build /app/publish ./
+COPY --from=frontend-build /build/dist ./wwwroot/
 
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh \
-    && mkdir -p /data/config /data/images /data/backups
+ENV ASPNETCORE_URLS=http://+:8080 \
+    ASPNETCORE_ENVIRONMENT=Production \
+    DataDir=/data
 
 EXPOSE 8080
 
-ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -fsS http://127.0.0.1:8080/api/v1/health || exit 1
+
+ENTRYPOINT ["dotnet", "FateAndFridge.Api.dll"]

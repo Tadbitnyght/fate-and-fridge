@@ -5,6 +5,12 @@ The application contains stateful household data and time-sensitive logic.
 
 Testing is mandatory.
 
+Tooling:
+- Backend: xUnit v3 with FluentAssertions
+- PostgreSQL integration tests: Testcontainers
+- Frontend: Vitest with Testing Library
+- End-to-end: Playwright against a running stack
+
 The most dangerous areas are:
 - randomization
 - dates/timezones

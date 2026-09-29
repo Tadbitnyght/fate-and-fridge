@@ -19,5 +19,16 @@ indent_size = 2
 [Makefile]
 indent_style = tab
 
+[*.cs]
+indent_size = 4
+csharp_new_line_before_open_brace = all
+dotnet_sort_system_directives_first = true
+
+# EF Core generates migration files with a UTF-8 BOM; leave them untouched
+# by formatting/analyzer passes.
+[**/Migrations/*.cs]
+charset = utf-8-bom
+generated_code = true
+
 [*.{bat,cmd,ps1}]
 end_of_line = crlf
