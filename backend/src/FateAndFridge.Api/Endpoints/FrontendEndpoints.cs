@@ -27,6 +27,7 @@ public static class FrontendEndpoints
                     return;
                 }
 
+                context.Response.ContentType = "text/html; charset=utf-8";
                 await context.Response.SendFileAsync(indexFile);
             });
 
