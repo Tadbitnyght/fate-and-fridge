@@ -1,6 +1,9 @@
+using System.Data;
 using FateAndFridge.Api.Data;
 using FateAndFridge.Api.Domain;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Logging;
 
 namespace FateAndFridge.Api.Auth;
 
@@ -22,6 +25,13 @@ public abstract record LoginResult
 
     /// <summary>An existing <c>locked_until</c> is still in the future.</summary>
     public sealed record AccountLocked(DateTimeOffset LockedUntil) : LoginResult;
+
+    /// <summary>
+    /// Too many recent attempts from this source address; the caller answers
+    /// <c>429 RATE_LIMITED</c> with <see cref="RetryAfter"/> in the
+    /// <c>Retry-After</c> header.
+    /// </summary>
+    public sealed record RateLimited(TimeSpan RetryAfter) : LoginResult;
 }
 
 /// <summary>
@@ -31,9 +41,11 @@ public abstract record LoginResult
 /// does not disclose account existence.
 /// </summary>
 /// <remarks>
-/// Lockout thresholds, progressive delay, and per-IP rate limiting are part 2.
-/// This class only honors an already-stored <c>locked_until</c> and delegates
-/// counter bookkeeping to <see cref="ILoginAttemptPolicy"/>.
+/// Per-account lockout bookkeeping is delegated to
+/// <see cref="LockoutLoginAttemptPolicy"/>. Failures are applied under an
+/// atomic per-user row lock (<c>SELECT ... FOR UPDATE</c> plus a single
+/// counter write) so parallel attempts cannot lose increments. Per-IP limiting
+/// reserves a slot through <see cref="ILoginIpThrottle"/> before verification.
 /// </remarks>
 public sealed class AuthService(
     AppDbContext dbContext,
@@ -41,7 +53,10 @@ public sealed class AuthService(
     SessionService sessionService,
     IAuthEventWriter authEventWriter,
     ILoginAttemptPolicy loginAttemptPolicy,
-    TimeProvider timeProvider)
+    ILoginIpThrottle loginIpThrottle,
+    ILoginAttemptDelayer loginAttemptDelayer,
+    TimeProvider timeProvider,
+    ILogger<AuthService> logger)
 {
     /// <summary><c>user_sessions.revoked_reason</c> written by <see cref="LogoutAsync"/>.</summary>
     public const string LogoutRevocationReason = "logout";
@@ -78,6 +93,22 @@ public sealed class AuthService(
     {
         ArgumentNullException.ThrowIfNull(username);
         ArgumentNullException.ThrowIfNull(password);
+
+        // Atomic per-IP reservation before any verification or database work:
+        // parallel attempts cannot slip past the threshold with a check-then-
+        // record race. Over-threshold attempts are rejected immediately and
+        // deliberately write no auth event, only a warning log, so an abuse
+        // burst cannot amplify database writes.
+        var throttleDecision = loginIpThrottle.Reserve(ipAddress);
+        if (!throttleDecision.Allowed)
+        {
+            logger.LogWarning(
+                "Login attempt from {IpAddress} was rate limited; retry after {RetryAfterSeconds} seconds.",
+                ipAddress ?? "(unknown)",
+                Math.Max(1, (int)Math.Ceiling(throttleDecision.RetryAfter.TotalSeconds)));
+
+            return new LoginResult.RateLimited(throttleDecision.RetryAfter);
+        }
 
         var normalizedUsername = UsernameNormalizer.Normalize(username);
         var now = timeProvider.GetUtcNow();
@@ -127,16 +158,10 @@ public sealed class AuthService(
         }
 
         var attemptState = LoginAttemptState.From(user);
-        await ApplyDelayAsync(
-            loginAttemptPolicy.GetVerificationDelay(attemptState, now),
-            cancellationToken);
 
         if (!passwordHasher.Verify(user.PasswordHash, password))
         {
-            var outcome = loginAttemptPolicy.RecordFailure(attemptState, now);
-            outcome.State.ApplyTo(user);
-            user.UpdatedAt = now;
-            await dbContext.SaveChangesAsync(cancellationToken);
+            var outcome = await RecordFailureAtomicallyAsync(user.Id, now, cancellationToken);
 
             await WriteFailureAsync(
                 user.Id,
@@ -155,7 +180,7 @@ public sealed class AuthService(
                         normalizedUsername,
                         ipAddress,
                         userAgent,
-                        LockedUntilMetadata(user.LockedUntil)),
+                        LockedUntilMetadata(outcome.State.LockedUntil)),
                     cancellationToken);
             }
 
@@ -164,6 +189,7 @@ public sealed class AuthService(
         }
 
         loginAttemptPolicy.RecordSuccess(attemptState, now).ApplyTo(user);
+        loginIpThrottle.RecordSuccess(ipAddress);
 
         // Rehash after a successful login when the stored hash uses older
         // parameters (docs/SECURITY.md §2). Plaintext stays in this frame.
@@ -201,6 +227,85 @@ public sealed class AuthService(
     public Task<bool> LogoutAsync(long sessionId, CancellationToken cancellationToken = default) =>
         sessionService.RevokeAsync(sessionId, LogoutRevocationReason, cancellationToken);
 
+    /// <summary>
+    /// Applies one credential failure under a per-user row lock so parallel
+    /// attempts cannot lose increments (docs/SECURITY.md §3). The state is read
+    /// with <c>SELECT ... FOR UPDATE</c>, the pure policy decides the outcome,
+    /// and the counters are written back in the same transaction; concurrent
+    /// claimers serialize on the row, so the 10th parallel failure
+    /// deterministically engages the lock.
+    /// </summary>
+    private async Task<LoginAttemptOutcome> RecordFailureAtomicallyAsync(
+        long userId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        var state = await LoadLockoutStateForUpdateAsync(userId, cancellationToken);
+        var outcome = loginAttemptPolicy.RecordFailure(state, now);
+
+        await dbContext.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            UPDATE users
+            SET failed_login_count = {outcome.State.FailedLoginCount},
+                last_failed_login_at = {outcome.State.LastFailedLoginAt},
+                lockout_count = {outcome.State.LockoutCount},
+                lockout_window_started_at = {outcome.State.LockoutWindowStartedAt},
+                locked_until = {outcome.State.LockedUntil},
+                updated_at = {now}
+            WHERE id = {userId}
+            """,
+            cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
+        return outcome;
+    }
+
+    /// <summary>
+    /// Reads the lockout counters of one user while holding the row lock for
+    /// the enclosing transaction.
+    /// </summary>
+    private async Task<LoginAttemptState> LoadLockoutStateForUpdateAsync(
+        long userId,
+        CancellationToken cancellationToken)
+    {
+        var connection = dbContext.Database.GetDbConnection();
+        if (connection.State != ConnectionState.Open)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        await using var command = connection.CreateCommand();
+        command.Transaction = dbContext.Database.CurrentTransaction?.GetDbTransaction();
+        command.CommandText =
+            """
+            SELECT failed_login_count, last_failed_login_at, lockout_count, lockout_window_started_at, locked_until
+            FROM users
+            WHERE id = @userId
+            FOR UPDATE
+            """;
+
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = "userId";
+        parameter.Value = userId;
+        command.Parameters.Add(parameter);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            throw new InvalidOperationException(
+                $"User {userId} disappeared while recording a login failure.");
+        }
+
+        return new LoginAttemptState(
+            reader.GetInt32(0),
+            reader.IsDBNull(1) ? null : reader.GetFieldValue<DateTimeOffset>(1),
+            reader.GetInt32(2),
+            reader.IsDBNull(3) ? null : reader.GetFieldValue<DateTimeOffset>(3),
+            reader.IsDBNull(4) ? null : reader.GetFieldValue<DateTimeOffset>(4));
+    }
+
     private Task WriteFailureAsync(
         long? userId,
         string normalizedUsername,
@@ -227,7 +332,7 @@ public sealed class AuthService(
     {
         if (delay is { } value && value > TimeSpan.Zero)
         {
-            await Task.Delay(value, timeProvider, cancellationToken);
+            await loginAttemptDelayer.DelayAsync(value, cancellationToken);
         }
     }
 }

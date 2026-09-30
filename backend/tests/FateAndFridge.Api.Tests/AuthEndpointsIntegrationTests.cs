@@ -123,6 +123,29 @@ public sealed class AuthEndpointsIntegrationTests(M1SetupFixture fixture) : IAsy
         authEvent.MetadataJson.Should().BeNull();
     }
 
+    [Theory]
+    [InlineData("http", false)]
+    [InlineData("https", true)]
+    public async Task Login_cookie_is_secure_only_over_https(string scheme, bool expectSecure)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        await SeedUserAsync(new UserSeed("smith", Password), cancellationToken);
+        await MarkSetupCompletedAsync(cancellationToken);
+
+        using var factory = fixture.CreateFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri($"{scheme}://localhost"),
+            HandleCookies = false,
+        });
+
+        var response = await LoginAsync(client, "smith", Password, cancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        HasCookieAttribute(GetSessionCookieHeader(response), "secure").Should().Be(expectSecure);
+    }
+
     [Fact]
     public async Task Credential_failures_return_identical_generic_401_bodies()
     {
@@ -166,6 +189,8 @@ public sealed class AuthEndpointsIntegrationTests(M1SetupFixture fixture) : IAsy
     [InlineData("""{"username":"smith","password":["x"]}""")]
     [InlineData("not json at all")]
     [InlineData("[]")]
+    [InlineData("")]
+    [InlineData("   ")]
     public async Task Login_validation_failures_return_400_validation_failed(string body)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -416,6 +441,56 @@ public sealed class AuthEndpointsIntegrationTests(M1SetupFixture fixture) : IAsy
         var sessionResponse = await client.GetAsync("/api/v1/auth/session", cancellationToken);
         sessionResponse.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
         (await ReadErrorCodeAsync(sessionResponse, cancellationToken)).Should().Be(ErrorCodes.AuthRequired);
+    }
+
+    [Fact]
+    public async Task Logout_revokes_only_the_current_session_of_a_user()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        var user = await SeedUserAsync(new UserSeed("smith", Password), cancellationToken);
+        await MarkSetupCompletedAsync(cancellationToken);
+
+        using var factory = fixture.CreateFactory();
+        var (sessionAId, tokenA) = await CreateSessionAsync(factory, user, cancellationToken);
+        var (sessionBId, tokenB) = await CreateSessionAsync(factory, user, cancellationToken);
+
+        var cookies = new CookieContainer();
+        using var client = factory.CreateDefaultClient(new CookieContainerHandler(cookies));
+        cookies.Add(
+            new Uri("http://localhost/"),
+            new Cookie(SessionAuthenticationDefaults.CookieName, tokenA) { Path = "/" });
+
+        var bootstrap = await client.GetAsync("/api/v1/auth/session", cancellationToken);
+        bootstrap.StatusCode.Should().Be(HttpStatusCode.OK);
+        var csrfToken = bootstrap.Headers.GetValues(CsrfMiddleware.HeaderName).Single();
+
+        using var logoutRequest = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/logout");
+        logoutRequest.Headers.Add(CsrfMiddleware.HeaderName, csrfToken);
+        var logout = await client.SendAsync(logoutRequest, cancellationToken);
+        logout.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        await using (var context = fixture.CreateContext())
+        {
+            var storedA = await context.UserSessions
+                .AsNoTracking()
+                .SingleAsync(candidate => candidate.Id == sessionAId, cancellationToken);
+            storedA.RevokedAt.Should().NotBeNull();
+            storedA.RevokedReason.Should().Be(AuthService.LogoutRevocationReason);
+
+            var storedB = await context.UserSessions
+                .AsNoTracking()
+                .SingleAsync(candidate => candidate.Id == sessionBId, cancellationToken);
+            storedB.RevokedAt.Should().BeNull();
+        }
+
+        using var otherClient = factory.CreateDefaultClient();
+        using var sessionRequest = new HttpRequestMessage(HttpMethod.Get, "/api/v1/auth/session");
+        sessionRequest.Headers.Add(
+            "Cookie",
+            $"{SessionAuthenticationDefaults.CookieName}={tokenB}");
+        var sessionResponse = await otherClient.SendAsync(sessionRequest, cancellationToken);
+        sessionResponse.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]

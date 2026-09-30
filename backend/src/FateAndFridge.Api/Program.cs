@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -64,9 +65,20 @@ builder.Services.AddScoped<SessionService>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<IAuthEventWriter, AuthEventWriter>();
 
-// Part-1 baseline: consecutive-failure counters only. M1-07 part 2 replaces
-// this registration with the threshold/progressive-delay/lockout policy.
-builder.Services.AddSingleton<ILoginAttemptPolicy, DefaultLoginAttemptPolicy>();
+// M1-07 part 2: per-account lockout and progressive delay
+// (docs/SECURITY.md §3) plus a process-local, bounded per-IP failure throttle.
+builder.Services
+    .AddOptions<LoginThrottleOptions>()
+    .Bind(builder.Configuration.GetSection(LoginThrottleOptions.SectionName))
+    .Validate(
+        options => options.MaxFailuresPerWindow >= 1
+            && options.WindowSeconds >= 1
+            && options.MaxTrackedAddresses >= 1,
+        "Auth:LoginThrottle limits must be positive.")
+    .ValidateOnStart();
+builder.Services.AddSingleton<ILoginIpThrottle, LoginIpThrottle>();
+builder.Services.AddSingleton<ILoginAttemptPolicy, LockoutLoginAttemptPolicy>();
+builder.Services.AddSingleton<ILoginAttemptDelayer, TimeProviderLoginAttemptDelayer>();
 
 builder.Services.AddAuthentication(SessionAuthenticationDefaults.Scheme)
     .AddScheme<AuthenticationSchemeOptions, SessionAuthenticationHandler>(

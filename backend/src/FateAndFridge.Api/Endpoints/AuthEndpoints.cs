@@ -59,6 +59,8 @@ public static class AuthEndpoints
 
     private const string AccountLockedMessage = "The account is temporarily locked.";
 
+    private const string RateLimitedMessage = "Too many failed login attempts. Try again later.";
+
     public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/v1/auth").WithTags("Auth");
@@ -106,8 +108,23 @@ public static class AuthEndpoints
                 ErrorCodes.AccountLocked,
                 AccountLockedMessage,
                 new Dictionary<string, object?> { ["locked_until"] = locked.LockedUntil }),
+            LoginResult.RateLimited rateLimited => RateLimited(context, rateLimited),
             _ => InvalidCredentials(),
         };
+    }
+
+    private static IResult RateLimited(HttpContext context, LoginResult.RateLimited rateLimited)
+    {
+        // Retry-After is whole seconds per RFC 9110; round up so a sub-second
+        // remainder never advertises "0".
+        var retryAfterSeconds = Math.Max(1, (int)Math.Ceiling(rateLimited.RetryAfter.TotalSeconds));
+        context.Response.Headers["Retry-After"] =
+            retryAfterSeconds.ToString(CultureInfo.InvariantCulture);
+
+        return ApiResults.Error(
+            StatusCodes.Status429TooManyRequests,
+            ErrorCodes.RateLimited,
+            RateLimitedMessage);
     }
 
     private static async Task<IResult> LoginSuccessAsync(

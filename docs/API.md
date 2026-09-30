@@ -117,8 +117,8 @@ Responses:
 - `200` — same payload as the multiuser `GET /auth/session` shape below. Sets a persistent `faf_session` cookie with the 30-day idle window and returns a fresh `X-CSRF-TOKEN` header.
 - `400 VALIDATION_FAILED` — missing, blank, or non-string `username`/`password`, or malformed JSON; `details.field_errors` present.
 - `401 INVALID_CREDENTIALS` — generic; the body is identical for unknown usernames, inactive users, and wrong passwords.
-- `423 ACCOUNT_LOCKED` — `details.locked_until` present (ISO 8601).
-- `429 RATE_LIMITED` — with `Retry-After`; part 2 of M1-07.
+- `423 ACCOUNT_LOCKED` — `details.locked_until` present (ISO 8601). Defaults (docs/SECURITY.md §3): 10 consecutive failures engage a 15-minute lock; 5 lockouts within 24 hours escalate to 24 hours. A future `locked_until` short-circuits before password verification; the failure that engages the lock still returns `401`.
+- `429 RATE_LIMITED` — `Retry-After` header (whole seconds until the window resets). Per-IP defaults: 20 login attempts per 10 minutes (`Auth:LoginThrottle`). Every attempt reserves a slot before verification and a successful login clears that address's slots, so effectively only failures consume the budget; over-limit attempts are rejected before any credential check.
 
 `POST /auth/logout` (requires a valid session and the `X-CSRF-TOKEN` header):
 - `204` — revokes the current session server-side and deletes the cookie.
