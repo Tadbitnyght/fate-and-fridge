@@ -10,7 +10,8 @@ namespace FateAndFridge.Api.Tests.Support;
 /// </summary>
 public sealed class ApiFactory(
     string connectionString = ApiFactory.DummyConnectionString,
-    bool migrateOnStartup = false) : WebApplicationFactory<Program>
+    bool migrateOnStartup = false,
+    string? dataDir = null) : WebApplicationFactory<Program>
 {
     public const string DummyConnectionString =
         "Host=localhost;Port=5432;Database=fatefridge_tests;Username=fatefridge;Password=fatefridge";
@@ -19,5 +20,9 @@ public sealed class ApiFactory(
     {
         builder.UseSetting("ConnectionStrings:Default", connectionString);
         builder.UseSetting("Database:MigrateOnStartup", migrateOnStartup ? "true" : "false");
+        if (dataDir is not null)
+        {
+            builder.UseSetting("DataDir", dataDir);
+        }
     }
 }

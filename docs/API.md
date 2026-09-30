@@ -41,6 +41,7 @@ External API keys/service accounts are deferred.
 
 ## 3. General Rules
 - JSON request/response
+- JSON property names are snake_case
 - consistent error envelope
 - UTC timestamps
 - household-local calendar dates represented as ISO date strings

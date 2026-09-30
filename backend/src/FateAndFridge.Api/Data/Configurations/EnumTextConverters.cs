@@ -41,7 +41,7 @@ internal static class EnumTextConverters
         _ => throw new ArgumentOutOfRangeException(nameof(text), text, "Unknown user role text."),
     };
 
-    private static string AuthModeToText(AuthMode mode) => mode switch
+    internal static string AuthModeToText(AuthMode mode) => mode switch
     {
         AuthMode.SingleUser => "single_user",
         AuthMode.Multiuser => "multiuser",

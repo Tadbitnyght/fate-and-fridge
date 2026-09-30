@@ -1,6 +1,9 @@
+using System.Text.Json;
 using FateAndFridge.Api;
 using FateAndFridge.Api.Data;
 using FateAndFridge.Api.Endpoints;
+using FateAndFridge.Api.Middleware;
+using FateAndFridge.Api.Services;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -15,6 +18,14 @@ if (string.IsNullOrWhiteSpace(connectionString))
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString).UseSnakeCaseNamingConvention());
+
+// The internal API contract uses snake_case JSON property names (docs/API.md §3).
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;
+});
+
+builder.Services.AddScoped<SetupStateService>();
 
 builder.Services.AddOpenApi();
 
@@ -33,8 +44,11 @@ if (migrateOnly)
     return;
 }
 
+app.UseMiddleware<SetupGatingMiddleware>();
+
 app.MapOpenApi();
 app.MapHealthEndpoints();
+app.MapSetupEndpoints();
 app.MapFrontend();
 
 await app.RunAsync();
