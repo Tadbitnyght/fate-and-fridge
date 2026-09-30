@@ -5,6 +5,17 @@
   // `opencode mcp add`, and run /mcps in OpenCode to connect and
   // authenticate servers that need it.
   "$schema": "https://opencode.ai/config.json",
+  // Docker infrastructure is owned by the docker-admin subagent. These global
+  // rules deny docker/docker compose shell commands and Docker MCP tools for
+  // every agent (including lead); docker-admin re-allows them in its agent
+  // file. Agent rules are appended after global rules, so its allow wins.
+  "permissions": [
+    { "action": "docker_*", "resource": "*", "effect": "deny" },
+    { "action": "shell", "resource": "docker *", "effect": "deny" },
+    { "action": "shell", "resource": "docker-compose *", "effect": "deny" },
+    { "action": "shell", "resource": "sudo docker *", "effect": "deny" },
+    { "action": "shell", "resource": "sudo docker-compose *", "effect": "deny" }
+  ],
   "mcp": {
     "servers": {
       // GitHub's official remote MCP server, authenticated with a personal

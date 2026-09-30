@@ -21,6 +21,14 @@ All implementation choices should support those outcomes.
 
 ## AI Team Roles
 
+### Docker Infrastructure (docker-admin)
+The Docker Infrastructure specialist owns containers, Docker Compose, Docker contexts, volumes, networks, images, and the Docker MCP Gateway.
+
+- Every Docker operation must be delegated to `docker-admin`; other agents (Lead, Implementer, Reviewer) must not run `docker`/`docker compose` shell commands or `docker_*` MCP tools themselves.
+- `docker-admin` prefers normal Docker CLI and Compose commands over MCP tooling, uses explicit contexts for remote hosts, never switches the default context to production TrueNAS, and never deletes persistent volumes, datasets, backups, or production containers without explicit authorization.
+- Exception: Testcontainers-based integration tests (`dotnet test`) start disposable containers through the test library's Docker API. That is ordinary test execution and does not require delegation.
+- Enforcement lives in `opencode.jsonc` (global deny rules) and `.opencode/agents/docker-admin.md` (re-allow).
+
 ### Lead Developer
 The Lead Developer owns architecture and scope.
 
