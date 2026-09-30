@@ -77,6 +77,7 @@ Use stable error codes.
 | `INVALID_CREDENTIALS` | 401 | Login failed (generic; never reveals whether the username exists) |
 | `ACCOUNT_LOCKED` | 423 | Account temporarily locked; `details.locked_until` present |
 | `RATE_LIMITED` | 429 | Too many attempts; `Retry-After` header present |
+| `NOT_FOUND` | 404 | The requested entity does not exist |
 | `PASSWORD_CHANGE_REQUIRED` | 403 | Session must complete a forced password change first |
 | `FORBIDDEN` | 403 | Authenticated but missing the required permission |
 | `IP_NOT_ALLOWED` | 403 | Client address is outside the configured IP allowlist |
@@ -103,6 +104,7 @@ Session model (approved M1):
 - Login sets an opaque, HttpOnly session cookie (`SameSite=Lax`, `Secure` when served over HTTPS).
 - Authenticated state-changing requests must present an antiforgery token; the frontend reads the token from the `X-CSRF-TOKEN` response header and echoes it in the `X-CSRF-TOKEN` request header on unsafe requests. Missing or invalid tokens fail with `403 CSRF_VALIDATION_FAILED`; safe methods and unauthenticated requests (including stale or invalid session cookies) are not validated, so those requests fall through to normal `401 AUTH_REQUIRED` handling.
 - Session lifetime is 30 days idle / 90 days absolute, with rotation on login, password change, and privilege change.
+- Login, session, change-password, and reset-password responses are sent with `Cache-Control: no-store`.
 - `GET /auth/session` returns the current user (or single-user household identity), effective permissions, auth mode, and `must_change_password`.
 - When `must_change_password` is true, every route except `/auth/session`, `/auth/change-password`, and `/auth/logout` fails with `PASSWORD_CHANGE_REQUIRED`.
 
@@ -123,6 +125,17 @@ Responses:
 `POST /auth/logout` (requires a valid session and the `X-CSRF-TOKEN` header):
 - `204` — revokes the current session server-side and deletes the cookie.
 - `401 AUTH_REQUIRED` without a valid session.
+
+`POST /auth/change-password` (requires a valid session and the `X-CSRF-TOKEN` header). Request:
+```json
+{ "current_password": "correct horse battery staple", "new_password": "a much better passphrase" }
+```
+- `204` — password updated. The current session is rotated (fresh `faf_session` cookie and `X-CSRF-TOKEN`), every other session of the user is revoked with reason `password_change`, `must_change_password` is cleared, and a `password_change` auth event is written.
+- `400 VALIDATION_FAILED` — missing, blank, or non-string fields, malformed JSON, a `new_password` outside 12–128 characters, or a `new_password` identical to `current_password`; `details.field_errors.new_password` is present for the password-policy cases.
+- `401 INVALID_CREDENTIALS` — generic failure when `current_password` is wrong.
+- `401 AUTH_REQUIRED` without a valid session.
+
+Forced-change gate: while `must_change_password` is true, every `/api/v1` route fails with `403 PASSWORD_CHANGE_REQUIRED` except `GET /auth/session`, `POST /auth/change-password`, and `POST /auth/logout`; `/health` and `/setup/*` remain reachable. The gate runs before antiforgery validation, so gated routes return `PASSWORD_CHANGE_REQUIRED` even when the CSRF token is missing.
 
 `GET /auth/session`, multiuser authenticated:
 ```json
@@ -146,6 +159,16 @@ Multiuser unauthenticated: `401 AUTH_REQUIRED`. Single-user:
 ```
 
 Effective permissions: Admins hold all seven keys; members hold their granted keys plus the matching view key for every granted edit key.
+
+`POST /users/{id}/reset-password` (Admin in multiuser mode, or the single-user system actor; `X-CSRF-TOKEN` required). Response `200`:
+```json
+{ "temporary_password": "Kd7mQ2xRf9Tn4Wpz8Hs6" }
+```
+- The temporary password is returned exactly once, never logged or stored in plaintext, satisfies the 12–128 policy, and uses an unambiguous alphabet (no `0/O/1/I/l`).
+- Sets the target's `must_change_password`, clears all lockout state (`failed_login_count`, `last_failed_login_at`, `locked_until`, `lockout_count`, `lockout_window_started_at`) so a locked user can log in again, revokes every session of the target with reason `password_reset`, and writes a `password_reset` auth event whose `metadata_json` carries `actor_user_id`. The next login with the temporary password is subject to the forced-change gate.
+- `401 AUTH_REQUIRED` without a valid session; `403 FORBIDDEN` for a non-Admin member; `404 NOT_FOUND` for an unknown user id. Resetting an inactive user succeeds (the Admin may be preparing to re-enable them), but login stays blocked until the user is re-enabled (M1-10).
+
+Password-lifecycle auth event types: `password_change`, `password_reset` (alongside `login_success`, `login_failure`, and `account_locked`).
 
 Login CSRF note: `POST /auth/login` is unauthenticated, so the antiforgery check does not apply (M1-06 decision). The JSON-body requirement and SameSite=Lax session cookie are the interim cross-site mitigations; M1-15 revisits login CSRF explicitly.
 

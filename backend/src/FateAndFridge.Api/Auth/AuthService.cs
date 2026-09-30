@@ -34,6 +34,40 @@ public abstract record LoginResult
     public sealed record RateLimited(TimeSpan RetryAfter) : LoginResult;
 }
 
+/// <summary>Outcome of a self-service password change (docs/API.md §5).</summary>
+public abstract record ChangePasswordResult
+{
+    private ChangePasswordResult()
+    {
+    }
+
+    /// <summary>Password updated; the caller sets the cookie from <see cref="RotatedToken"/>.</summary>
+    public sealed record Success(string RotatedToken, DateTimeOffset CookieExpiresAt) : ChangePasswordResult;
+
+    /// <summary>Current password did not verify; generic 401.</summary>
+    public sealed record InvalidCredentials : ChangePasswordResult;
+
+    /// <summary>New password failed validation; 400 with field errors.</summary>
+    public sealed record ValidationFailed(IReadOnlyDictionary<string, string[]> FieldErrors) : ChangePasswordResult;
+
+    /// <summary>User or session is no longer valid; 401 AUTH_REQUIRED.</summary>
+    public sealed record UserUnavailable : ChangePasswordResult;
+}
+
+/// <summary>Outcome of an Admin password reset (docs/API.md §5).</summary>
+public abstract record ResetPasswordResult
+{
+    private ResetPasswordResult()
+    {
+    }
+
+    /// <summary>Temporary password returned exactly once; never persisted in plaintext.</summary>
+    public sealed record Success(string TemporaryPassword) : ResetPasswordResult;
+
+    /// <summary>The target user id does not exist.</summary>
+    public sealed record UserNotFound : ResetPasswordResult;
+}
+
 /// <summary>
 /// Credential check, session issue/revocation, and auth-event bookkeeping
 /// (M1-07; docs/SECURITY.md §2/§3, docs/DATABASE.md §2). Failures are generic;
@@ -60,6 +94,12 @@ public sealed class AuthService(
 {
     /// <summary><c>user_sessions.revoked_reason</c> written by <see cref="LogoutAsync"/>.</summary>
     public const string LogoutRevocationReason = "logout";
+
+    /// <summary><c>user_sessions.revoked_reason</c> for a self-service password change.</summary>
+    public const string PasswordChangeRevocationReason = "password_change";
+
+    /// <summary><c>user_sessions.revoked_reason</c> for an Admin password reset.</summary>
+    public const string PasswordResetRevocationReason = "password_reset";
 
     /// <summary>Auth-event metadata reason categories (never secret material).</summary>
     public const string UnknownUserReason = "unknown_user";
@@ -228,6 +268,153 @@ public sealed class AuthService(
         sessionService.RevokeAsync(sessionId, LogoutRevocationReason, cancellationToken);
 
     /// <summary>
+    /// Changes the signed-in user's password (docs/API.md §5): verifies the
+    /// current password, applies the 12–128 character policy, rejects an
+    /// unchanged password, rotates the current session, revokes every other
+    /// session, clears <c>must_change_password</c>, and writes a
+    /// <c>password_change</c> event.
+    /// </summary>
+    public async Task<ChangePasswordResult> ChangePasswordAsync(
+        long userId,
+        long sessionId,
+        string currentPassword,
+        string newPassword,
+        string? ipAddress,
+        string? userAgent,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(currentPassword);
+        ArgumentNullException.ThrowIfNull(newPassword);
+
+        var user = await dbContext.Users.SingleOrDefaultAsync(
+            candidate => candidate.Id == userId,
+            cancellationToken);
+
+        if (user is null || !user.IsActive)
+        {
+            return new ChangePasswordResult.UserUnavailable();
+        }
+
+        if (!passwordHasher.Verify(user.PasswordHash, currentPassword))
+        {
+            return new ChangePasswordResult.InvalidCredentials();
+        }
+
+        if (!PasswordPolicy.IsValid(newPassword))
+        {
+            return NewPasswordValidation(
+                $"The new password must be between {PasswordPolicy.MinLength} and {PasswordPolicy.MaxLength} characters.");
+        }
+
+        if (string.Equals(currentPassword, newPassword, StringComparison.Ordinal))
+        {
+            return NewPasswordValidation("The new password must be different from the current password.");
+        }
+
+        // Rotate, persist, revoke, and audit as one transaction: a failure must
+        // not leave a rotated session with an unchanged password, or a changed
+        // password with live sibling sessions.
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        // Rotate before mutating the password: when the session can no longer be
+        // rotated the request fails as unauthenticated without a partial change.
+        var rotatedToken = await sessionService.RotateAsync(sessionId, cancellationToken);
+        if (rotatedToken is null)
+        {
+            return new ChangePasswordResult.UserUnavailable();
+        }
+
+        var now = timeProvider.GetUtcNow();
+        user.PasswordHash = passwordHasher.Hash(newPassword);
+        user.MustChangePassword = false;
+        user.UpdatedAt = now;
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        var revokedOtherSessions = await sessionService.RevokeOthersForUserAsync(
+            userId,
+            sessionId,
+            PasswordChangeRevocationReason,
+            cancellationToken);
+
+        await authEventWriter.WriteAsync(
+            new AuthEventEntry(
+                AuthEventTypes.PasswordChange,
+                user.Id,
+                user.Username,
+                ipAddress,
+                userAgent,
+                new Dictionary<string, object?> { ["revoked_other_sessions"] = revokedOtherSessions }),
+            cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
+
+        // The cookie expiry is a client-side hint; the database idle window
+        // (refreshed by the rotation) remains authoritative.
+        return new ChangePasswordResult.Success(rotatedToken, now + SessionService.IdleTimeout);
+    }
+
+    /// <summary>
+    /// Admin password reset (docs/API.md §5): issues a one-time temporary
+    /// password, sets <c>must_change_password</c>, clears all lockout state so
+    /// the reset unblocks a locked account, revokes every session of the
+    /// target, and writes a <c>password_reset</c> event naming the acting user.
+    /// Inactive targets are reset as well; their login stays blocked until the
+    /// user is re-enabled (M1-10).
+    /// </summary>
+    public async Task<ResetPasswordResult> ResetPasswordAsync(
+        long targetUserId,
+        long? actorUserId,
+        string? ipAddress,
+        string? userAgent,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await dbContext.Users.SingleOrDefaultAsync(
+            candidate => candidate.Id == targetUserId,
+            cancellationToken);
+
+        if (user is null)
+        {
+            return new ResetPasswordResult.UserNotFound();
+        }
+
+        // The new credential, the revoked sessions, and the audit event are one
+        // transaction so a failure cannot leave a reset password with live
+        // sessions (or vice versa).
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        var temporaryPassword = TemporaryPasswordGenerator.Generate();
+        var now = timeProvider.GetUtcNow();
+        user.PasswordHash = passwordHasher.Hash(temporaryPassword);
+        user.MustChangePassword = true;
+
+        // An admin reset is the only M1 flow that can unblock a locked account.
+        user.FailedLoginCount = 0;
+        user.LastFailedLoginAt = null;
+        user.LockedUntil = null;
+        user.LockoutCount = 0;
+        user.LockoutWindowStartedAt = null;
+
+        user.UpdatedAt = now;
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        await sessionService.RevokeAllForUserAsync(user.Id, PasswordResetRevocationReason, cancellationToken);
+
+        await authEventWriter.WriteAsync(
+            new AuthEventEntry(
+                AuthEventTypes.PasswordReset,
+                user.Id,
+                user.Username,
+                ipAddress,
+                userAgent,
+                new Dictionary<string, object?> { ["actor_user_id"] = actorUserId }),
+            cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
+
+        return new ResetPasswordResult.Success(temporaryPassword);
+    }
+
+    /// <summary>
     /// Applies one credential failure under a per-user row lock so parallel
     /// attempts cannot lose increments (docs/SECURITY.md §3). The state is read
     /// with <c>SELECT ... FOR UPDATE</c>, the pure policy decides the outcome,
@@ -327,6 +514,9 @@ public sealed class AuthService(
         lockedUntil is null
             ? null
             : new Dictionary<string, object?> { ["locked_until"] = lockedUntil };
+
+    private static ChangePasswordResult.ValidationFailed NewPasswordValidation(string message) =>
+        new(new Dictionary<string, string[]> { ["new_password"] = [message] });
 
     private async Task ApplyDelayAsync(TimeSpan? delay, CancellationToken cancellationToken)
     {

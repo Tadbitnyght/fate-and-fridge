@@ -108,10 +108,13 @@ if (migrateOnly)
 }
 
 // Order matters: authentication resolves the session principal first, setup
-// gating still wins pre-setup (409, never 401), and CSRF runs only for
+// gating still wins pre-setup (409, never 401), the forced-password-change gate
+// runs before CSRF so a flagged session always gets PASSWORD_CHANGE_REQUIRED on
+// gated routes (even without an antiforgery token), and CSRF runs only for
 // authenticated requests before authorization.
 app.UseAuthentication();
 app.UseMiddleware<SetupGatingMiddleware>();
+app.UseMiddleware<MustChangePasswordMiddleware>();
 app.UseMiddleware<CsrfMiddleware>();
 app.UseAuthorization();
 
@@ -119,6 +122,7 @@ app.MapOpenApi();
 app.MapHealthEndpoints();
 app.MapSetupEndpoints();
 app.MapAuthEndpoints();
+app.MapUserEndpoints();
 app.MapSettingsEndpoints();
 app.MapFrontend();
 

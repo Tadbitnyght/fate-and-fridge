@@ -24,6 +24,8 @@ public static class ErrorCodes
 
     public const string PasswordChangeRequired = "PASSWORD_CHANGE_REQUIRED";
 
+    public const string NotFound = "NOT_FOUND";
+
     public const string Forbidden = "FORBIDDEN";
 
     public const string IpNotAllowed = "IP_NOT_ALLOWED";

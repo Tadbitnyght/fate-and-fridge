@@ -1,6 +1,3 @@
-using System.Buffers.Text;
-using System.Security.Cryptography;
-using System.Text;
 using FateAndFridge.Api.Data;
 using FateAndFridge.Api.Domain;
 using Microsoft.EntityFrameworkCore;
@@ -39,11 +36,11 @@ public sealed class SessionService(AppDbContext dbContext, TimeProvider timeProv
         CancellationToken cancellationToken = default)
     {
         var now = timeProvider.GetUtcNow();
-        var rawToken = CreateRawToken();
+        var rawToken = SessionTokenHasher.CreateRawToken();
         var session = new UserSession
         {
             UserId = userId,
-            TokenHash = HashToken(rawToken),
+            TokenHash = SessionTokenHasher.Hash(rawToken),
             CreatedAt = now,
             LastSeenAt = now,
             IdleExpiresAt = now + IdleTimeout,
@@ -75,7 +72,7 @@ public sealed class SessionService(AppDbContext dbContext, TimeProvider timeProv
             return null;
         }
 
-        var tokenHash = HashToken(rawToken);
+        var tokenHash = SessionTokenHasher.Hash(rawToken);
         var match = await (
                 from session in dbContext.UserSessions
                 join user in dbContext.Users on session.UserId equals user.Id
@@ -135,8 +132,8 @@ public sealed class SessionService(AppDbContext dbContext, TimeProvider timeProv
             return null;
         }
 
-        var rawToken = CreateRawToken();
-        session.TokenHash = HashToken(rawToken);
+        var rawToken = SessionTokenHasher.CreateRawToken();
+        session.TokenHash = SessionTokenHasher.Hash(rawToken);
         session.LastSeenAt = now;
         session.IdleExpiresAt = RefreshIdleExpiry(now, session.AbsoluteExpiresAt);
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -195,15 +192,34 @@ public sealed class SessionService(AppDbContext dbContext, TimeProvider timeProv
                 cancellationToken);
     }
 
+    /// <summary>
+    /// Revokes every active session of a user except <paramref name="exceptSessionId"/>
+    /// (used by password change so the rotating session stays valid) and returns
+    /// the number of sessions revoked. M1-10 reuses this for privilege changes.
+    /// </summary>
+    public async Task<int> RevokeOthersForUserAsync(
+        long userId,
+        long exceptSessionId,
+        string reason,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+
+        var now = timeProvider.GetUtcNow();
+        return await dbContext.UserSessions
+            .Where(session => session.UserId == userId
+                && session.Id != exceptSessionId
+                && session.RevokedAt == null)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(session => session.RevokedAt, now)
+                    .SetProperty(session => session.RevokedReason, reason),
+                cancellationToken);
+    }
+
     private static DateTimeOffset RefreshIdleExpiry(DateTimeOffset now, DateTimeOffset absoluteExpiresAt)
     {
         var idleExpiresAt = now + IdleTimeout;
         return idleExpiresAt < absoluteExpiresAt ? idleExpiresAt : absoluteExpiresAt;
     }
-
-    private static string CreateRawToken() =>
-        Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(32));
-
-    private static byte[] HashToken(string rawToken) =>
-        SHA256.HashData(Encoding.UTF8.GetBytes(rawToken));
 }

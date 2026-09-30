@@ -141,6 +141,11 @@ public sealed class SessionAuthenticationHandler : AuthenticationHandler<Authent
 
     protected override async Task HandleChallengeAsync(AuthenticationProperties properties)
     {
+        // Challenge responses (for example an unauthenticated
+        // POST /auth/change-password) must not be cached, matching every other
+        // auth response (docs/API.md §5).
+        Response.Headers.CacheControl = "no-store";
+
         // Routes using RequireAuthorization() get the same stable envelope as
         // endpoints that check ICurrentActorProvider themselves.
         var result = ApiResults.Error(

@@ -333,6 +333,61 @@ public sealed class SessionServiceTests(M1SetupFixture fixture) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Revoke_others_for_user_keeps_the_excepted_session_active()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var clock = new TestTimeProvider(Start);
+        var alice = await SeedUserAsync("alice", cancellationToken);
+        var bob = await SeedUserAsync("bob", cancellationToken);
+        var (aliceKept, aliceKeptToken) = await CreateSessionAsync(clock, alice, cancellationToken);
+        var (aliceRevoked, aliceRevokedToken) = await CreateSessionAsync(clock, alice, cancellationToken);
+        var (_, bobToken) = await CreateSessionAsync(clock, bob, cancellationToken);
+
+        int revokedCount;
+        await using (var context = fixture.CreateContext())
+        {
+            revokedCount = await new SessionService(context, clock)
+                .RevokeOthersForUserAsync(
+                    alice.Id,
+                    aliceKept.Id,
+                    "password_change",
+                    cancellationToken);
+        }
+
+        revokedCount.Should().Be(1);
+
+        await using (var verification = fixture.CreateContext())
+        {
+            var kept = await verification.UserSessions
+                .AsNoTracking()
+                .SingleAsync(candidate => candidate.Id == aliceKept.Id, cancellationToken);
+            kept.RevokedAt.Should().BeNull();
+
+            var revoked = await verification.UserSessions
+                .AsNoTracking()
+                .SingleAsync(candidate => candidate.Id == aliceRevoked.Id, cancellationToken);
+            revoked.RevokedAt.Should().Be(Start);
+            revoked.RevokedReason.Should().Be("password_change");
+        }
+
+        await using (var context = fixture.CreateContext())
+        {
+            var service = new SessionService(context, clock);
+            (await service.ResolveAsync(aliceKeptToken, cancellationToken)).Should().NotBeNull();
+            (await service.ResolveAsync(aliceRevokedToken, cancellationToken)).Should().BeNull();
+            (await service.ResolveAsync(bobToken, cancellationToken)).Should().NotBeNull();
+        }
+
+        // Idempotent: nothing left to revoke for the excepted session.
+        await using (var context = fixture.CreateContext())
+        {
+            (await new SessionService(context, clock)
+                    .RevokeOthersForUserAsync(alice.Id, aliceKept.Id, "password_change", cancellationToken))
+                .Should().Be(0);
+        }
+    }
+
+    [Fact]
     public async Task Session_lifecycle_never_logs_the_raw_token_or_its_hash()
     {
         var cancellationToken = TestContext.Current.CancellationToken;

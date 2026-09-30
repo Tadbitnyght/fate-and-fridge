@@ -6,9 +6,9 @@ namespace FateAndFridge.Api.Auth;
 
 /// <summary>
 /// Stable <c>auth_events.event_type</c> values (docs/DATABASE.md §2).
-/// <c>account_locked</c> is written when a lock engages (part 2); a login
-/// attempt rejected by an already-active lock is recorded as
-/// <see cref="LoginFailure"/> with reason <c>account_locked</c>.
+/// <c>account_locked</c> is written when a lock engages; a login attempt
+/// rejected by an already-active lock is recorded as <see cref="LoginFailure"/>
+/// with reason <c>account_locked</c>.
 /// </summary>
 public static class AuthEventTypes
 {
@@ -17,6 +17,10 @@ public static class AuthEventTypes
     public const string LoginFailure = "login_failure";
 
     public const string AccountLocked = "account_locked";
+
+    public const string PasswordChange = "password_change";
+
+    public const string PasswordReset = "password_reset";
 }
 
 /// <summary>

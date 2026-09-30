@@ -8,7 +8,9 @@ using FateAndFridge.Api.Domain;
 using FateAndFridge.Api.Errors;
 using FateAndFridge.Api.Middleware;
 using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace FateAndFridge.Api.Endpoints;
 
@@ -76,6 +78,9 @@ public static class AuthEndpoints
 
         group.MapGet("/session", GetSessionAsync);
 
+        // Allowed by the forced-change gate; rotates the current session.
+        group.MapPost("/change-password", ChangePasswordAsync).RequireAuthorization();
+
         return app;
     }
 
@@ -86,6 +91,8 @@ public static class AuthEndpoints
         AppDbContext dbContext,
         CancellationToken cancellationToken)
     {
+        ResponseCache.NoStore(context);
+
         var (request, validationError) = await ReadLoginRequestAsync(context, cancellationToken);
         if (request is null)
         {
@@ -152,12 +159,122 @@ public static class AuthEndpoints
         return Results.Ok(await CreateMultiuserSessionAsync(dbContext, success.User, cancellationToken));
     }
 
+    /// <summary>
+    /// Self-service password change (docs/API.md §5). The current password must
+    /// verify; the new password follows the 12–128 character policy; success
+    /// rotates the session cookie and returns <c>204</c>.
+    /// </summary>
+    private static async Task<IResult> ChangePasswordAsync(
+        HttpContext context,
+        AuthService authService,
+        IAntiforgery antiforgery,
+        IOptions<AntiforgeryOptions> antiforgeryOptions,
+        CancellationToken cancellationToken)
+    {
+        ResponseCache.NoStore(context);
+
+        var (request, validationError) = await ReadChangePasswordRequestAsync(context, cancellationToken);
+        if (request is null)
+        {
+            return validationError!;
+        }
+
+        var userIdValue = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var sessionIdValue = context.User.FindFirstValue(SessionAuthenticationDefaults.SessionIdClaim);
+        if (!long.TryParse(userIdValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var userId)
+            || !long.TryParse(sessionIdValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var sessionId))
+        {
+            return AuthRequired();
+        }
+
+        var result = await authService.ChangePasswordAsync(
+            userId,
+            sessionId,
+            request.CurrentPassword,
+            request.NewPassword,
+            RemoteIpAddress(context),
+            UserAgent(context),
+            cancellationToken);
+
+        return result switch
+        {
+            ChangePasswordResult.Success success =>
+                ChangePasswordSucceeded(context, antiforgery, antiforgeryOptions, success),
+            ChangePasswordResult.InvalidCredentials => InvalidCredentials(),
+            ChangePasswordResult.ValidationFailed failed => ApiResults.ValidationError(failed.FieldErrors),
+            _ => AuthRequired(),
+        };
+    }
+
+    private static IResult ChangePasswordSucceeded(
+        HttpContext context,
+        IAntiforgery antiforgery,
+        IOptions<AntiforgeryOptions> antiforgeryOptions,
+        ChangePasswordResult.Success success)
+    {
+        SessionCookie.Append(context.Response, success.RotatedToken, success.CookieExpiresAt);
+
+        // Rotation replaced the stored token hash, so both the cookie token
+        // decision and the request token cached earlier in this request are
+        // stale. IAntiforgery keeps that state in an internal per-request
+        // feature (IAntiforgeryFeature) and would otherwise reuse the
+        // pre-rotation token without writing a cookie, so reset it and hide the
+        // request's antiforgery cookie before minting a fresh pair bound to the
+        // rotated session.
+        context.Items[SessionAuthenticationDefaults.SessionTokenHashItemKey] =
+            Convert.ToHexString(SessionTokenHasher.Hash(success.RotatedToken));
+
+        ResetAntiforgeryRequestState(context);
+        HideRequestAntiforgeryCookie(context, antiforgeryOptions.Value.Cookie.Name);
+
+        var tokenSet = antiforgery.GetAndStoreTokens(context);
+        context.Response.Headers[CsrfMiddleware.HeaderName] = tokenSet.RequestToken;
+
+        return Results.NoContent();
+    }
+
+    /// <summary>
+    /// Removes the framework's cached antiforgery state for this request so the
+    /// next mint re-evaluates the (rotated) session instead of reusing the
+    /// token minted before rotation. The feature type lives in the framework's
+    /// internals, so it is located by name.
+    /// </summary>
+    private static void ResetAntiforgeryRequestState(HttpContext context)
+    {
+        const string antiforgeryFeatureTypeName = "Microsoft.AspNetCore.Antiforgery.IAntiforgeryFeature";
+
+        foreach (var feature in context.Features)
+        {
+            if (string.Equals(feature.Key.FullName, antiforgeryFeatureTypeName, StringComparison.Ordinal))
+            {
+                context.Features[feature.Key] = null;
+                return;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Hides the request's antiforgery cookie so the next mint generates and
+    /// stores a new cookie token instead of reusing the pre-rotation one.
+    /// </summary>
+    private static void HideRequestAntiforgeryCookie(HttpContext context, string? cookieName)
+    {
+        if (string.IsNullOrEmpty(cookieName))
+        {
+            return;
+        }
+
+        // Replace only the parsed view: the raw Cookie header (and every other
+        // cookie value, including percent-encoded ones) is left untouched.
+        var filtered = new FilteredRequestCookieCollection(context.Request.Cookies, cookieName);
+        context.Features.Set<IRequestCookiesFeature>(new RequestCookiesFeature(filtered));
+    }
+
     private static async Task<IResult> LogoutAsync(
         HttpContext context,
         AuthService authService,
         CancellationToken cancellationToken)
-    {
-        // RequireAuthorization() already rejected requests without a valid
+    {        // RequireAuthorization() already rejected requests without a valid
         // session; the claim is issued by the session authentication handler.
         var sessionIdValue = context.User.FindFirstValue(SessionAuthenticationDefaults.SessionIdClaim);
         if (!long.TryParse(sessionIdValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var sessionId))
@@ -172,10 +289,13 @@ public static class AuthEndpoints
     }
 
     private static async Task<IResult> GetSessionAsync(
+        HttpContext context,
         AppDbContext dbContext,
         ICurrentActorProvider actorProvider,
         CancellationToken cancellationToken)
     {
+        ResponseCache.NoStore(context);
+
         var actor = await actorProvider.GetCurrentActorAsync(cancellationToken);
         if (actor is null)
         {
@@ -298,6 +418,48 @@ public static class AuthEndpoints
         return value;
     }
 
+    /// <summary>
+    /// Parses and validates the change-password body. Missing, blank, or
+    /// non-string fields and malformed JSON produce <c>400 VALIDATION_FAILED</c>
+    /// with <c>details.field_errors</c>; policy and same-password checks happen
+    /// in <see cref="AuthService.ChangePasswordAsync"/>.
+    /// </summary>
+    private static async Task<(ChangePasswordRequest? Request, IResult? Error)> ReadChangePasswordRequestAsync(
+        HttpContext context,
+        CancellationToken cancellationToken)
+    {
+        JsonDocument document;
+        try
+        {
+            document = await JsonDocument.ParseAsync(
+                context.Request.Body,
+                cancellationToken: cancellationToken);
+        }
+        catch (JsonException)
+        {
+            return (null, BodyValidationError());
+        }
+
+        using (document)
+        {
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                return (null, BodyValidationError());
+            }
+
+            var fieldErrors = new Dictionary<string, string[]>();
+            var currentPassword = ReadRequiredString(root, "current_password", fieldErrors);
+            var newPassword = ReadRequiredString(root, "new_password", fieldErrors);
+            if (fieldErrors.Count > 0)
+            {
+                return (null, ApiResults.ValidationError(fieldErrors));
+            }
+
+            return (new ChangePasswordRequest(currentPassword!, newPassword!), null);
+        }
+    }
+
     private static IResult BodyValidationError() =>
         ApiResults.ValidationError(new Dictionary<string, string[]>
         {
@@ -314,4 +476,6 @@ public static class AuthEndpoints
     }
 
     private sealed record LoginRequest(string Username, string Password);
+
+    private sealed record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 }
