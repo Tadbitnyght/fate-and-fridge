@@ -1,6 +1,6 @@
-import { Field } from '../Field'
-import { fieldProps } from '../fieldProps'
-import { validateAllowlistText } from '../validation'
+import { Field } from '../../../components/Field'
+import { fieldProps } from '../../../components/fieldProps'
+import { validateAllowlistText } from '../../../utils/ipRanges'
 import type { StepProps } from './types'
 
 /** Optional IP allowlist with the explicit lockout warning (docs/SECURITY.md §5). */

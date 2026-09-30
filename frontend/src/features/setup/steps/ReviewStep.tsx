@@ -1,5 +1,5 @@
-import { AUTH_MODE_LABELS, STARTUP_PAGE_LABELS, WEEK_START_LABELS } from '../labels'
-import { validateAllowlistText } from '../validation'
+import { AUTH_MODE_LABELS, STARTUP_PAGE_LABELS, WEEK_START_LABELS } from '../../../utils/labels'
+import { validateAllowlistText } from '../../../utils/ipRanges'
 import type { StepProps } from './types'
 
 /** Read-only summary of everything that will be sent to `POST /setup/complete`. */

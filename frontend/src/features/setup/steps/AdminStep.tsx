@@ -1,5 +1,5 @@
-import { Field } from '../Field'
-import { fieldProps } from '../fieldProps'
+import { Field } from '../../../components/Field'
+import { fieldProps } from '../../../components/fieldProps'
 import type { StepProps } from './types'
 
 export function AdminStep({ values, errors, onChange }: StepProps) {

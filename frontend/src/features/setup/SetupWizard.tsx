@@ -4,6 +4,8 @@ import { Navigate, useNavigate } from 'react-router-dom'
 import { isApiError } from '../../api/client'
 import { ErrorCodes } from '../../api/errorCodes'
 import type { CompleteSetupResponse } from '../../api/setup'
+import { extractServerFieldErrors, type FieldErrors } from '../../utils/fieldErrors'
+import { detectTimezoneOptions, getDefaultTimezone } from '../../utils/timezones'
 import { AdminStep } from './steps/AdminStep'
 import { AllowlistStep } from './steps/AllowlistStep'
 import { HouseholdStep } from './steps/HouseholdStep'
@@ -16,14 +18,12 @@ import {
   buildRequest,
   clearFieldError,
   clearStepErrors,
-  extractServerFieldErrors,
   nextStep,
   previousStep,
   stepForFieldErrors,
   validateAll,
   validateStep,
   wizardSteps,
-  type FieldErrors,
   type SetupFormValues,
   type SetupStep,
   type ValidationContext,
@@ -36,38 +36,6 @@ const STEP_TITLES: Record<SetupStep, string> = {
   allowlist: 'Network access',
   review: 'Review and finish',
   recovery: 'Save your recovery key',
-}
-
-function detectTimezoneOptions(): string[] | null {
-  try {
-    if (typeof Intl.supportedValuesOf !== 'function') {
-      return null
-    }
-    const zones = Intl.supportedValuesOf('timeZone')
-    return Array.isArray(zones) && zones.length > 0 ? zones : null
-  } catch {
-    return null
-  }
-}
-
-function defaultTimezone(options: string[] | null): string {
-  let detected = ''
-  try {
-    detected = Intl.DateTimeFormat().resolvedOptions().timeZone ?? ''
-  } catch {
-    detected = ''
-  }
-
-  if (detected.length > 0) {
-    if (options === null) {
-      return detected
-    }
-    // Keep the detected zone (aliases such as UTC are valid server-side even
-    // though Intl omits them); the membership check only prefers canonical form.
-    return options.find((zone) => zone.toLowerCase() === detected.toLowerCase()) ?? detected
-  }
-
-  return options?.[0] ?? 'UTC'
 }
 
 function createInitialValues(timezone: string): SetupFormValues {
@@ -99,7 +67,7 @@ export function SetupWizard() {
 
   const [timezoneOptions] = useState<string[] | null>(() => detectTimezoneOptions())
   const [values, setValues] = useState<SetupFormValues>(() =>
-    createInitialValues(defaultTimezone(timezoneOptions)),
+    createInitialValues(getDefaultTimezone(timezoneOptions)),
   )
   const [step, setStep] = useState<SetupStep>('mode')
   const [errors, setErrors] = useState<FieldErrors>({})

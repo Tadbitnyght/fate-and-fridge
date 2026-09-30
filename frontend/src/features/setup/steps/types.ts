@@ -1,4 +1,5 @@
-import type { FieldErrors, SetupFormValues } from '../validation'
+import type { FieldErrors } from '../../../utils/fieldErrors'
+import type { SetupFormValues } from '../validation'
 
 export interface StepProps {
   values: SetupFormValues

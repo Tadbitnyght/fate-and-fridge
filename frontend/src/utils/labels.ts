@@ -1,5 +1,5 @@
-import type { AuthMode } from '../../api/auth'
-import type { StartupPage } from '../../api/setup'
+import type { AuthMode } from '../api/auth'
+import type { StartupPage } from '../api/setup'
 
 export const WEEK_START_LABELS = [
   'Sunday',

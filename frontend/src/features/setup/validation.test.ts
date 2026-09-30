@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
+import { extractServerFieldErrors } from '../../utils/fieldErrors'
+import { validateAllowlistRange, validateAllowlistText } from '../../utils/ipRanges'
 import {
   buildRequest,
   clearFieldError,
   clearStepErrors,
-  extractServerFieldErrors,
   stepForFieldErrors,
-  validateAllowlistRange,
-  validateAllowlistText,
   validateStep,
   wizardSteps,
   type SetupFormValues,

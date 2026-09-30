@@ -479,13 +479,6 @@ body {
   outline-offset: 2px;
 }
 
-.wizard__footer button.button--primary,
-.wizard__step > button.button--primary {
-  border-color: var(--text);
-  background: var(--text);
-  color: var(--bg);
-}
-
 .form__fieldset {
   display: flex;
   flex-direction: column;
@@ -608,5 +601,317 @@ body {
   .wizard__footer button,
   .wizard__step > button {
     flex: 1 1 auto;
+  }
+}
+
+/* ---------- settings area (M1-14) ---------- */
+
+.settings-nav {
+  margin: 0.75rem 0 1.25rem;
+}
+
+.settings-nav__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0.25rem;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  background: var(--surface);
+}
+
+.settings-nav__link {
+  display: inline-block;
+  padding: 0.35rem 0.8rem;
+  border-radius: 0.45rem;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.settings-nav__link:hover {
+  color: var(--text);
+}
+
+.settings-nav__link--active {
+  background: var(--bg);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.settings-nav__link:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.settings-section h3 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.settings-section h4 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.settings-subsection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.settings-section__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.form__status {
+  margin: 0;
+  color: var(--ok-text);
+  font-weight: 600;
+}
+
+.settings-section fieldset.form__fieldset {
+  gap: 0.75rem;
+}
+
+.settings-section textarea {
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  resize: vertical;
+}
+
+.settings-section select {
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.data-table caption {
+  text-align: left;
+}
+
+.data-table th,
+.data-table td {
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.data-table thead th {
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.data-table__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.data-table__actions button,
+.modal__actions button {
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 0.45rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.data-table__actions button:focus-visible,
+.modal__actions button:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.modal__actions button.button--primary,
+.wizard__footer button.button--primary,
+.settings-actions button.button--primary,
+.wizard__step > button.button--primary {
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--bg);
+}
+
+.modal__actions button:disabled,
+.data-table__actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.tag {
+  display: inline-block;
+  margin-right: 0.35rem;
+  padding: 0.05rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.tag--ok {
+  background: var(--ok-bg);
+  color: var(--ok-text);
+  border-color: transparent;
+}
+
+.tag--bad {
+  background: var(--bad-bg);
+  color: var(--bad-text);
+  border-color: transparent;
+}
+
+/* ---------- modal dialogs ---------- */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 1.5rem 1rem;
+  background: rgb(0 0 0 / 55%);
+  overflow-y: auto;
+}
+
+.modal {
+  width: min(32rem, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.modal:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.modal__title {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.modal__body p {
+  margin: 0 0 0.5rem;
+}
+
+.modal__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+/* ---------- one-time temporary password ---------- */
+
+.one-time {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.9rem 1rem;
+  border: 2px solid var(--ok-text);
+  border-radius: 0.6rem;
+  background: var(--ok-bg);
+  color: var(--ok-text);
+}
+
+.one-time h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.one-time h4:focus-visible {
+  outline: 2px solid var(--ok-text);
+  outline-offset: 3px;
+}
+
+.one-time .form__hint {
+  color: inherit;
+}
+
+.permission-list {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 40rem) {
+  .data-table thead {
+    display: none;
+  }
+
+  .data-table tr {
+    display: block;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .data-table th,
+  .data-table td {
+    display: block;
+    border-bottom: none;
+    padding: 0.15rem 0.2rem;
+  }
+
+  .data-table__actions {
+    padding-top: 0.35rem;
   }
 }

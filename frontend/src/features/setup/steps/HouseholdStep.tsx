@@ -1,6 +1,6 @@
-import { Field } from '../Field'
-import { fieldProps } from '../fieldProps'
-import { STARTUP_PAGE_LABELS, WEEK_START_LABELS } from '../labels'
+import { Field } from '../../../components/Field'
+import { fieldProps } from '../../../components/fieldProps'
+import { STARTUP_PAGE_LABELS, WEEK_START_LABELS } from '../../../utils/labels'
 import type { StepProps } from './types'
 
 export function HouseholdStep({ values, errors, timezoneOptions, onChange }: StepProps) {
