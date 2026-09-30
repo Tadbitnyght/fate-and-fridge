@@ -73,6 +73,7 @@ Use stable error codes.
 | `SETUP_ALREADY_COMPLETED` | 409 | `POST /setup/complete` was called after setup finished |
 | `VALIDATION_FAILED` | 400 | Request body/query failed validation; `details.field_errors` present |
 | `AUTH_REQUIRED` | 401 | No valid session |
+| `CSRF_VALIDATION_FAILED` | 403 | Unsafe request carried a session cookie but the antiforgery token was missing or invalid |
 | `INVALID_CREDENTIALS` | 401 | Login failed (generic; never reveals whether the username exists) |
 | `ACCOUNT_LOCKED` | 423 | Account temporarily locked; `details.locked_until` present |
 | `RATE_LIMITED` | 429 | Too many attempts; `Retry-After` header present |
@@ -100,7 +101,7 @@ Rate limits apply to authentication routes.
 
 Session model (approved M1):
 - Login sets an opaque, HttpOnly session cookie (`SameSite=Lax`, `Secure` when served over HTTPS).
-- State-changing requests must present an antiforgery token; the frontend reads the token from the `X-CSRF-TOKEN` response header and echoes it on unsafe requests.
+- Authenticated state-changing requests must present an antiforgery token; the frontend reads the token from the `X-CSRF-TOKEN` response header and echoes it in the `X-CSRF-TOKEN` request header on unsafe requests. Missing or invalid tokens fail with `403 CSRF_VALIDATION_FAILED`; safe methods and unauthenticated requests (including stale or invalid session cookies) are not validated, so those requests fall through to normal `401 AUTH_REQUIRED` handling.
 - Session lifetime is 30 days idle / 90 days absolute, with rotation on login, password change, and privilege change.
 - `GET /auth/session` returns the current user (or single-user household identity), effective permissions, auth mode, and `must_change_password`.
 - When `must_change_password` is true, every route except `/auth/session`, `/auth/change-password`, and `/auth/logout` fails with `PASSWORD_CHANGE_REQUIRED`.

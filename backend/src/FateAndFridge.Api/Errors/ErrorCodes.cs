@@ -14,6 +14,8 @@ public static class ErrorCodes
 
     public const string AuthRequired = "AUTH_REQUIRED";
 
+    public const string CsrfValidationFailed = "CSRF_VALIDATION_FAILED";
+
     public const string InvalidCredentials = "INVALID_CREDENTIALS";
 
     public const string AccountLocked = "ACCOUNT_LOCKED";

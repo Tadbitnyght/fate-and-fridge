@@ -5,6 +5,9 @@ using FateAndFridge.Api.Data;
 using FateAndFridge.Api.Endpoints;
 using FateAndFridge.Api.Middleware;
 using FateAndFridge.Api.Services;
+using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -20,6 +23,27 @@ if (string.IsNullOrWhiteSpace(connectionString))
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString).UseSnakeCaseNamingConvention());
 
+// The Data Protection key ring must live on the persistent volume so opaque
+// sessions and antiforgery tokens survive container replacement
+// (docs/MILESTONES.md M1 decisions, docs/SECURITY.md §2).
+builder.Services
+    .AddDataProtection()
+    .SetApplicationName("FateAndFridge")
+    .PersistKeysToFileSystem(new DirectoryInfo(AppPaths.DataProtectionKeysRoot(builder.Configuration)));
+
+// Antiforgery backs the X-CSRF-TOKEN header contract (docs/API.md §5).
+builder.Services.AddAntiforgery(options =>
+{
+    options.HeaderName = CsrfMiddleware.HeaderName;
+    options.Cookie.Name = "faf_csrf";
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SameSite = SameSiteMode.Lax;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+});
+
+// Session-scoped antiforgery tokens: rotation and cross-session reuse fail.
+builder.Services.AddSingleton<IAntiforgeryAdditionalDataProvider, SessionAntiforgeryDataProvider>();
+
 // The internal API contract uses snake_case JSON property names (docs/API.md §3).
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
@@ -30,9 +54,19 @@ builder.Services.AddScoped<SetupStateService>();
 
 builder.Services.AddScoped<HouseholdSettingsService>();
 
-// M1-03 authorization seam: M1-06/M1-07 replace this provider with the
-// session-backed one; M1-09 re-tests the multiuser permission matrix.
-builder.Services.AddScoped<ICurrentActorProvider, HouseholdAuthModeActorProvider>();
+// M1-06 session infrastructure: opaque DB-backed cookie sessions resolved by
+// the default authentication scheme, with the session-aware actor provider
+// replacing the M1-03 interim provider. M1-07 adds login/logout endpoints and
+// M1-09 re-tests the multiuser permission matrix.
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<SessionService>();
+builder.Services.AddAuthentication(SessionAuthenticationDefaults.Scheme)
+    .AddScheme<AuthenticationSchemeOptions, SessionAuthenticationHandler>(
+        SessionAuthenticationDefaults.Scheme,
+        _ => { });
+builder.Services.AddAuthorization();
+builder.Services.AddScoped<ICurrentActorProvider, SessionActorProvider>();
 
 // Argon2id hashing is stateless and thread-safe (libsodium initializes once).
 builder.Services.AddSingleton<IPasswordHasher, Argon2idPasswordHasher>();
@@ -54,7 +88,13 @@ if (migrateOnly)
     return;
 }
 
+// Order matters: authentication resolves the session principal first, setup
+// gating still wins pre-setup (409, never 401), and CSRF runs only for
+// authenticated requests before authorization.
+app.UseAuthentication();
 app.UseMiddleware<SetupGatingMiddleware>();
+app.UseMiddleware<CsrfMiddleware>();
+app.UseAuthorization();
 
 app.MapOpenApi();
 app.MapHealthEndpoints();

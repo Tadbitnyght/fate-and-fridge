@@ -41,12 +41,22 @@ public sealed class M1SetupFixture : IAsyncLifetime
     public ApiFactory CreateFactory(string? dataDir = null) =>
         new(ConnectionString, migrateOnStartup: false, dataDir);
 
-    /// <summary>Removes setup state so every test starts from a fresh install.</summary>
+    /// <summary>
+    /// Removes setup state and M1 authentication rows so every test starts from
+    /// a fresh install. Sessions first: they reference users with RESTRICT.
+    /// </summary>
     public async Task ResetAsync(CancellationToken cancellationToken)
     {
         await using var context = CreateContext();
         await context.Database.ExecuteSqlRawAsync(
-            "DELETE FROM application_settings; DELETE FROM household_settings;",
+            """
+            DELETE FROM user_sessions;
+            DELETE FROM user_permissions;
+            DELETE FROM auth_events;
+            DELETE FROM users;
+            DELETE FROM application_settings;
+            DELETE FROM household_settings;
+            """,
             cancellationToken);
     }
 }

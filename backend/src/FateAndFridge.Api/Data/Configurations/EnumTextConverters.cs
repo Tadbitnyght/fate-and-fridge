@@ -27,19 +27,33 @@ internal static class EnumTextConverters
             page => StartupPageToText(page),
             text => StartupPageFromText(text));
 
-    private static string UserRoleToText(UserRole role) => role switch
+    internal static string UserRoleToText(UserRole role) => role switch
     {
         UserRole.Admin => "admin",
         UserRole.Member => "member",
         _ => throw new ArgumentOutOfRangeException(nameof(role), role, "Unknown user role."),
     };
 
-    private static UserRole UserRoleFromText(string text) => text switch
+    internal static bool TryUserRoleFromText(string? text, out UserRole role)
     {
-        "admin" => UserRole.Admin,
-        "member" => UserRole.Member,
-        _ => throw new ArgumentOutOfRangeException(nameof(text), text, "Unknown user role text."),
-    };
+        switch (text)
+        {
+            case "admin":
+                role = UserRole.Admin;
+                return true;
+            case "member":
+                role = UserRole.Member;
+                return true;
+            default:
+                role = default;
+                return false;
+        }
+    }
+
+    private static UserRole UserRoleFromText(string text) =>
+        TryUserRoleFromText(text, out var role)
+            ? role
+            : throw new ArgumentOutOfRangeException(nameof(text), text, "Unknown user role text.");
 
     internal static string AuthModeToText(AuthMode mode) => mode switch
     {

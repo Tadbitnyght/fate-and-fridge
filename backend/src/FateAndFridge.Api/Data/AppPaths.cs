@@ -5,8 +5,19 @@ internal static class AppPaths
 {
     private static readonly string[] Subdirectories = ["config", "images", "backups"];
 
+    private static readonly UnixFileMode DataProtectionDirectoryMode =
+        UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+
     public static string DataRoot(IConfiguration configuration) =>
         configuration.GetValue("DataDir", "./data") ?? "./data";
+
+    /// <summary>
+    /// Data Protection key ring location (docs/MILESTONES.md M1 decisions): it
+    /// must live on the persistent volume so sessions and antiforgery tokens
+    /// survive container replacement.
+    /// </summary>
+    public static string DataProtectionKeysRoot(IConfiguration configuration) =>
+        Path.Combine(DataRoot(configuration), "config", "dp-keys");
 
     /// <summary>
     /// Creates the required data directories. Missing or unwritable paths are
@@ -23,11 +34,31 @@ internal static class AppPaths
                 Directory.CreateDirectory(Path.Combine(root, subdirectory));
             }
 
+            EnsureDataProtectionKeysDirectory(root);
+
             logger.LogInformation("Persistent data directory ready at {DataRoot}", root);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             logger.LogWarning(ex, "Could not prepare data directories under {DataRoot}", root);
+        }
+    }
+
+    /// <summary>
+    /// Creates the Data Protection key directory and restricts it to the owner
+    /// (mode 0700) on Unix because the key ring protects session cookies and
+    /// antiforgery tokens. The mode is applied even when the directory already
+    /// exists (for example after an upgrade); Windows keeps the default ACL
+    /// behavior. Individual key file modes are left to Data Protection.
+    /// </summary>
+    private static void EnsureDataProtectionKeysDirectory(string root)
+    {
+        var path = Path.Combine(root, "config", "dp-keys");
+        Directory.CreateDirectory(path);
+
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(path, DataProtectionDirectoryMode);
         }
     }
 }
