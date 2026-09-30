@@ -45,12 +45,17 @@
       // The service environment does not have ~/.dotnet on PATH, and the tool's
       // Linux SDK discovery does not probe ~/.dotnet, so pin the workspace to
       // the user SDK (10.0.4xx per backend/global.json) explicitly.
+      // FATE_ARTIFACTS_PATH must match the value used by dotnet CLI builds on
+      // this workstation (backend/Directory.Build.props redirects obj/bin to it
+      // on SMB/9p shares); without it the workspace looks in backend/obj and
+      // cannot resolve NuGet references.
       "roslyn": {
         "type": "local",
         "command": ["/home/tadbit/.dotnet/tools/madq-roslynmcp"],
         "environment": {
           "DOTNET_ROOT": "/home/tadbit/.dotnet",
-          "ROSLYNMCP_MSBUILD_PATH": "/home/tadbit/.dotnet/sdk/10.0.401"
+          "ROSLYNMCP_MSBUILD_PATH": "/home/tadbit/.dotnet/sdk/10.0.401",
+          "FATE_ARTIFACTS_PATH": "/tmp/fate-and-fridge-artifacts"
         }
       },
       // Docker MCP Toolkit gateway (Docker CLI with the docker-mcp plugin).
