@@ -9,6 +9,13 @@
 - audit meaningful changes
 - support future API/service accounts without rebuilding auth model
 
+Conventions (approved M1):
+- Primary keys are `bigint` identity surrogate keys. IDs are not treated as secrets; authorization is always server-side.
+- Instants are stored as `timestamptz` and are always UTC in code.
+- Calendar dates are stored as `date` and evaluated in the household timezone.
+- Enum-like columns are stored as text with application-level constants (no PostgreSQL enum types).
+- Normalized columns are lowercase, trimmed, and whitespace-collapsed.
+
 ---
 
 ## 2. Core Tables
@@ -30,10 +37,16 @@ Suggested fields:
 ### users
 - `id`
 - `username`
+- `normalized_username` — unique; lowercase, trimmed
 - `password_hash`
+- `must_change_password` — set by Admin reset; cleared after a successful change
 - `role` (`admin`, `member`)
 - `is_active`
 - `locked_until`
+- `failed_login_count` — consecutive failures since the last success
+- `last_failed_login_at`
+- `lockout_count` — lockouts inside the current lockout window
+- `lockout_window_started_at`
 - `created_at`
 - `updated_at`
 - `last_login_at`
@@ -56,6 +69,25 @@ Keys:
 - `recipes.view`
 - `recipes.edit`
 - `reference_data.edit`
+
+Edit implies view: the server evaluates an effective permission set of granted keys plus the matching view key for every granted edit key. Permission changes take effect immediately; sessions do not cache permissions.
+
+---
+
+### user_sessions
+- `id`
+- `user_id`
+- `token_hash` — unique; only a hash of the session token is stored
+- `created_at`
+- `idle_expires_at`
+- `absolute_expires_at`
+- `last_seen_at`
+- `revoked_at` nullable
+- `revoked_reason` nullable
+- `ip_address` nullable
+- `user_agent` nullable
+
+Policy (approved M1): 30-day idle timeout, 90-day absolute cap; rotation on login, password change, and privilege change; all sessions revoked when a user is disabled or has a password reset.
 
 ---
 
@@ -363,6 +395,8 @@ Examples:
 
 Avoid putting complex relational domain data into generic JSON settings when a dedicated table is more appropriate.
 
+Security note: the backup recovery key is **not** stored in the database. It is generated during setup (M1) and stored at `/data/config/recovery.key` with file mode `0600`. It is never logged and never returned by ordinary settings endpoints; a single display at setup completion and the M13 export endpoint are the only exposure points.
+
 ---
 
 ## 12. Backup Metadata
@@ -432,5 +466,10 @@ Add indexes for:
 - proteins.normalized_name
 - audit_events.created_at
 - auth_events.occurred_at
+- auth_events.user_id
+- users.normalized_username (unique)
+- user_sessions.token_hash (unique)
+- user_sessions.user_id
+- user_sessions.absolute_expires_at
 
 Use PostgreSQL text search/trigram extensions only if needed after baseline performance is known.

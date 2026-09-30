@@ -23,20 +23,43 @@ Acceptance:
 ---
 
 ## Milestone 1 — Setup and Authentication
+
+Approved decisions (2026-09-29):
+- The backup recovery key is generated during setup in M1 (moved forward from M13 issues 1–2). M13 keeps export and restore.
+- Sessions: DB-backed opaque session cookie (`user_sessions`), 30-day idle / 90-day absolute, rotation on login, password change, and privilege change; all sessions revoked on password reset or disable; Data Protection keys persisted in `/data/config`; antiforgery on unsafe methods.
+- Password policy: 12–128 characters, no composition rules, paste allowed.
+- Admin reset issues a one-time temporary password and sets `users.must_change_password` (new column).
+- Lockout: 5 failures → progressive delay, 10 → 15-minute lock, 5 lockouts in 24h → 24-hour lock; per-IP 20 failures/10 min → 429; generic errors to prevent account enumeration.
+- Argon2id via libsodium bindings, PHC-encoded parameters, rehash on login when parameters change.
+- Single-user mode: system actor (null `created_by`/`updated_by`); Settings supports single → multiuser conversion with first-Admin creation. Multiuser → single is deferred.
+- Permissions: per-user keys in `user_permissions`; "permission groups" are UI presets only; edit implies view server-side; new members default view-only.
+- IP allowlist: app-wide except `/api/v1/health`; loopback always allowed; IPv4/IPv6 CIDR; forwarded headers honored only when the immediate peer is a configured trusted proxy.
+- Pre-setup gating: all `/api/v1` routes except `/health` and `/setup/*` return 409 `SETUP_REQUIRED`.
+
 Issues:
-1. Household settings model.
-2. Setup wizard.
-3. Single-user no-login mode.
-4. Multiuser mode.
-5. Admin creation.
-6. Member creation.
-7. Argon2id password hashing.
-8. Session/auth system.
-9. Permission groups.
-10. Login rate limits.
-11. Auth event logging.
-12. Admin password reset.
-13. Optional IP allowlist configuration.
+| # | Issue | Deliverable |
+|---|-------|-------------|
+| M1-01 | Schema baseline | `household_settings`, `application_settings`, `users`, `user_permissions`, `auth_events`, `user_sessions` + migration |
+| M1-02 | Setup state + error envelope | stable error envelope, `GET /setup/status`, `SETUP_REQUIRED` gating |
+| M1-03 | Household settings API | `GET/PATCH /settings/household` + validation |
+| M1-04 | Setup completion | `POST /setup/complete` (atomic, single-shot) + recovery key generation/storage |
+| M1-05 | Password hashing | libsodium Argon2id hasher + tests |
+| M1-06 | Session infrastructure | DB sessions, cookie scheme, CSRF, persisted Data Protection keys |
+| M1-07 | Auth endpoints | login/logout/session + lockout + rate limits + auth events |
+| M1-08 | Password lifecycle | change-password, admin reset, `must_change_password` |
+| M1-09 | Permissions | evaluator, edit-implies-view, enforcement helpers |
+| M1-10 | User management | users CRUD, permissions, disable/enable, last-admin safety, auth-mode switch |
+| M1-11 | IP allowlist | middleware + security settings + trusted proxies |
+| M1-12 | Frontend foundation | router, query client, API client, session context, login/logout, shell |
+| M1-13 | Setup wizard UI | mode, household, admin, allowlist, recovery key display |
+| M1-14 | Admin console UI | household, users/permissions, security, change password |
+| M1-15 | M1 verification | permission matrix, CSRF/session/allowlist/setup race tests, docs |
+
+Acceptance:
+- Fresh install reaches the setup wizard; setup is single-shot, atomic, and creates the recovery key.
+- Multiuser login, lockout, rate limits, CSRF, and the full permission matrix pass independent tests.
+- Single-user mode operates without login and can be converted to multiuser from Settings.
+- The IP allowlist blocks disallowed clients app-wide but never health checks or loopback.
 
 ---
 
@@ -206,8 +229,8 @@ Issues:
 
 ## Milestone 13 — Backup / Restore / Updates
 Issues:
-1. recovery key generation.
-2. persistent key storage.
+1. recovery key generation — delivered in M1 (M1-04).
+2. persistent key storage — delivered in M1 (M1-04; `/data/config/recovery.key`).
 3. key export.
 4. encrypted backup format.
 5. database backup.

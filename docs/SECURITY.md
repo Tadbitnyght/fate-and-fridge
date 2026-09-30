@@ -15,10 +15,15 @@
 ## 2. Authentication
 Multiuser mode uses:
 - local username/password
-- Argon2id password hashing
-- secure cookies or properly managed tokens
-- CSRF protection where applicable
-- session expiration/rotation
+- Argon2id password hashing (libsodium binding; PHC-encoded parameters; rehash on login when parameters change)
+- opaque DB-backed session cookies (`user_sessions` stores only a token hash)
+- HttpOnly, SameSite=Lax cookies; `Secure` when served over HTTPS
+- antiforgery tokens on unsafe methods
+- 30-day idle / 90-day absolute session expiration
+- rotation on login, password change, and privilege change
+- all sessions revoked on password reset or user disable
+
+Password policy (V1): minimum 12 characters, maximum 128, no composition rules, pasting allowed.
 
 Never store plaintext passwords.
 
@@ -29,9 +34,13 @@ Track:
 - successful login
 - failed login
 
-Apply:
-- progressive delay/rate limiting
-- temporary account lockout after excessive attempts
+Apply (V1 defaults):
+- 5 consecutive failures → progressive delay
+- 10 failures → 15-minute account lock
+- 5 lockouts within 24 hours → 24-hour lock
+- 20 failures per source IP per 10 minutes → HTTP 429 with `Retry-After`
+- generic `INVALID_CREDENTIALS` responses so login never reveals whether a username exists
+- `account_locked` auth event whenever a lock engages
 
 Lockout target:
 - configurable 24 or 48 hour maximum lock window after severe repeated abuse
@@ -64,6 +73,14 @@ Setup should warn:
 - do not expose unauthenticated instance directly to internet
 
 Optional IP allowlist may be enabled.
+
+V1 allowlist behavior:
+- applies app-wide except `/api/v1/health`
+- loopback (`127.0.0.1`, `::1`) is always allowed for the container healthcheck
+- IPv4 and IPv6 CIDR ranges
+- blocked clients receive HTTP 403
+- `X-Forwarded-For` is honored only when the immediate peer is a configured trusted proxy (CIDR list)
+- enabling requires explicit confirmation and a warning because a misconfigured allowlist can lock out the household
 
 IP allowlist must not replace authentication when multiuser mode is active.
 
@@ -157,9 +174,10 @@ Do not allow ordinary calendar update endpoints to accept past dates.
 Backup archive must be encrypted.
 
 Recovery key:
-- generated securely
-- stored in mounted persistent config
-- exportable separately
+- generated during setup (M1) as 32 random bytes, base64url
+- stored at `/data/config/recovery.key` with file mode `0600`
+- returned to the browser exactly once at setup completion
+- exportable separately by Admin (M13)
 - not displayed casually
 - never logged
 

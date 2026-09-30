@@ -18,8 +18,10 @@ External API keys/service accounts are deferred.
 ## 2. API Families
 
 ```text
+/api/v1/setup
 /api/v1/auth
 /api/v1/users
+/api/v1/settings
 /api/v1/calendar
 /api/v1/meals
 /api/v1/recipes
@@ -29,7 +31,6 @@ External API keys/service accounts are deferred.
 /api/v1/tags
 /api/v1/groceries
 /api/v1/statistics
-/api/v1/settings
 /api/v1/import
 /api/v1/admin/audit
 /api/v1/admin/history
@@ -63,6 +64,24 @@ External API keys/service accounts are deferred.
 
 Use stable error codes.
 
+### M1 error codes
+
+| Code | HTTP | Meaning |
+|------|------|---------|
+| `SETUP_REQUIRED` | 409 | Setup is not complete; only `/health` and `/setup/*` are callable |
+| `SETUP_ALREADY_COMPLETED` | 409 | `POST /setup/complete` was called after setup finished |
+| `VALIDATION_FAILED` | 400 | Request body/query failed validation; `details.field_errors` present |
+| `AUTH_REQUIRED` | 401 | No valid session |
+| `INVALID_CREDENTIALS` | 401 | Login failed (generic; never reveals whether the username exists) |
+| `ACCOUNT_LOCKED` | 423 | Account temporarily locked; `details.locked_until` present |
+| `RATE_LIMITED` | 429 | Too many attempts; `Retry-After` header present |
+| `PASSWORD_CHANGE_REQUIRED` | 403 | Session must complete a forced password change first |
+| `FORBIDDEN` | 403 | Authenticated but missing the required permission |
+| `IP_NOT_ALLOWED` | 403 | Client address is outside the configured IP allowlist |
+| `AUTH_MODE_DOWNGRADE_NOT_SUPPORTED` | 409 | Multiuser → single-user conversion is deferred |
+
+Clients must branch on `code`, never on `message`.
+
 ---
 
 ## 5. Auth
@@ -77,6 +96,13 @@ Admin:
 - `POST /users/{id}/reset-password`
 
 Rate limits apply to authentication routes.
+
+Session model (approved M1):
+- Login sets an opaque, HttpOnly session cookie (`SameSite=Lax`, `Secure` when served over HTTPS).
+- State-changing requests must present an antiforgery token; the frontend reads the token from the `X-CSRF-TOKEN` response header and echoes it on unsafe requests.
+- Session lifetime is 30 days idle / 90 days absolute, with rotation on login, password change, and privilege change.
+- `GET /auth/session` returns the current user (or single-user household identity), effective permissions, auth mode, and `must_change_password`.
+- When `must_change_password` is true, every route except `/auth/session`, `/auth/change-password`, and `/auth/logout` fails with `PASSWORD_CHANGE_REQUIRED`.
 
 ---
 
@@ -312,3 +338,56 @@ Future voice/integration operations should be possible without new domain logic:
 - read upcoming meals
 
 The API should expose domain actions cleanly enough that future service accounts can reuse them.
+
+---
+
+## 21. M1 Contract: Setup, Settings, Sessions
+
+### Setup
+
+- `GET /setup/status` (public while unconfigured)
+  ```json
+  { "setup_completed": false, "auth_mode": null, "recovery_key_present": false }
+  ```
+- `POST /setup/complete` (public, single-shot, atomic)
+  Request:
+  ```json
+  {
+    "household_name": "The Smiths",
+    "timezone": "America/Chicago",
+    "week_starts_on": 0,
+    "default_diner_count": 4,
+    "startup_page": "calendar",
+    "auth_mode": "multiuser",
+    "admin": { "username": "smith", "password": "correct horse battery staple" },
+    "ip_allowlist": { "enabled": false, "ranges": [] },
+    "update_check_enabled": true
+  }
+  ```
+  `admin` is required if and only if `auth_mode` is `multiuser`. `week_starts_on` is 0–6 (Sunday = 0, default 0). `startup_page` is `calendar` or `dashboard`.
+  Response `201`:
+  ```json
+  {
+    "auth_mode": "multiuser",
+    "recovery_key": "<base64url, 32 bytes>",
+    "session": { "user": { "...": "..." } }
+  }
+  ```
+  The recovery key is returned exactly once here. It is stored at `/data/config/recovery.key` (mode 0600), never logged, and only exportable later via the M13 admin export route. In multiuser mode the response also establishes the first Admin session. Repeated calls return `409 SETUP_ALREADY_COMPLETED`.
+
+### Household and security settings
+
+- `GET /settings/household`, `PATCH /settings/household` — name, timezone (IANA, validated), `week_starts_on`, `default_diner_count` (1–20), `startup_page`. Admin-only for PATCH; any authenticated/single-user caller may GET.
+- `GET /settings/security`, `PATCH /settings/security` — `ip_allowlist_enabled`, `ip_allowlist_ranges` (IPv4/IPv6 CIDR), `trusted_proxies` (CIDR). Admin-only. Enabling the allowlist requires `confirmed: true` in the PATCH body; the server validates that at least one range is present and that the caller's own address is covered.
+- `POST /settings/auth-mode` — single-user → multiuser conversion; body carries the first Admin's `username`/`password`. Admin-only once configured. Multiuser → single-user returns `409 AUTH_MODE_DOWNGRADE_NOT_SUPPORTED` (deferred).
+
+### User management
+
+- Existing routes in section 6, plus:
+  - `POST /users/{id}/reset-password` — Admin issues a one-time temporary password (returned once), sets `must_change_password`, and revokes the user's sessions.
+  - `PATCH /users/{id}/permissions` — replaces the permission key set; edit keys imply their view key server-side.
+- Safety rules: the last active Admin cannot be disabled, demoted, or have Admin removed; disabling a user revokes all sessions immediately.
+
+### Pre-setup gating
+
+Until `POST /setup/complete` succeeds, every `/api/v1` route except `/health` and `/setup/*` returns `409 SETUP_REQUIRED`. The frontend routes to the wizard on that code.
