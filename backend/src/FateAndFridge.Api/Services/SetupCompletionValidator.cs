@@ -1,6 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Net;
-using System.Net.Sockets;
 using System.Text.Json;
 using FateAndFridge.Api.Auth;
 using FateAndFridge.Api.Data.Configurations;
@@ -295,7 +293,7 @@ public static class SetupCompletionValidator
                         ? rangeElement.GetString()!.Trim()
                         : null;
 
-                    if (range is null || !TryNormalizeRange(range, out var cidr))
+                    if (range is null || !ClientAddress.TryNormalizeRange(range, out var cidr))
                     {
                         AddError(
                             errors,
@@ -318,30 +316,6 @@ public static class SetupCompletionValidator
         }
 
         return (enabled, ranges);
-    }
-
-    /// <summary>
-    /// Validates one allowlist entry and returns its CIDR form. A bare IPv4 or
-    /// IPv6 address is accepted and normalized to a single-host range
-    /// (<c>/32</c> or <c>/128</c>); anything else must already parse as a CIDR.
-    /// </summary>
-    private static bool TryNormalizeRange(string range, out string cidr)
-    {
-        if (range.Contains('/'))
-        {
-            cidr = range;
-            return IPNetwork.TryParse(range, out _);
-        }
-
-        if (IPAddress.TryParse(range, out var address))
-        {
-            var prefixLength = address.AddressFamily == AddressFamily.InterNetworkV6 ? 128 : 32;
-            cidr = $"{address}/{prefixLength}";
-            return IPNetwork.TryParse(cidr, out _);
-        }
-
-        cidr = string.Empty;
-        return false;
     }
 
     private static void AddError(Dictionary<string, string[]> errors, string field, string message) =>

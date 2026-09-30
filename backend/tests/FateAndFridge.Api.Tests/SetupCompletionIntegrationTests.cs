@@ -504,6 +504,88 @@ public sealed class SetupCompletionIntegrationTests(M1SetupFixture fixture) : IA
         }
     }
 
+    [Fact]
+    public async Task Setup_enabling_the_allowlist_requires_caller_coverage()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var dataDir = CreateTempDataDir();
+        using var factory = CreateFactoryWithClientAddress(dataDir);
+        using var client = factory.CreateClient();
+
+        var response = await CompleteSetupAsync(
+            client,
+            MultiuserBody(ipAllowlistEnabled: true, ipAllowlistRange: "10.0.0.0/8"),
+            cancellationToken,
+            clientIp: "203.0.113.10");
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var root = await ReadJsonAsync(response, cancellationToken);
+        var error = root.GetProperty("error");
+        error.GetProperty("code").GetString().Should().Be(ErrorCodes.ValidationFailed);
+        error.GetProperty("details").GetProperty("field_errors")
+            .TryGetProperty("ip_allowlist.ranges", out _).Should().BeTrue();
+
+        // Nothing was written and setup is still incomplete.
+        await using (var context = fixture.CreateContext())
+        {
+            (await context.HouseholdSettings.CountAsync(cancellationToken)).Should().Be(0);
+            (await context.Users.CountAsync(cancellationToken)).Should().Be(0);
+            (await context.ApplicationSettings.CountAsync(cancellationToken)).Should().Be(0);
+        }
+
+        var status = await client.GetAsync("/api/v1/setup/status", cancellationToken);
+        (await ReadJsonAsync(status, cancellationToken)).GetProperty("setup_completed").GetBoolean()
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Setup_enabling_the_allowlist_with_a_covering_range_succeeds()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var dataDir = CreateTempDataDir();
+        using var factory = CreateFactoryWithClientAddress(dataDir);
+        using var client = factory.CreateClient();
+
+        var response = await CompleteSetupAsync(
+            client,
+            MultiuserBody(ipAllowlistEnabled: true, ipAllowlistRange: "203.0.113.0/24"),
+            cancellationToken,
+            clientIp: "203.0.113.10");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        await using var context = fixture.CreateContext();
+        var settings = await context.ApplicationSettings
+            .AsNoTracking()
+            .ToDictionaryAsync(setting => setting.Key, setting => setting.ValueJson, cancellationToken);
+        settings[SetupCompletionService.IpAllowlistEnabledKey].Should().Be("true");
+        using var ranges = JsonDocument.Parse(settings[SetupCompletionService.IpAllowlistRangesKey]!);
+        ranges.RootElement.EnumerateArray().Select(element => element.GetString()!)
+            .Should().Equal("203.0.113.0/24");
+    }
+
+    [Fact]
+    public async Task Setup_enabling_the_allowlist_from_loopback_succeeds()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var dataDir = CreateTempDataDir();
+        using var factory = CreateFactoryWithClientAddress(dataDir);
+        using var client = factory.CreateClient();
+
+        var response = await CompleteSetupAsync(
+            client,
+            MultiuserBody(ipAllowlistEnabled: true, ipAllowlistRange: "10.0.0.0/8"),
+            cancellationToken,
+            clientIp: "127.0.0.1");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+    }
+
+    private WebApplicationFactory<Program> CreateFactoryWithClientAddress(string dataDir) =>
+        fixture.CreateFactory(dataDir).WithWebHostBuilder(builder =>
+            builder.ConfigureServices(services =>
+                services.AddSingleton<IStartupFilter>(new TestRemoteIpStartupFilter())));
+
     private string CreateTempDataDir()
     {
         var directory = Path.Combine(
@@ -558,12 +640,17 @@ public sealed class SetupCompletionIntegrationTests(M1SetupFixture fixture) : IA
     private static async Task<HttpResponseMessage> CompleteSetupAsync(
         HttpClient client,
         string json,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? clientIp = null)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/setup/complete")
         {
             Content = new StringContent(json, Encoding.UTF8, "application/json"),
         };
+        if (clientIp is not null)
+        {
+            request.Headers.TryAddWithoutValidation(TestRemoteIpStartupFilter.HeaderName, clientIp);
+        }
 
         return await client.SendAsync(request, cancellationToken);
     }

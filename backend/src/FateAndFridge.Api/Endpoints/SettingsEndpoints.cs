@@ -28,8 +28,185 @@ public static class SettingsEndpoints
         group.MapPatch("/household", PatchHouseholdSettingsAsync).RequireAdmin();
         group.MapPost("/auth-mode", SwitchAuthModeAsync).RequireAdmin();
 
+        // M1-11: Admin-only security settings (IP allowlist and trusted proxies).
+        group.MapGet("/security", GetSecuritySettingsAsync).RequireAdmin();
+        group.MapPatch("/security", PatchSecuritySettingsAsync).RequireAdmin();
+
         return app;
     }
+
+    private static async Task<IResult> GetSecuritySettingsAsync(
+        SecuritySettingsService securitySettings,
+        CancellationToken cancellationToken) =>
+        Results.Ok(await securitySettings.GetAsync(cancellationToken));
+
+    /// <summary>
+    /// Updates the security settings (docs/API.md §21). Enabling the allowlist
+    /// requires <c>confirmed: true</c>, at least one range, and coverage of the
+    /// caller's resolved client address; disabling needs no confirmation.
+    /// Changes apply to the next request.
+    /// </summary>
+    private static async Task<IResult> PatchSecuritySettingsAsync(
+        HttpContext context,
+        SecuritySettingsService securitySettings,
+        CancellationToken cancellationToken)
+    {
+        var parsed = await ReadObjectAsync(context, cancellationToken);
+        if (parsed is null)
+        {
+            return BodyError();
+        }
+
+        using var document = parsed.Value.Document;
+        var root = parsed.Value.Root;
+        var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
+
+        bool? enabled = null;
+        if (root.TryGetProperty("ip_allowlist_enabled", out var enabledElement))
+        {
+            if (enabledElement.ValueKind is JsonValueKind.True or JsonValueKind.False)
+            {
+                enabled = enabledElement.GetBoolean();
+            }
+            else
+            {
+                errors["ip_allowlist_enabled"] = ["ip_allowlist_enabled must be a boolean."];
+            }
+        }
+
+        IReadOnlyList<string>? ranges = null;
+        if (root.TryGetProperty("ip_allowlist_ranges", out var rangesElement))
+        {
+            ranges = ReadNormalizedRanges(rangesElement, "ip_allowlist_ranges", errors);
+        }
+
+        IReadOnlyList<string>? trustedProxies = null;
+        if (root.TryGetProperty("trusted_proxies", out var proxiesElement))
+        {
+            trustedProxies = ReadNormalizedRanges(proxiesElement, "trusted_proxies", errors);
+        }
+
+        bool? confirmed = null;
+        if (root.TryGetProperty("confirmed", out var confirmedElement))
+        {
+            if (confirmedElement.ValueKind is JsonValueKind.True or JsonValueKind.False)
+            {
+                confirmed = confirmedElement.GetBoolean();
+            }
+            else
+            {
+                errors["confirmed"] = ["confirmed must be a boolean."];
+            }
+        }
+
+        if (enabled is null && ranges is null && trustedProxies is null)
+        {
+            errors["body"] = [
+                "At least one of ip_allowlist_enabled, ip_allowlist_ranges, or trusted_proxies must be provided."];
+        }
+
+        if (errors.Count > 0)
+        {
+            return ApiResults.ValidationError(errors);
+        }
+
+        var current = await securitySettings.GetAsync(cancellationToken);
+        var resultingEnabled = enabled ?? current.IpAllowlistEnabled;
+        var resultingRanges = ranges ?? current.IpAllowlistRanges;
+        var resultingProxies = trustedProxies ?? current.TrustedProxies;
+
+        if (resultingEnabled)
+        {
+            if (!current.IpAllowlistEnabled && confirmed != true)
+            {
+                errors["confirmed"] = ["Enabling the IP allowlist requires confirmed: true."];
+            }
+
+            if (resultingRanges.Count == 0)
+            {
+                errors["ip_allowlist_ranges"] = [
+                    "At least one range is required when the allowlist is enabled."];
+            }
+            else
+            {
+                var client = ClientAddress.Normalize(context.Connection.RemoteIpAddress);
+                if (client is null
+                    || !(ClientAddress.IsLoopback(client)
+                        || ClientAddress.IsInAnyRange(client, resultingRanges)))
+                {
+                    errors["ip_allowlist_ranges"] = [
+                        "The caller's address must be covered by the allowlist ranges to avoid locking out this session."];
+                }
+            }
+        }
+
+        if (errors.Count > 0)
+        {
+            return ApiResults.ValidationError(errors);
+        }
+
+        var updated = new SecuritySettings(resultingEnabled, resultingRanges, resultingProxies);
+        await securitySettings.SaveAsync(updated, cancellationToken);
+        return Results.Ok(updated);
+    }
+
+    private static IReadOnlyList<string>? ReadNormalizedRanges(
+        JsonElement element,
+        string field,
+        Dictionary<string, string[]> errors)
+    {
+        if (element.ValueKind != JsonValueKind.Array)
+        {
+            errors[field] = [$"{field} must be an array of IPv4/IPv6 addresses or CIDR ranges."];
+            return null;
+        }
+
+        var normalized = new List<string>();
+        foreach (var item in element.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.String
+                || !ClientAddress.TryNormalizeRange(item.GetString(), out var cidr))
+            {
+                errors[field] = [$"Each {field} entry must be a valid IPv4/IPv6 address or CIDR range."];
+                return null;
+            }
+
+            normalized.Add(cidr);
+        }
+
+        return normalized;
+    }
+
+    private static async Task<(JsonDocument Document, JsonElement Root)?> ReadObjectAsync(
+        HttpContext context,
+        CancellationToken cancellationToken)
+    {
+        JsonDocument document;
+        try
+        {
+            document = await JsonDocument.ParseAsync(
+                context.Request.Body,
+                cancellationToken: cancellationToken);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+
+        if (document.RootElement.ValueKind != JsonValueKind.Object)
+        {
+            document.Dispose();
+            return null;
+        }
+
+        return (document, document.RootElement);
+    }
+
+    private static IResult BodyError() =>
+        ApiResults.ValidationError(new Dictionary<string, string[]>
+        {
+            ["body"] = ["The request body must be a valid JSON object."],
+        });
 
     private static async Task<IResult> GetHouseholdSettingsAsync(
         HouseholdSettingsService settingsService,

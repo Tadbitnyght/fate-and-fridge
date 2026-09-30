@@ -83,6 +83,24 @@ public static class SetupEndpoints
                 return ApiResults.ValidationError(validation.FieldErrors);
             }
 
+            // Enabling the allowlist during setup must not lock out the device
+            // performing setup (docs/API.md §21): the resolved client address
+            // has to be covered by the ranges; loopback is always allowed.
+            if (validation.Request.IpAllowlistEnabled)
+            {
+                var client = ClientAddress.Normalize(context.Connection.RemoteIpAddress);
+                if (client is null
+                    || !(ClientAddress.IsLoopback(client)
+                        || ClientAddress.IsInAnyRange(client, validation.Request.IpAllowlistRanges)))
+                {
+                    return ApiResults.ValidationError(new Dictionary<string, string[]>
+                    {
+                        ["ip_allowlist.ranges"] = [
+                            "The caller's address must be covered by the allowlist ranges to avoid locking out this device."],
+                    });
+                }
+            }
+
             var result = await setupCompletion.CompleteAsync(
                 validation.Request,
                 context.Connection.RemoteIpAddress?.ToString(),

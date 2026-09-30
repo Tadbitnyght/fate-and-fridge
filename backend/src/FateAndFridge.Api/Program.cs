@@ -62,6 +62,11 @@ builder.Services.AddScoped<RecoveryKeyStore>();
 builder.Services.AddScoped<UserManagementService>();
 builder.Services.AddScoped<AuthModeService>();
 
+// M1-11: security settings (IP allowlist + trusted proxies) with a short-TTL
+// cache so the per-request middleware does not query the database every time.
+builder.Services.AddMemoryCache();
+builder.Services.AddScoped<SecuritySettingsService>();
+
 builder.Services.AddScoped<HouseholdSettingsService>();
 
 // M1-06 session infrastructure: opaque DB-backed cookie sessions resolved by
@@ -121,11 +126,14 @@ if (migrateOnly)
     return;
 }
 
-// Order matters: authentication resolves the session principal first, setup
-// gating still wins pre-setup (409, never 401), the forced-password-change gate
-// runs before CSRF so a flagged session always gets PASSWORD_CHANGE_REQUIRED on
-// gated routes (even without an antiforgery token), and CSRF runs only for
-// authenticated requests before authorization.
+// Order matters: the client address (trusted-proxy forwarded headers) resolves
+// first so the allowlist, Secure-cookie decisions, and antiforgery all see the
+// real client; the allowlist then rejects blocked clients before any
+// authentication or setup state is consulted; setup gating still wins pre-setup
+// (409) for allowed clients; the forced-password-change gate runs before CSRF
+// so a flagged session always gets PASSWORD_CHANGE_REQUIRED on gated routes.
+app.UseMiddleware<ClientAddressMiddleware>();
+app.UseMiddleware<IpAllowlistMiddleware>();
 app.UseAuthentication();
 app.UseMiddleware<SetupGatingMiddleware>();
 app.UseMiddleware<MustChangePasswordMiddleware>();
