@@ -69,13 +69,17 @@ Frontend (Node 24+):
 ```bash
 cd frontend
 npm install
-npm run dev         # Vite dev server on :5173, proxies /api to :8000
+npm run dev         # Vite dev server on :5173, proxies /api to the backend
 npm run lint
 npm run format:check
 npm run typecheck
 npm run test        # Vitest unit tests
-npm run test:e2e    # Playwright smoke tests (needs a running stack)
+npm run test:e2e    # hermetic Playwright smoke tests (set E2E_BASE_URL for a real stack)
 ```
+
+The dev proxy targets `http://localhost:50080` (the Compose host port) by
+default; run `VITE_API_PROXY=http://localhost:8000 npm run dev` when the API
+runs through `dotnet run`.
 
 The API root returns a small JSON index when no built frontend is present; the
 Vite dev server serves the UI during development.

@@ -1,20 +1,38 @@
-import { StatusPage } from './pages/StatusPage'
+import { Navigate, Route, Routes } from 'react-router-dom'
+
+import { AppShell } from './components/AppShell'
+import { RequireSession } from './components/RequireSession'
+import { AuthProvider } from './features/auth/AuthProvider'
+import { CalendarPage } from './pages/CalendarPage'
+import { ChangePasswordPage } from './pages/ChangePasswordPage'
+import { DashboardPage } from './pages/DashboardPage'
+import { GroceriesPage } from './pages/GroceriesPage'
+import { LoginPage } from './pages/LoginPage'
+import { RecipesPage } from './pages/RecipesPage'
+import { SettingsPage } from './pages/SettingsPage'
+import { SetupPage } from './pages/SetupPage'
+import { StatisticsPage } from './pages/StatisticsPage'
 
 export function App() {
   return (
-    <div className="app-shell">
-      <header className="app-header">
-        <h1>Fate &amp; Fridge</h1>
-        <p className="app-subtitle">What&rsquo;s for dinner? &middot; Operation Dinner Plate</p>
-      </header>
+    <AuthProvider>
+      <Routes>
+        <Route path="/setup" element={<SetupPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/change-password" element={<ChangePasswordPage />} />
 
-      <main className="app-main">
-        <StatusPage />
-      </main>
-
-      <footer className="app-footer">
-        <p>Self-hosted &middot; no telemetry &middot; your household data stays home</p>
-      </footer>
-    </div>
+        <Route element={<RequireSession />}>
+          <Route element={<AppShell />}>
+            <Route index element={<CalendarPage />} />
+            <Route path="dashboard" element={<DashboardPage />} />
+            <Route path="recipes" element={<RecipesPage />} />
+            <Route path="groceries" element={<GroceriesPage />} />
+            <Route path="statistics" element={<StatisticsPage />} />
+            <Route path="settings" element={<SettingsPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
+        </Route>
+      </Routes>
+    </AuthProvider>
   )
 }

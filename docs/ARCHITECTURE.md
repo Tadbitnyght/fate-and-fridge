@@ -193,6 +193,25 @@ Frontend must not replicate business rules that belong on the server.
 
 Frontend may present warnings/previews, but backend is authoritative.
 
+Implemented foundation (M1-12):
+
+```text
+frontend/src/
+  api/          client.ts (JSON + error envelope + CSRF), auth.ts, setup.ts, errorCodes.ts
+  components/   AppShell.tsx (header/nav/outlet/footer), RequireSession.tsx, StatusPanel.tsx
+  features/
+    auth/       AuthProvider (TanStack Query session state), AuthContext/useAuth, messages
+    setup/      useSetupStatus
+  pages/        SetupPage, LoginPage, ChangePasswordPage, Calendar/Dashboard/… placeholders
+  test/         mockFetch + render helpers
+```
+
+Routing rules: incomplete setup → `/setup`; unauthenticated multiuser → `/login`;
+`must_change_password` → `/change-password`; single-user households enter the shell
+directly. The API client stores the latest `X-CSRF-TOKEN` response header in memory
+and echoes it on unsafe requests. Routing and session state are UI conveniences;
+server-side authorization remains the only boundary.
+
 ---
 
 ## 8. State Strategy

@@ -15,7 +15,7 @@ function StatusBadge({ ok, label }: StatusBadgeProps) {
   )
 }
 
-export function StatusPage() {
+export function StatusPanel() {
   const health = useQuery({ queryKey: ['health'], queryFn: fetchHealth })
   const database = useQuery({ queryKey: ['health', 'db'], queryFn: fetchDatabaseHealth })
 
@@ -24,7 +24,7 @@ export function StatusPage() {
 
   return (
     <section className="status-panel" aria-labelledby="status-heading">
-      <h2 id="status-heading">System status</h2>
+      <h3 id="status-heading">System status</h3>
 
       <dl className="status-grid">
         <div className="status-row">
@@ -52,10 +52,6 @@ export function StatusPage() {
           </dd>
         </div>
       </dl>
-
-      <p className="status-note">
-        Milestone 0 application shell. Planning, recipes, and groceries arrive in later milestones.
-      </p>
     </section>
   )
 }
