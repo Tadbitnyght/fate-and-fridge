@@ -1,5 +1,6 @@
 using System.Text.Json;
 using FateAndFridge.Api;
+using FateAndFridge.Api.Auth;
 using FateAndFridge.Api.Data;
 using FateAndFridge.Api.Endpoints;
 using FateAndFridge.Api.Middleware;
@@ -26,6 +27,9 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 });
 
 builder.Services.AddScoped<SetupStateService>();
+
+// Argon2id hashing is stateless and thread-safe (libsodium initializes once).
+builder.Services.AddSingleton<IPasswordHasher, Argon2idPasswordHasher>();
 
 builder.Services.AddOpenApi();
 
