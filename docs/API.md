@@ -49,6 +49,15 @@ External API keys/service accounts are deferred.
 - server-side authorization on every protected route
 - no business logic duplicated in frontend
 
+### Permission enforcement
+
+- Permission keys are enforced server-side on every protected route; the frontend must not rely on hidden UI.
+- Keys: `calendar.view`, `calendar.edit`, `groceries.view`, `groceries.edit`, `recipes.view`, `recipes.edit`, `reference_data.edit`.
+- Edit implies view: granting an edit key effectively grants the matching view key (`reference_data.edit` has no view counterpart).
+- The single-user system actor and Admins hold all keys by explicit bypass; members are evaluated from their granted rows plus implied view keys.
+- Unauthenticated requests receive `401 AUTH_REQUIRED`; authenticated requests without the required key receive `403 FORBIDDEN`.
+- Grants are read on every request, so permission changes apply on the next request (no session caching).
+
 ---
 
 ## 4. Example Error Shape

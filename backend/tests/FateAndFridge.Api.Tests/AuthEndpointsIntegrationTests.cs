@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using FateAndFridge.Api.Auth;
+using FateAndFridge.Api.Auth.Permissions;
 using FateAndFridge.Api.Domain;
 using FateAndFridge.Api.Errors;
 using FateAndFridge.Api.Middleware;
@@ -76,7 +77,7 @@ public sealed class AuthEndpointsIntegrationTests(M1SetupFixture fixture) : IAsy
         userElement.GetProperty("username").GetString().Should().Be("smith");
         userElement.GetProperty("role").GetString().Should().Be("admin");
         root.GetProperty("permissions").EnumerateArray().Select(element => element.GetString()!)
-            .Should().Equal(EffectivePermissions.All);
+            .Should().Equal(PermissionKeys.All);
 
         var sessionCookie = GetSessionCookieHeader(response);
         sessionCookie.Should().StartWith($"{SessionAuthenticationDefaults.CookieName}=");
@@ -538,7 +539,7 @@ public sealed class AuthEndpointsIntegrationTests(M1SetupFixture fixture) : IAsy
         userElement.GetProperty("username").GetString().Should().Be("smith");
         userElement.GetProperty("role").GetString().Should().Be("admin");
         root.GetProperty("permissions").EnumerateArray().Select(element => element.GetString()!)
-            .Should().Equal(EffectivePermissions.All);
+            .Should().Equal(PermissionKeys.All);
     }
 
     [Fact]
@@ -549,8 +550,8 @@ public sealed class AuthEndpointsIntegrationTests(M1SetupFixture fixture) : IAsy
         var user = await SeedUserAsync(
             new UserSeed("alice", Password, MustChangePassword: true),
             cancellationToken);
-        await SeedPermissionAsync(user.Id, EffectivePermissions.CalendarEdit, cancellationToken);
-        await SeedPermissionAsync(user.Id, EffectivePermissions.RecipesView, cancellationToken);
+        await SeedPermissionAsync(user.Id, PermissionKeys.CalendarEdit, cancellationToken);
+        await SeedPermissionAsync(user.Id, PermissionKeys.RecipesView, cancellationToken);
         await SeedPermissionAsync(user.Id, "bogus.key", cancellationToken);
         await MarkSetupCompletedAsync(cancellationToken);
 
@@ -566,9 +567,9 @@ public sealed class AuthEndpointsIntegrationTests(M1SetupFixture fixture) : IAsy
         root.GetProperty("user").GetProperty("role").GetString().Should().Be("member");
         root.GetProperty("permissions").EnumerateArray().Select(element => element.GetString()!)
             .Should().Equal(
-                EffectivePermissions.CalendarView,
-                EffectivePermissions.CalendarEdit,
-                EffectivePermissions.RecipesView);
+                PermissionKeys.CalendarView,
+                PermissionKeys.CalendarEdit,
+                PermissionKeys.RecipesView);
     }
 
     [Fact]
@@ -609,7 +610,7 @@ public sealed class AuthEndpointsIntegrationTests(M1SetupFixture fixture) : IAsy
         root.GetProperty("user").ValueKind.Should().Be(JsonValueKind.Null);
         root.GetProperty("must_change_password").GetBoolean().Should().BeFalse();
         root.GetProperty("permissions").EnumerateArray().Select(element => element.GetString()!)
-            .Should().Equal(EffectivePermissions.All);
+            .Should().Equal(PermissionKeys.All);
     }
 
     [Fact]

@@ -18,6 +18,15 @@ public sealed class ApiFactory(
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        // The Testing environment enables the test-only permission probe routes
+        // (M1-09); it never runs in production. Scope validation stays on so
+        // captive-dependency regressions are caught in tests.
+        builder.UseEnvironment("Testing");
+        builder.UseDefaultServiceProvider(options =>
+        {
+            options.ValidateScopes = true;
+            options.ValidateOnBuild = true;
+        });
         builder.UseSetting("ConnectionStrings:Default", connectionString);
         builder.UseSetting("Database:MigrateOnStartup", migrateOnStartup ? "true" : "false");
         if (dataDir is not null)

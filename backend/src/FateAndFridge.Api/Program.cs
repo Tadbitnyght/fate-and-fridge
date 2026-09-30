@@ -1,6 +1,7 @@
 using System.Text.Json;
 using FateAndFridge.Api;
 using FateAndFridge.Api.Auth;
+using FateAndFridge.Api.Auth.Permissions;
 using FateAndFridge.Api.Data;
 using FateAndFridge.Api.Endpoints;
 using FateAndFridge.Api.Middleware;
@@ -65,6 +66,11 @@ builder.Services.AddScoped<SessionService>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<IAuthEventWriter, AuthEventWriter>();
 
+// M1-09 permission model: one uncached grant reader plus the evaluator service
+// shared by GET /auth/session and the route enforcement filter.
+builder.Services.AddScoped<IPermissionGrantReader, DbPermissionGrantReader>();
+builder.Services.AddScoped<PermissionService>();
+
 // M1-07 part 2: per-account lockout and progressive delay
 // (docs/SECURITY.md §3) plus a process-local, bounded per-IP failure throttle.
 builder.Services
@@ -124,6 +130,16 @@ app.MapSetupEndpoints();
 app.MapAuthEndpoints();
 app.MapUserEndpoints();
 app.MapSettingsEndpoints();
+
+// Test-only permission probes (M1-09): mapped solely in the Testing
+// environment so the permission matrix can exercise server-side enforcement.
+// They are regular /api/v1 routes, subject to setup gating and the
+// forced-change gate, and expose no secrets.
+if (app.Environment.IsEnvironment("Testing"))
+{
+    app.MapPermissionProbeEndpoints();
+}
+
 app.MapFrontend();
 
 await app.RunAsync();

@@ -1,5 +1,4 @@
 using FateAndFridge.Api.Auth;
-using FateAndFridge.Api.Domain;
 using FateAndFridge.Api.Errors;
 
 namespace FateAndFridge.Api.Endpoints;
@@ -13,12 +12,11 @@ public sealed record ResetPasswordResponse(string TemporaryPassword);
 /// <summary>
 /// User management routes (docs/API.md §5/§6). M1-08 ships the Admin password
 /// reset; M1-10 extends this group with CRUD, permissions, and enable/disable.
+/// Access is enforced server-side by the M1-09 <c>RequireAdmin()</c> filter.
 /// </summary>
 public static class UserEndpoints
 {
     private const string AuthRequiredMessage = "Authentication is required.";
-
-    private const string ForbiddenMessage = "Only an Admin may reset another user's password.";
 
     private const string NotFoundMessage = "The requested user does not exist.";
 
@@ -26,10 +24,7 @@ public static class UserEndpoints
     {
         var group = app.MapGroup("/api/v1/users").WithTags("Users");
 
-        // Authorization is enforced in the handler rather than
-        // RequireAuthorization() so the single-user system actor (which has no
-        // session cookie) takes the same path as an Admin.
-        group.MapPost("/{id:long}/reset-password", ResetPasswordAsync);
+        group.MapPost("/{id:long}/reset-password", ResetPasswordAsync).RequireAdmin();
 
         return app;
     }
@@ -46,18 +41,12 @@ public static class UserEndpoints
         var actor = await actorProvider.GetCurrentActorAsync(cancellationToken);
         if (actor is null)
         {
+            // RequireAdmin() already rejected unauthenticated requests; keep the
+            // defensive envelope so the handler cannot fail open.
             return ApiResults.Error(
                 StatusCodes.Status401Unauthorized,
                 ErrorCodes.AuthRequired,
                 AuthRequiredMessage);
-        }
-
-        if (!actor.IsSystem && actor.Role != UserRole.Admin)
-        {
-            return ApiResults.Error(
-                StatusCodes.Status403Forbidden,
-                ErrorCodes.Forbidden,
-                ForbiddenMessage);
         }
 
         var result = await authService.ResetPasswordAsync(

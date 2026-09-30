@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Claims;
 using System.Text.Json;
 using FateAndFridge.Api.Auth;
+using FateAndFridge.Api.Auth.Permissions;
 using FateAndFridge.Api.Data;
 using FateAndFridge.Api.Data.Configurations;
 using FateAndFridge.Api.Domain;
@@ -39,7 +40,7 @@ public sealed record AuthSessionResponse(
             Authenticated: true,
             AuthMode: SingleUserAuthMode,
             User: null,
-            Permissions: EffectivePermissions.All,
+            Permissions: PermissionKeys.All,
             MustChangePassword: false);
 }
 
@@ -88,7 +89,7 @@ public static class AuthEndpoints
         HttpContext context,
         AuthService authService,
         IAntiforgery antiforgery,
-        AppDbContext dbContext,
+        PermissionService permissionService,
         CancellationToken cancellationToken)
     {
         ResponseCache.NoStore(context);
@@ -109,7 +110,7 @@ public static class AuthEndpoints
         return result switch
         {
             LoginResult.Success success =>
-                await LoginSuccessAsync(context, dbContext, antiforgery, success, cancellationToken),
+                await LoginSuccessAsync(context, permissionService, antiforgery, success, cancellationToken),
             LoginResult.AccountLocked locked => ApiResults.Error(
                 StatusCodes.Status423Locked,
                 ErrorCodes.AccountLocked,
@@ -136,7 +137,7 @@ public static class AuthEndpoints
 
     private static async Task<IResult> LoginSuccessAsync(
         HttpContext context,
-        AppDbContext dbContext,
+        PermissionService permissionService,
         IAntiforgery antiforgery,
         LoginResult.Success success,
         CancellationToken cancellationToken)
@@ -156,7 +157,7 @@ public static class AuthEndpoints
         context.Response.Headers[CsrfMiddleware.HeaderName] =
             antiforgery.GetAndStoreTokens(context).RequestToken;
 
-        return Results.Ok(await CreateMultiuserSessionAsync(dbContext, success.User, cancellationToken));
+        return Results.Ok(await CreateMultiuserSessionAsync(permissionService, success.User, cancellationToken));
     }
 
     /// <summary>
@@ -292,6 +293,7 @@ public static class AuthEndpoints
         HttpContext context,
         AppDbContext dbContext,
         ICurrentActorProvider actorProvider,
+        PermissionService permissionService,
         CancellationToken cancellationToken)
     {
         ResponseCache.NoStore(context);
@@ -318,19 +320,17 @@ public static class AuthEndpoints
             return AuthRequired();
         }
 
-        return Results.Ok(await CreateMultiuserSessionAsync(dbContext, user, cancellationToken));
+        return Results.Ok(await CreateMultiuserSessionAsync(permissionService, user, cancellationToken));
     }
 
     private static async Task<AuthSessionResponse> CreateMultiuserSessionAsync(
-        AppDbContext dbContext,
+        PermissionService permissionService,
         User user,
         CancellationToken cancellationToken)
     {
-        var grantedKeys = await dbContext.UserPermissions
-            .AsNoTracking()
-            .Where(permission => permission.UserId == user.Id)
-            .Select(permission => permission.PermissionKey)
-            .ToListAsync(cancellationToken);
+        // One source of truth with route enforcement (M1-09): the evaluator
+        // decides admin bypass and edit-implies-view, reading grants fresh.
+        var actor = new CurrentActor(IsSystem: false, Role: user.Role) { UserId = user.Id };
 
         return new AuthSessionResponse(
             Authenticated: true,
@@ -339,7 +339,7 @@ public static class AuthEndpoints
                 user.Id,
                 user.Username,
                 EnumTextConverters.UserRoleToText(user.Role)),
-            Permissions: EffectivePermissions.For(user.Role, grantedKeys),
+            Permissions: await permissionService.GetEffectiveKeysAsync(actor, cancellationToken),
             MustChangePassword: user.MustChangePassword);
     }
 
