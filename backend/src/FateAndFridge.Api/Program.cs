@@ -28,6 +28,12 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 builder.Services.AddScoped<SetupStateService>();
 
+builder.Services.AddScoped<HouseholdSettingsService>();
+
+// M1-03 authorization seam: M1-06/M1-07 replace this provider with the
+// session-backed one; M1-09 re-tests the multiuser permission matrix.
+builder.Services.AddScoped<ICurrentActorProvider, HouseholdAuthModeActorProvider>();
+
 // Argon2id hashing is stateless and thread-safe (libsodium initializes once).
 builder.Services.AddSingleton<IPasswordHasher, Argon2idPasswordHasher>();
 
@@ -53,6 +59,7 @@ app.UseMiddleware<SetupGatingMiddleware>();
 app.MapOpenApi();
 app.MapHealthEndpoints();
 app.MapSetupEndpoints();
+app.MapSettingsEndpoints();
 app.MapFrontend();
 
 await app.RunAsync();

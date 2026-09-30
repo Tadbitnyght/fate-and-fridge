@@ -55,17 +55,31 @@ internal static class EnumTextConverters
         _ => throw new ArgumentOutOfRangeException(nameof(text), text, "Unknown auth mode text."),
     };
 
-    private static string StartupPageToText(StartupPage page) => page switch
+    internal static string StartupPageToText(StartupPage page) => page switch
     {
         StartupPage.Calendar => "calendar",
         StartupPage.Dashboard => "dashboard",
         _ => throw new ArgumentOutOfRangeException(nameof(page), page, "Unknown startup page."),
     };
 
-    private static StartupPage StartupPageFromText(string text) => text switch
+    internal static bool TryStartupPageFromText(string text, out StartupPage page)
     {
-        "calendar" => StartupPage.Calendar,
-        "dashboard" => StartupPage.Dashboard,
-        _ => throw new ArgumentOutOfRangeException(nameof(text), text, "Unknown startup page text."),
-    };
+        switch (text)
+        {
+            case "calendar":
+                page = StartupPage.Calendar;
+                return true;
+            case "dashboard":
+                page = StartupPage.Dashboard;
+                return true;
+            default:
+                page = default;
+                return false;
+        }
+    }
+
+    private static StartupPage StartupPageFromText(string text) =>
+        TryStartupPageFromText(text, out var page)
+            ? page
+            : throw new ArgumentOutOfRangeException(nameof(text), text, "Unknown startup page text.");
 }
