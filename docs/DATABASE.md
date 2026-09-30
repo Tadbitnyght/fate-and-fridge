@@ -96,7 +96,7 @@ Policy (approved M1): 30-day idle timeout, 90-day absolute cap; rotation on logi
 - `user_id` nullable
 - `username_attempted` nullable
 - `event_type`
-- `ip_address`
+- `ip_address` nullable
 - `user_agent` optional
 - `occurred_at`
 - `metadata_json`
