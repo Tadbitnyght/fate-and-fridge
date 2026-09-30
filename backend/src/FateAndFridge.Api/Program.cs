@@ -61,6 +61,13 @@ builder.Services.AddScoped<HouseholdSettingsService>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<SessionService>();
+builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<IAuthEventWriter, AuthEventWriter>();
+
+// Part-1 baseline: consecutive-failure counters only. M1-07 part 2 replaces
+// this registration with the threshold/progressive-delay/lockout policy.
+builder.Services.AddSingleton<ILoginAttemptPolicy, DefaultLoginAttemptPolicy>();
+
 builder.Services.AddAuthentication(SessionAuthenticationDefaults.Scheme)
     .AddScheme<AuthenticationSchemeOptions, SessionAuthenticationHandler>(
         SessionAuthenticationDefaults.Scheme,
@@ -99,6 +106,7 @@ app.UseAuthorization();
 app.MapOpenApi();
 app.MapHealthEndpoints();
 app.MapSetupEndpoints();
+app.MapAuthEndpoints();
 app.MapSettingsEndpoints();
 app.MapFrontend();
 

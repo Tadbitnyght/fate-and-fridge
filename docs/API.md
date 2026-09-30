@@ -106,6 +106,49 @@ Session model (approved M1):
 - `GET /auth/session` returns the current user (or single-user household identity), effective permissions, auth mode, and `must_change_password`.
 - When `must_change_password` is true, every route except `/auth/session`, `/auth/change-password`, and `/auth/logout` fails with `PASSWORD_CHANGE_REQUIRED`.
 
+### M1 auth response shapes
+
+`POST /auth/login` (public). Request:
+```json
+{ "username": "smith", "password": "correct horse battery staple" }
+```
+
+Responses:
+- `200` — same payload as the multiuser `GET /auth/session` shape below. Sets a persistent `faf_session` cookie with the 30-day idle window and returns a fresh `X-CSRF-TOKEN` header.
+- `400 VALIDATION_FAILED` — missing, blank, or non-string `username`/`password`, or malformed JSON; `details.field_errors` present.
+- `401 INVALID_CREDENTIALS` — generic; the body is identical for unknown usernames, inactive users, and wrong passwords.
+- `423 ACCOUNT_LOCKED` — `details.locked_until` present (ISO 8601).
+- `429 RATE_LIMITED` — with `Retry-After`; part 2 of M1-07.
+
+`POST /auth/logout` (requires a valid session and the `X-CSRF-TOKEN` header):
+- `204` — revokes the current session server-side and deletes the cookie.
+- `401 AUTH_REQUIRED` without a valid session.
+
+`GET /auth/session`, multiuser authenticated:
+```json
+{
+  "authenticated": true,
+  "auth_mode": "multiuser",
+  "user": { "id": 1, "username": "smith", "role": "admin" },
+  "permissions": ["calendar.view", "calendar.edit", "groceries.view", "groceries.edit", "recipes.view", "recipes.edit", "reference_data.edit"],
+  "must_change_password": false
+}
+```
+Multiuser unauthenticated: `401 AUTH_REQUIRED`. Single-user:
+```json
+{
+  "authenticated": true,
+  "auth_mode": "single_user",
+  "user": null,
+  "permissions": ["calendar.view", "calendar.edit", "groceries.view", "groceries.edit", "recipes.view", "recipes.edit", "reference_data.edit"],
+  "must_change_password": false
+}
+```
+
+Effective permissions: Admins hold all seven keys; members hold their granted keys plus the matching view key for every granted edit key.
+
+Login CSRF note: `POST /auth/login` is unauthenticated, so the antiforgery check does not apply (M1-06 decision). The JSON-body requirement and SameSite=Lax session cookie are the interim cross-site mitigations; M1-15 revisits login CSRF explicitly.
+
 ---
 
 ## 6. Users

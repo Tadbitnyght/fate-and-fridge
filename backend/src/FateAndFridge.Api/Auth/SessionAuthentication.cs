@@ -22,6 +22,12 @@ public static class SessionAuthenticationDefaults
     public const string MustChangePasswordClaim = "must_change_password";
 
     /// <summary>
+    /// Claim carrying the database id of the resolved session, used by logout
+    /// to revoke exactly the current session (M1-07).
+    /// </summary>
+    public const string SessionIdClaim = "session_id";
+
+    /// <summary>
     /// <see cref="HttpContext.Items"/> key holding the resolved session's
     /// stored token hash, used to bind antiforgery tokens to the session.
     /// </summary>
@@ -67,7 +73,7 @@ public static class SessionCookie
 /// <summary>Builds the request principal for a resolved session user.</summary>
 internal static class SessionClaims
 {
-    public static ClaimsPrincipal Create(User user)
+    public static ClaimsPrincipal Create(User user, long sessionId)
     {
         var identity = new ClaimsIdentity(
             [
@@ -77,6 +83,9 @@ internal static class SessionClaims
                 new Claim(
                     SessionAuthenticationDefaults.MustChangePasswordClaim,
                     user.MustChangePassword ? "true" : "false"),
+                new Claim(
+                    SessionAuthenticationDefaults.SessionIdClaim,
+                    sessionId.ToString(CultureInfo.InvariantCulture)),
             ],
             authenticationType: SessionAuthenticationDefaults.Scheme);
 
@@ -127,7 +136,7 @@ public sealed class SessionAuthenticationHandler : AuthenticationHandler<Authent
             Convert.ToHexString(resolved.Session.TokenHash);
 
         return AuthenticateResult.Success(
-            new AuthenticationTicket(SessionClaims.Create(resolved.User), Scheme.Name));
+            new AuthenticationTicket(SessionClaims.Create(resolved.User, resolved.Session.Id), Scheme.Name));
     }
 
     protected override async Task HandleChallengeAsync(AuthenticationProperties properties)
