@@ -19,8 +19,7 @@ public sealed class SetupStateService(AppDbContext dbContext, IConfiguration con
     /// <summary>Key of the JSON boolean flag in <c>application_settings.key</c>.</summary>
     public const string SetupCompletedKey = "setup_completed";
 
-    private readonly string _recoveryKeyPath =
-        Path.Combine(AppPaths.DataRoot(configuration), "config", "recovery.key");
+    private readonly string _recoveryKeyPath = RecoveryKeyStore.FilePathFor(configuration);
 
     /// <summary>Returns whether <c>setup_completed</c> is stored as JSON <c>true</c>.</summary>
     public async Task<bool> IsSetupCompletedAsync(CancellationToken cancellationToken = default)
@@ -73,7 +72,7 @@ public sealed class SetupStateService(AppDbContext dbContext, IConfiguration con
             cancellationToken);
     }
 
-    private static bool IsTrueJson(string? valueJson)
+    internal static bool IsTrueJson(string? valueJson)
     {
         if (string.IsNullOrWhiteSpace(valueJson))
         {

@@ -62,12 +62,26 @@ internal static class EnumTextConverters
         _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unknown auth mode."),
     };
 
-    private static AuthMode AuthModeFromText(string text) => text switch
+    internal static bool TryAuthModeFromText(string? text, out AuthMode mode)
     {
-        "single_user" => AuthMode.SingleUser,
-        "multiuser" => AuthMode.Multiuser,
-        _ => throw new ArgumentOutOfRangeException(nameof(text), text, "Unknown auth mode text."),
-    };
+        switch (text)
+        {
+            case "single_user":
+                mode = AuthMode.SingleUser;
+                return true;
+            case "multiuser":
+                mode = AuthMode.Multiuser;
+                return true;
+            default:
+                mode = default;
+                return false;
+        }
+    }
+
+    private static AuthMode AuthModeFromText(string text) =>
+        TryAuthModeFromText(text, out var mode)
+            ? mode
+            : throw new ArgumentOutOfRangeException(nameof(text), text, "Unknown auth mode text.");
 
     internal static string StartupPageToText(StartupPage page) => page switch
     {

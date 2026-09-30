@@ -22,9 +22,24 @@ public sealed class CsrfMiddleware(RequestDelegate next)
 
     private const string FailedMessage = "The antiforgery token is missing or invalid.";
 
+    /// <summary>
+    /// Public setup completion route (docs/API.md §21). Repeat calls must
+    /// observe <c>409 SETUP_ALREADY_COMPLETED</c> even when the client still
+    /// carries the session cookie issued by the completion response; the
+    /// endpoint performs no authenticated state change once setup is complete.
+    /// </summary>
+    private static readonly PathString SetupCompletePath = new("/api/v1/setup/complete");
+
     public async Task InvokeAsync(HttpContext context, IAntiforgery antiforgery)
     {
         if (!IsSessionAuthenticated(context))
+        {
+            await next(context);
+            return;
+        }
+
+        if (HttpMethods.IsPost(context.Request.Method)
+            && context.Request.Path.StartsWithSegments(SetupCompletePath))
         {
             await next(context);
             return;

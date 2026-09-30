@@ -87,6 +87,7 @@ Use stable error codes.
 | `ACCOUNT_LOCKED` | 423 | Account temporarily locked; `details.locked_until` present |
 | `RATE_LIMITED` | 429 | Too many attempts; `Retry-After` header present |
 | `NOT_FOUND` | 404 | The requested entity does not exist |
+| `INTERNAL_ERROR` | 500 | Unexpected server failure; `message` may carry an operator-facing hint |
 | `PASSWORD_CHANGE_REQUIRED` | 403 | Session must complete a forced password change first |
 | `FORBIDDEN` | 403 | Authenticated but missing the required permission |
 | `IP_NOT_ALLOWED` | 403 | Client address is outside the configured IP allowlist |
@@ -441,7 +442,7 @@ The API should expose domain actions cleanly enough that future service accounts
     "update_check_enabled": true
   }
   ```
-  `admin` is required if and only if `auth_mode` is `multiuser`. `week_starts_on` is 0–6 (Sunday = 0, default 0). `startup_page` is `calendar` or `dashboard`.
+  `admin` is required if and only if `auth_mode` is `multiuser`. `week_starts_on` is 0–6 (Sunday = 0, default 0). `startup_page` is `calendar` or `dashboard`. `admin.username` is 3–32 characters; it is stored trimmed and its lowercase lookup form (`normalized_username`) is derived from it. `admin.password` follows the 12–128 character policy. `ip_allowlist` is optional; when `enabled` is true at least one valid IPv4/IPv6 CIDR range is required, and a bare IPv4/IPv6 address is accepted as a single-host range (`/32` or `/128`). Validation failures return `400 VALIDATION_FAILED` with `details.field_errors`.
   Response `201`:
   ```json
   {
@@ -450,7 +451,7 @@ The API should expose domain actions cleanly enough that future service accounts
     "session": { "user": { "...": "..." } }
   }
   ```
-  The recovery key is returned exactly once here. It is stored at `/data/config/recovery.key` (mode 0600), never logged, and only exportable later via the M13 admin export route. In multiuser mode the response also establishes the first Admin session. Repeated calls return `409 SETUP_ALREADY_COMPLETED`.
+  The recovery key is returned exactly once here. It is stored at `/data/config/recovery.key` (mode 0600), never logged, and only exportable later via the M13 admin export route. An existing key file is reused, never overwritten. In multiuser mode the response also establishes the first Admin session (same payload, cookie, and `X-CSRF-TOKEN` as login); single-user responses omit `session`. Repeated calls return `409 SETUP_ALREADY_COMPLETED`, and concurrent calls are serialized so exactly one succeeds.
 
 ### Household and security settings
 

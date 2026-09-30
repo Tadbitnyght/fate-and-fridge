@@ -95,7 +95,7 @@ public static class HouseholdSettingsPatchValidator
         return new HouseholdSettingsPatchValidation(patch, NoFieldErrors);
     }
 
-    private static string? ReadHouseholdName(JsonElement element, Dictionary<string, string[]> errors)
+    internal static string? ReadHouseholdName(JsonElement element, Dictionary<string, string[]> errors)
     {
         if (element.ValueKind != JsonValueKind.String)
         {
@@ -131,7 +131,7 @@ public static class HouseholdSettingsPatchValidator
         return value;
     }
 
-    private static string? ReadTimezone(JsonElement element, Dictionary<string, string[]> errors)
+    internal static string? ReadTimezone(JsonElement element, Dictionary<string, string[]> errors)
     {
         if (element.ValueKind != JsonValueKind.String)
         {
@@ -169,7 +169,7 @@ public static class HouseholdSettingsPatchValidator
         return canonical;
     }
 
-    private static int? ReadWeekStartsOn(JsonElement element, Dictionary<string, string[]> errors)
+    internal static int? ReadWeekStartsOn(JsonElement element, Dictionary<string, string[]> errors)
     {
         if (element.ValueKind != JsonValueKind.Number
             || !element.TryGetInt32(out var value)
@@ -186,7 +186,7 @@ public static class HouseholdSettingsPatchValidator
         return value;
     }
 
-    private static int? ReadDinerCount(JsonElement element, Dictionary<string, string[]> errors)
+    internal static int? ReadDinerCount(JsonElement element, Dictionary<string, string[]> errors)
     {
         if (element.ValueKind != JsonValueKind.Number
             || !element.TryGetInt32(out var value)
@@ -203,7 +203,7 @@ public static class HouseholdSettingsPatchValidator
         return value;
     }
 
-    private static StartupPage? ReadStartupPage(JsonElement element, Dictionary<string, string[]> errors)
+    internal static StartupPage? ReadStartupPage(JsonElement element, Dictionary<string, string[]> errors)
     {
         if (element.ValueKind == JsonValueKind.String
             && EnumTextConverters.TryStartupPageFromText(element.GetString()!, out var page))
@@ -215,7 +215,7 @@ public static class HouseholdSettingsPatchValidator
         return null;
     }
 
-    private static bool ContainsControlCharacters(string value)
+    internal static bool ContainsControlCharacters(string value)
     {
         foreach (var character in value)
         {

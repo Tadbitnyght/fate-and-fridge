@@ -54,6 +54,10 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 builder.Services.AddScoped<SetupStateService>();
 
+// M1-04: single-shot setup completion and the recovery key file store.
+builder.Services.AddScoped<SetupCompletionService>();
+builder.Services.AddScoped<RecoveryKeyStore>();
+
 builder.Services.AddScoped<HouseholdSettingsService>();
 
 // M1-06 session infrastructure: opaque DB-backed cookie sessions resolved by

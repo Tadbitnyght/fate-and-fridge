@@ -4,7 +4,6 @@ using System.Text.Json;
 using FateAndFridge.Api.Auth;
 using FateAndFridge.Api.Auth.Permissions;
 using FateAndFridge.Api.Data;
-using FateAndFridge.Api.Data.Configurations;
 using FateAndFridge.Api.Domain;
 using FateAndFridge.Api.Errors;
 using FateAndFridge.Api.Middleware;
@@ -142,22 +141,11 @@ public static class AuthEndpoints
         LoginResult.Success success,
         CancellationToken cancellationToken)
     {
-        // Persistent cookie for the 30-day idle window (docs/API.md §5).
-        SessionCookie.Append(context.Response, success.RawToken, success.Session.IdleExpiresAt);
+        // Shared with setup completion: persistent cookie, session principal,
+        // and a fresh antiforgery pair bound to the new session.
+        SessionSignIn.Apply(context, success.User, success.Session, success.RawToken, antiforgery);
 
-        // Mint the antiforgery pair for the new session so the client can send
-        // X-CSRF-TOKEN immediately: the CSRF middleware ran while this request
-        // was still unauthenticated and therefore skipped its authenticated
-        // branch. Tokens embed both the session token hash and the claims-based
-        // user id, so the token must be generated under the new session
-        // principal to validate on subsequent authenticated requests.
-        context.User = SessionClaims.Create(success.User, success.Session.Id);
-        context.Items[SessionAuthenticationDefaults.SessionTokenHashItemKey] =
-            Convert.ToHexString(success.Session.TokenHash);
-        context.Response.Headers[CsrfMiddleware.HeaderName] =
-            antiforgery.GetAndStoreTokens(context).RequestToken;
-
-        return Results.Ok(await CreateMultiuserSessionAsync(permissionService, success.User, cancellationToken));
+        return Results.Ok(await SessionPayloads.ForUserAsync(permissionService, success.User, cancellationToken));
     }
 
     /// <summary>
@@ -320,27 +308,7 @@ public static class AuthEndpoints
             return AuthRequired();
         }
 
-        return Results.Ok(await CreateMultiuserSessionAsync(permissionService, user, cancellationToken));
-    }
-
-    private static async Task<AuthSessionResponse> CreateMultiuserSessionAsync(
-        PermissionService permissionService,
-        User user,
-        CancellationToken cancellationToken)
-    {
-        // One source of truth with route enforcement (M1-09): the evaluator
-        // decides admin bypass and edit-implies-view, reading grants fresh.
-        var actor = new CurrentActor(IsSystem: false, Role: user.Role) { UserId = user.Id };
-
-        return new AuthSessionResponse(
-            Authenticated: true,
-            AuthMode: AuthSessionResponse.MultiuserAuthMode,
-            User: new AuthUserResponse(
-                user.Id,
-                user.Username,
-                EnumTextConverters.UserRoleToText(user.Role)),
-            Permissions: await permissionService.GetEffectiveKeysAsync(actor, cancellationToken),
-            MustChangePassword: user.MustChangePassword);
+        return Results.Ok(await SessionPayloads.ForUserAsync(permissionService, user, cancellationToken));
     }
 
     private static IResult AuthRequired() =>
