@@ -367,3 +367,246 @@ body {
   outline: 2px solid var(--text);
   outline-offset: 2px;
 }
+
+/* ---------- setup wizard ---------- */
+
+.wizard {
+  gap: 0.75rem;
+}
+
+.wizard__progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.wizard__progress li[aria-current='step'] {
+  color: var(--text);
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.wizard__position {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.wizard__title {
+  margin: 0;
+  font-size: 1.6rem;
+}
+
+.wizard__title:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 4px;
+}
+
+.wizard__errors {
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--bad-text);
+  border-radius: 0.5rem;
+  background: var(--bad-bg);
+  color: var(--bad-text);
+}
+
+.wizard__errors:focus-visible {
+  outline: 2px solid var(--bad-text);
+  outline-offset: 2px;
+}
+
+.wizard__errors h2 {
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
+}
+
+.wizard__errors ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.wizard__form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.wizard__step {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.wizard__step > p {
+  margin: 0;
+}
+
+.wizard__footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: space-between;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.wizard__footer button,
+.wizard__step > button {
+  padding: 0.5rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.wizard__footer button:disabled,
+.wizard__step > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.wizard__footer button:focus-visible,
+.wizard__step > button:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.wizard__footer button.button--primary,
+.wizard__step > button.button--primary {
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--bg);
+}
+
+.form__fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+}
+
+.form__fieldset legend {
+  padding: 0 0.35rem;
+  font-weight: 600;
+}
+
+.form__choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.form__choice input {
+  margin-top: 0.3rem;
+}
+
+.form__error-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--bad-text);
+}
+
+.notice {
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+}
+
+.notice h3 {
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
+}
+
+.notice ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.notice--warning {
+  border-color: var(--bad-text);
+  background: var(--bad-bg);
+  color: var(--bad-text);
+}
+
+.review {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.review div {
+  display: grid;
+  grid-template-columns: minmax(9rem, 12rem) 1fr;
+  gap: 0.5rem;
+}
+
+.review dt {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.review dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.recovery-key {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.recovery-key label {
+  font-weight: 600;
+}
+
+.recovery-key__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.recovery-key__row input {
+  flex: 1 1 16rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.recovery-key__row button {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+@media (max-width: 30rem) {
+  .review div {
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
+  }
+
+  .wizard__footer button,
+  .wizard__step > button {
+    flex: 1 1 auto;
+  }
+}

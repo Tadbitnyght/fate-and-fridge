@@ -46,7 +46,7 @@ afterEach(() => {
 })
 
 describe('App routing and guards', () => {
-  it('sends visitors to the setup placeholder while setup is incomplete', async () => {
+  it('sends visitors to the setup wizard while setup is incomplete', async () => {
     installMockFetch([
       { path: '/setup/status', body: setupIncomplete },
       { path: '/auth/session', ...sessionBeforeSetup() },
@@ -55,10 +55,11 @@ describe('App routing and guards', () => {
     renderWithProviders(<App />, { route: '/' })
 
     expect(
-      await screen.findByRole('heading', { level: 1, name: /set up fate & fridge/i }),
+      await screen.findByRole('heading', { level: 1, name: /welcome to fate & fridge/i }),
     ).toBeInTheDocument()
-    expect(screen.getByText('Auth mode')).toBeInTheDocument()
-    expect(screen.getByText('Not chosen yet')).toBeInTheDocument()
+    expect(screen.getByText('Installation mode')).toBeInTheDocument()
+    expect(screen.getByLabelText(/single user/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/multiuser/i)).toBeInTheDocument()
   })
 
   it('redirects unauthenticated multiuser visitors to the login page', async () => {

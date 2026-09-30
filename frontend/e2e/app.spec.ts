@@ -1,7 +1,14 @@
 import { expect, test, type Page } from '@playwright/test'
 
 const setupIncomplete = { setup_completed: false, auth_mode: null, recovery_key_present: false }
-const setupComplete = { setup_completed: true, auth_mode: 'multiuser', recovery_key_present: true }
+
+const singleUserSession = {
+  authenticated: true,
+  auth_mode: 'single_user',
+  user: null,
+  permissions: ['calendar.view', 'calendar.edit'],
+  must_change_password: false,
+}
 
 const multiuserSession = {
   authenticated: true,
@@ -11,32 +18,80 @@ const multiuserSession = {
   must_change_password: false,
 }
 
+interface CompleteResponse {
+  status?: number
+  body: unknown
+}
+
 interface MockApiOptions {
   setupCompleted: boolean
-  /** Omit for an unauthenticated (401) session. */
+  /** Session payload for an already-configured household. Omit for 401. */
   session?: unknown
+  /** Response for `POST /setup/complete`; defaults to single-user success. */
+  complete?: CompleteResponse
 }
 
 async function mockApi(page: Page, options: MockApiOptions): Promise<void> {
+  let completed = options.setupCompleted
+  let authMode: string | null = options.setupCompleted ? 'multiuser' : null
+  let sessionPayload: unknown = options.session
+
   await page.route('**/api/v1/**', async (route) => {
-    const path = new URL(route.request().url()).pathname
+    const request = route.request()
+    const path = new URL(request.url()).pathname
+
     if (path.endsWith('/setup/status')) {
-      await route.fulfill({ json: options.setupCompleted ? setupComplete : setupIncomplete })
+      await route.fulfill({
+        json: completed
+          ? { setup_completed: true, auth_mode: authMode, recovery_key_present: true }
+          : setupIncomplete,
+      })
       return
     }
+
+    if (path.endsWith('/setup/complete') && request.method() === 'POST') {
+      const response = options.complete ?? {
+        status: 201,
+        body: { auth_mode: 'single_user', recovery_key: 'E2E-RECOVERY-KEY' },
+      }
+      const status = response.status ?? 201
+      completed = status === 201 || status === 409
+      const body = response.body as { auth_mode?: string; session?: unknown }
+      authMode = body.auth_mode ?? authMode
+      if (body.session) {
+        sessionPayload = body.session
+      }
+      await route.fulfill({ status, json: response.body })
+      return
+    }
+
     if (path.endsWith('/auth/session')) {
-      if (options.session) {
-        await route.fulfill({ json: options.session })
-      } else {
+      if (!completed) {
         await route.fulfill({
-          status: 401,
+          status: 409,
           json: {
-            error: { code: 'AUTH_REQUIRED', message: 'A valid session is required.', details: {} },
+            error: { code: 'SETUP_REQUIRED', message: 'Setup is not complete.', details: {} },
           },
         })
+        return
       }
+      if (sessionPayload) {
+        await route.fulfill({ json: sessionPayload })
+        return
+      }
+      if (authMode === 'single_user') {
+        await route.fulfill({ json: singleUserSession })
+        return
+      }
+      await route.fulfill({
+        status: 401,
+        json: {
+          error: { code: 'AUTH_REQUIRED', message: 'A valid session is required.', details: {} },
+        },
+      })
       return
     }
+
     await route.fulfill({
       status: 404,
       json: { error: { code: 'NOT_FOUND', message: `No mock for ${path}`, details: {} } },
@@ -44,13 +99,16 @@ async function mockApi(page: Page, options: MockApiOptions): Promise<void> {
   })
 }
 
-test('routes an unconfigured household to the setup placeholder', async ({ page }) => {
+test('shows the setup wizard for an unconfigured household', async ({ page }) => {
   await mockApi(page, { setupCompleted: false })
 
   await page.goto('/')
 
   await expect(page).toHaveURL(/\/setup$/)
-  await expect(page.getByRole('heading', { level: 1, name: 'Set up Fate & Fridge' })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Welcome to Fate & Fridge' }),
+  ).toBeVisible()
+  await expect(page.getByLabel(/Multiuser/)).toBeVisible()
 })
 
 test('routes unauthenticated multiuser visitors to the login page', async ({ page }) => {
@@ -73,4 +131,80 @@ test('renders the app shell for an authenticated session', async ({ page }) => {
   await expect(page.getByRole('heading', { level: 2, name: 'Calendar' })).toBeVisible()
   await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Settings' })).toBeVisible()
+})
+
+test('completes single-user setup and gates the recovery key', async ({ page }) => {
+  await mockApi(page, {
+    setupCompleted: false,
+    complete: {
+      status: 201,
+      body: { auth_mode: 'single_user', recovery_key: 'E2E-RECOVERY-KEY' },
+    },
+  })
+
+  await page.goto('/')
+  await expect(page).toHaveURL(/\/setup$/)
+
+  await page.getByLabel(/Single user/).check()
+  await expect(page.getByText(/trusted private network/i)).toBeVisible()
+  await page.getByRole('button', { name: 'Next' }).click()
+
+  await page.getByLabel('Household name').fill('The Smiths')
+  await page.getByLabel('Timezone').fill('America/Chicago')
+  await page.getByRole('button', { name: 'Next' }).click()
+
+  // Single-user mode has no admin step.
+  await expect(page.getByRole('heading', { level: 1, name: 'Network access' })).toBeVisible()
+  await page.getByRole('button', { name: 'Next' }).click()
+
+  await expect(page.getByRole('heading', { level: 1, name: 'Review and finish' })).toBeVisible()
+  await page.getByRole('button', { name: 'Finish setup' }).click()
+
+  await expect(page.getByRole('textbox', { name: 'Recovery key' })).toHaveValue('E2E-RECOVERY-KEY')
+  const continueButton = page.getByRole('button', { name: /Continue to Fate & Fridge/ })
+  await expect(continueButton).toBeDisabled()
+  await page.getByLabel(/I have saved this recovery key/).check()
+  await expect(continueButton).toBeEnabled()
+  await continueButton.click()
+
+  await expect(page.getByRole('heading', { level: 2, name: 'Calendar' })).toBeVisible()
+})
+
+test('completes multiuser setup with an admin account', async ({ page }) => {
+  await mockApi(page, {
+    setupCompleted: false,
+    complete: {
+      status: 201,
+      body: {
+        auth_mode: 'multiuser',
+        recovery_key: 'E2E-RECOVERY-KEY',
+        session: multiuserSession,
+      },
+    },
+  })
+
+  await page.goto('/setup')
+
+  await page.getByLabel(/Multiuser/).check()
+  await page.getByRole('button', { name: 'Next' }).click()
+
+  await page.getByLabel('Household name').fill('The Smiths')
+  await page.getByLabel('Timezone').fill('America/Chicago')
+  await page.getByRole('button', { name: 'Next' }).click()
+
+  await expect(page.getByRole('heading', { level: 1, name: 'Admin account' })).toBeVisible()
+  await page.getByLabel('Admin username').fill('smith')
+  await page.getByLabel('Admin password', { exact: true }).fill('correct horse battery staple')
+  await page.getByLabel('Confirm admin password').fill('correct horse battery staple')
+  await page.getByRole('button', { name: 'Next' }).click()
+
+  await page.getByRole('button', { name: 'Next' }).click()
+  await page.getByRole('button', { name: 'Finish setup' }).click()
+
+  await expect(page.getByRole('textbox', { name: 'Recovery key' })).toHaveValue('E2E-RECOVERY-KEY')
+  await page.getByLabel(/I have saved this recovery key/).check()
+  await page.getByRole('button', { name: /Continue to Fate & Fridge/ }).click()
+
+  await expect(page.getByRole('heading', { level: 2, name: 'Calendar' })).toBeVisible()
+  await expect(page.getByText('smith')).toBeVisible()
 })

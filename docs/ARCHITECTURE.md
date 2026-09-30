@@ -201,7 +201,7 @@ frontend/src/
   components/   AppShell.tsx (header/nav/outlet/footer), RequireSession.tsx, StatusPanel.tsx
   features/
     auth/       AuthProvider (TanStack Query session state), AuthContext/useAuth, messages
-    setup/      useSetupStatus
+    setup/      SetupWizard + steps (M1-13), validation, useSetupStatus, useCompleteSetup
   pages/        SetupPage, LoginPage, ChangePasswordPage, Calendar/Dashboard/… placeholders
   test/         mockFetch + render helpers
 ```
@@ -211,6 +211,12 @@ Routing rules: incomplete setup → `/setup`; unauthenticated multiuser → `/lo
 directly. The API client stores the latest `X-CSRF-TOKEN` response header in memory
 and echoes it on unsafe requests. Routing and session state are UI conveniences;
 server-side authorization remains the only boundary.
+
+Setup wizard (M1-13): mode → household → admin (multiuser only) → optional IP
+allowlist → review, then a one-time recovery key screen that requires an explicit
+"I have saved this key" confirmation before the app opens. Client validation mirrors
+the server (`SetupCompletionValidator`); server `details.field_errors` are mapped
+back to the step that owns the field.
 
 ---
 
