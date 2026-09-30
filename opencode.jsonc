@@ -42,9 +42,16 @@
       },
       // Roslyn-powered C# analysis and refactoring, using the locally
       // installed madq-roslynmcp tool (dotnet tool install -g madq-roslynmcp).
+      // The service environment does not have ~/.dotnet on PATH, and the tool's
+      // Linux SDK discovery does not probe ~/.dotnet, so pin the workspace to
+      // the user SDK (10.0.4xx per backend/global.json) explicitly.
       "roslyn": {
         "type": "local",
-        "command": ["/home/tadbit/.dotnet/tools/madq-roslynmcp"]
+        "command": ["/home/tadbit/.dotnet/tools/madq-roslynmcp"],
+        "environment": {
+          "DOTNET_ROOT": "/home/tadbit/.dotnet",
+          "ROSLYNMCP_MSBUILD_PATH": "/home/tadbit/.dotnet/sdk/10.0.401"
+        }
       },
       // Docker MCP Toolkit gateway (Docker CLI with the docker-mcp plugin).
       // DOCKER_CONTEXT points it at the TrueNAS daemon over SSH (see
