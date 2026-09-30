@@ -58,6 +58,10 @@ builder.Services.AddScoped<SetupStateService>();
 builder.Services.AddScoped<SetupCompletionService>();
 builder.Services.AddScoped<RecoveryKeyStore>();
 
+// M1-10: user management, last-active-Admin safety, and the auth-mode switch.
+builder.Services.AddScoped<UserManagementService>();
+builder.Services.AddScoped<AuthModeService>();
+
 builder.Services.AddScoped<HouseholdSettingsService>();
 
 // M1-06 session infrastructure: opaque DB-backed cookie sessions resolved by

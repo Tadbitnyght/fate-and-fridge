@@ -202,7 +202,7 @@ public static class SetupCompletionValidator
         return null;
     }
 
-    private static SetupAdminCredentials? ReadAdminCredentials(
+    internal static SetupAdminCredentials? ReadAdminCredentials(
         JsonElement adminElement,
         Dictionary<string, string[]> errors)
     {
@@ -218,16 +218,12 @@ public static class SetupCompletionValidator
         else
         {
             var trimmed = usernameElement.GetString()!.Trim();
-            if (trimmed.Length < MinUsernameLength || trimmed.Length > MaxUsernameLength)
+            if (!UsernamePolicy.IsValid(trimmed))
             {
                 AddError(
                     errors,
                     "admin.username",
-                    $"admin.username must be between {MinUsernameLength} and {MaxUsernameLength} characters.");
-            }
-            else if (HouseholdSettingsPatchValidator.ContainsControlCharacters(trimmed))
-            {
-                AddError(errors, "admin.username", "admin.username must not contain control characters.");
+                    $"admin.username must be between {MinUsernameLength} and {MaxUsernameLength} characters using letters, digits, '.', '_' or '-'.");
             }
             else
             {

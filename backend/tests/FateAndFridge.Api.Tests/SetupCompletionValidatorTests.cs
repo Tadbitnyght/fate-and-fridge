@@ -1,4 +1,5 @@
 using System.Text.Json;
+using FateAndFridge.Api.Auth;
 using FateAndFridge.Api.Domain;
 using FateAndFridge.Api.Services;
 using FluentAssertions;
@@ -267,6 +268,33 @@ public sealed class SetupCompletionValidatorTests
         var validation = Validate(body);
 
         validation.FieldErrors.Should().ContainKey("admin.username");
+    }
+
+    [Theory]
+    [InlineData("john doe", false)]
+    [InlineData("josé", false)]
+    [InlineData("smith.jones", true)]
+    [InlineData("smith_jones-1", true)]
+    [InlineData("Smith", true)]
+    public void Admin_username_charset_matches_the_shared_policy(string username, bool expected)
+    {
+        var body = ValidMultiuserBody();
+        body["admin"] = new { username, password = "correct horse battery staple" };
+
+        var validation = Validate(body);
+
+        if (expected)
+        {
+            validation.FieldErrors.Should().BeEmpty();
+            validation.Request.Should().NotBeNull();
+            validation.Request!.Admin!.Username.Should().Be(username);
+            validation.Request.Admin.NormalizedUsername.Should().Be(UsernameNormalizer.Normalize(username));
+        }
+        else
+        {
+            validation.Request.Should().BeNull();
+            validation.FieldErrors.Should().ContainKey("admin.username");
+        }
     }
 
     [Theory]

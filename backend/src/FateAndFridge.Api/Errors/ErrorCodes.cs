@@ -28,6 +28,10 @@ public static class ErrorCodes
 
     public const string InternalError = "INTERNAL_ERROR";
 
+    public const string LastAdminProtected = "LAST_ADMIN_PROTECTED";
+
+    public const string AuthModeAlreadyMultiuser = "AUTH_MODE_ALREADY_MULTIUSER";
+
     public const string Forbidden = "FORBIDDEN";
 
     public const string IpNotAllowed = "IP_NOT_ALLOWED";

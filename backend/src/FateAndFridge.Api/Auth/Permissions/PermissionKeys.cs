@@ -36,6 +36,18 @@ public static class PermissionKeys
     /// <summary>All seven keys in canonical order.</summary>
     public static readonly IReadOnlyList<string> All = Array.AsReadOnly(AllKeysArray);
 
+    /// <summary>
+    /// Default grants for a newly created member (docs/MILESTONES.md M1
+    /// decisions): view-only — <c>calendar.view</c>, <c>groceries.view</c>,
+    /// <c>recipes.view</c> in canonical order.
+    /// </summary>
+    public static readonly IReadOnlyList<string> MemberViewOnly = Array.AsReadOnly(
+    [
+        CalendarView,
+        GroceriesView,
+        RecipesView,
+    ]);
+
     /// <summary>True when <paramref name="key"/> is one of the known keys.</summary>
     public static bool IsKnown(string? key) =>
         key is not null && AllKeysArray.Contains(key, StringComparer.Ordinal);

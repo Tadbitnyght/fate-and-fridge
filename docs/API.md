@@ -88,6 +88,8 @@ Use stable error codes.
 | `RATE_LIMITED` | 429 | Too many attempts; `Retry-After` header present |
 | `NOT_FOUND` | 404 | The requested entity does not exist |
 | `INTERNAL_ERROR` | 500 | Unexpected server failure; `message` may carry an operator-facing hint |
+| `LAST_ADMIN_PROTECTED` | 409 | Operation would remove the last active Admin |
+| `AUTH_MODE_ALREADY_MULTIUSER` | 409 | The household already uses multiuser mode |
 | `PASSWORD_CHANGE_REQUIRED` | 403 | Session must complete a forced password change first |
 | `FORBIDDEN` | 403 | Authenticated but missing the required permission |
 | `IP_NOT_ALLOWED` | 403 | Client address is outside the configured IP allowlist |
@@ -193,7 +195,7 @@ Login CSRF note: `POST /auth/login` is unauthenticated, so the antiforgery check
 - `POST /users/{id}/disable`
 - `POST /users/{id}/enable`
 
-Admin only.
+Admin only. New members default to view-only (`calendar.view`, `groceries.view`, `recipes.view`); demoting an Admin to member seeds those view-only defaults only when the user has no granted rows (existing grants are preserved); admin-created accounts must change their password on first login.
 
 ---
 
@@ -442,7 +444,7 @@ The API should expose domain actions cleanly enough that future service accounts
     "update_check_enabled": true
   }
   ```
-  `admin` is required if and only if `auth_mode` is `multiuser`. `week_starts_on` is 0–6 (Sunday = 0, default 0). `startup_page` is `calendar` or `dashboard`. `admin.username` is 3–32 characters; it is stored trimmed and its lowercase lookup form (`normalized_username`) is derived from it. `admin.password` follows the 12–128 character policy. `ip_allowlist` is optional; when `enabled` is true at least one valid IPv4/IPv6 CIDR range is required, and a bare IPv4/IPv6 address is accepted as a single-host range (`/32` or `/128`). Validation failures return `400 VALIDATION_FAILED` with `details.field_errors`.
+  `admin` is required if and only if `auth_mode` is `multiuser`. `week_starts_on` is 0–6 (Sunday = 0, default 0). `startup_page` is `calendar` or `dashboard`. `admin.username` is 3–32 characters using ASCII letters, digits, `"."`, `"_"`, or `"-"`; it is stored trimmed and its lowercase lookup form (`normalized_username`) is derived from it. `admin.password` follows the 12–128 character policy. `ip_allowlist` is optional; when `enabled` is true at least one valid IPv4/IPv6 CIDR range is required, and a bare IPv4/IPv6 address is accepted as a single-host range (`/32` or `/128`). Validation failures return `400 VALIDATION_FAILED` with `details.field_errors`.
   Response `201`:
   ```json
   {
@@ -457,14 +459,25 @@ The API should expose domain actions cleanly enough that future service accounts
 
 - `GET /settings/household`, `PATCH /settings/household` — name, timezone (IANA, validated), `week_starts_on`, `default_diner_count` (1–20), `startup_page`. Admin-only for PATCH; any authenticated/single-user caller may GET.
 - `GET /settings/security`, `PATCH /settings/security` — `ip_allowlist_enabled`, `ip_allowlist_ranges` (IPv4/IPv6 CIDR), `trusted_proxies` (CIDR). Admin-only. Enabling the allowlist requires `confirmed: true` in the PATCH body; the server validates that at least one range is present and that the caller's own address is covered.
-- `POST /settings/auth-mode` — single-user → multiuser conversion; body carries the first Admin's `username`/`password`. Admin-only once configured. Multiuser → single-user returns `409 AUTH_MODE_DOWNGRADE_NOT_SUPPORTED` (deferred).
+- `POST /settings/auth-mode` — auth-mode switch (Admin-only; the single-user system actor may also call it).
+  - Single-user → multiuser: body `{ "admin": { "username": "smith", "password": "..." } }` (an optional `"auth_mode": "multiuser"` is accepted). Creates the first Admin (3–32 character username, 12–128 character password), sets `household_settings.auth_mode`, and returns the signed-in multiuser session payload with the usual cookie and `X-CSRF-TOKEN` pair.
+  - Already multiuser: `409 AUTH_MODE_ALREADY_MULTIUSER`.
+  - Explicit single-user request (`"auth_mode": "single_user"`): `409 AUTH_MODE_DOWNGRADE_NOT_SUPPORTED` (deferred).
+  - Invalid admin credentials or body: `400 VALIDATION_FAILED` with `details.field_errors`.
 
 ### User management
 
-- Existing routes in section 6, plus:
-  - `POST /users/{id}/reset-password` — Admin issues a one-time temporary password (returned once), sets `must_change_password`, and revokes the user's sessions.
-  - `PATCH /users/{id}/permissions` — replaces the permission key set; edit keys imply their view key server-side.
-- Safety rules: the last active Admin cannot be disabled, demoted, or have Admin removed; disabling a user revokes all sessions immediately.
+All routes require an Admin (or the single-user system actor); members receive `403 FORBIDDEN`.
+
+- `GET /users` — list of `{ id, username, role, is_active, must_change_password, last_login_at, permissions }`, where `permissions` is the effective set (Admins hold all seven keys).
+- `POST /users` — body `{ username, role?, password? }`; `role` defaults to `"member"`. Usernames are 3–32 characters using ASCII letters, digits, `"."`, `"_"`, or `"-"`, stored trimmed with a lowercase lookup form; duplicates return `400 VALIDATION_FAILED`. New members default to **view-only** (`calendar.view`, `groceries.view`, `recipes.view`); Admins hold all keys without rows. When `password` is omitted a one-time temporary password is generated and returned once as `temporary_password`. Admin-created accounts always start with `must_change_password = true`, so the first login is gated until the password is changed.
+- `GET /users/{id}` — single user payload; `404 NOT_FOUND` for unknown ids.
+- `PATCH /users/{id}` — body `{ username?, role? }` (at least one). Renames revalidate the username and reject duplicates. Changing a role revokes that user's sessions so the new role applies on the next login. Demoting an Admin to member seeds the view-only defaults (`calendar.view`, `groceries.view`, `recipes.view`) only when the user has no granted rows, so a demoted Admin is never left with zero visibility; existing grants are preserved. Demoting the last active Admin returns `409 LAST_ADMIN_PROTECTED`.
+- `PATCH /users/{id}/permissions` — body `{ "permissions": ["calendar.edit", "recipes.view"] }` replaces the member's granted rows; unknown keys return `400 VALIDATION_FAILED`, Admin targets return `400` (Admins always hold all keys), duplicates are removed, and changes take effect on the next request.
+- `POST /users/{id}/disable` — sets `is_active = false` and revokes all sessions immediately; the last active Admin is protected (`409 LAST_ADMIN_PROTECTED`).
+- `POST /users/{id}/enable` — sets `is_active = true` and clears all lockout state (`locked_until`, `failed_login_count`, `lockout_count`, `lockout_window_started_at`) so the account can log in again; login stays generic while disabled.
+- `POST /users/{id}/reset-password` — Admin issues a one-time temporary password (returned once), sets `must_change_password`, clears lockout state, and revokes the user's sessions.
+- Safety rules: the last active Admin cannot be disabled, demoted, or have Admin removed; concurrent demotions/disables are serialized so the household always keeps at least one active Admin; temporary passwords are returned exactly once and never logged or stored in plaintext.
 
 ### Pre-setup gating
 
