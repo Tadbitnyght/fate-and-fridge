@@ -25,6 +25,10 @@ public sealed class ReferenceDataNormalizerTests
     [InlineData("Σόφια", "σοφια")]
     [InlineData("ΆΝΩ", "ανω")]
     [InlineData("ϊϋ", "ιυ")]
+    [InlineData("ΠΟΣ", "ποσ")]
+    [InlineData("πος", "ποσ")]
+    [InlineData("ϓ", "υ")]
+    [InlineData("ϔ", "υ")]
     [InlineData("ΑΒΓ", "αβγ")]
     public void Normalize_lowercases_non_latin_scripts_without_transliterating(string input, string normalized)
     {
@@ -76,6 +80,28 @@ public sealed class ReferenceDataNormalizerTests
 
         success.Display.Should().Be(decomposed);
         success.Normalized.Should().Be("jalapeno");
+    }
+
+    [Fact]
+    public void Normalize_folds_n_preceded_by_apostrophe_to_its_decomposed_form()
+    {
+        var success = AsSuccess("\u0149");
+
+        success.Display.Should().Be("\u0149");
+        success.Normalized.Should().Be("\u02BCn");
+        success.Normalized.Should().NotBe("n");
+        AsSuccess("\u02BCn").Normalized.Should().Be("\u02BCn");
+    }
+
+    [Theory]
+    [InlineData("कु", "क")]
+    [InlineData("بَيْت", "بيت")]
+    public void Normalize_strips_non_spacing_marks_in_mark_based_scripts(string input, string normalized)
+    {
+        var success = AsSuccess(input);
+
+        success.Display.Should().Be(input);
+        success.Normalized.Should().Be(normalized);
     }
 
     [Theory]
@@ -132,6 +158,28 @@ public sealed class ReferenceDataNormalizerTests
     [Fact]
     public void Normalize_rejects_input_with_no_normalized_form_after_folding() =>
         AssertInvalid("\u0301", ReferenceDataNormalizationFailureReason.Empty);
+
+    [Theory]
+    [InlineData("\u0301 \u0302")]
+    [InlineData("\u0301 \u0302 \u0303")]
+    public void Normalize_rejects_mark_only_input_that_folds_away_to_whitespace(string input) =>
+        AssertInvalid(input, ReferenceDataNormalizationFailureReason.Empty);
+
+    [Fact]
+    public void Normalize_recollapses_whitespace_exposed_by_folding()
+    {
+        const string input = "x\u0301 \u0302 y";
+
+        var success = AsSuccess(input);
+
+        success.Display.Should().Be(input);
+        success.Normalized.Should().Be("x y");
+
+        var renormalized = AsSuccess(success.Normalized);
+
+        renormalized.Display.Should().Be(success.Normalized);
+        renormalized.Normalized.Should().Be(success.Normalized);
+    }
 
     [Fact]
     public void Normalize_handles_ten_thousand_ascii_characters_deterministically()

@@ -45,21 +45,32 @@ public abstract record ReferenceDataNormalizationResult
 /// <remarks>
 /// <para>
 /// The pipeline is fixed and idempotent: trim, then collapse every run of
-/// Unicode whitespace to one space, then fold diacritics, then invariant
-/// lowercase. Normalizing an already normalized value returns it unchanged, so
+/// Unicode whitespace to one space, then fold diacritics, then trim and
+/// collapse again (folding can remove marks that sat between whitespace), then
+/// invariant lowercase. <c>Normalized</c> is therefore always trimmed and
+/// whitespace-collapsed, and normalizing it again returns it unchanged, so
 /// writes and searches always compare the same text.
 /// </para>
 /// <para>
 /// Diacritic folding is table-driven and ICU-independent, so it also works when
 /// .NET runs in globalization-invariant mode (<c>String.Normalize</c> is a
-/// no-op there). Folding strips non-spacing marks, which handles decomposed
-/// input such as <c>Jalapeño</c>, and maps composed Latin-1 Supplement /
-/// Latin Extended-A letters and Greek tonos/dialytika vowels to their base
-/// letters: <c>Jalapeño</c> → <c>jalapeno</c>, <c>Łódź</c> → <c>lodz</c>,
-/// <c>Σόφια</c> → <c>σοφια</c>. Æ/Œ/ß fold to AE/OE/ss, and the non-decomposing
-/// stroke and horn letters (Ø, Ð, Þ, Đ, Ł, ı, ĸ, Ŋ, ſ, …) fold to their base
-/// letters. Other scripts pass through unchanged apart from lowercasing; there
-/// is no transliteration.
+/// no-op there). Folding strips non-spacing marks in every script: that handles
+/// decomposed input such as <c>Jalapeño</c>, but it also folds marked
+/// forms of mark-based scripts onto their unmarked form (for example Devanagari
+/// <c>कु</c> → <c>क</c> and Arabic <c>بَيْت</c> → <c>بيت</c>), which is a
+/// known limitation for those scripts.
+/// </para>
+/// <para>
+/// The composed-letter table maps Latin-1 Supplement letters (all letters
+/// U+00C0–U+00FF except × and ÷), all of Latin Extended-A (U+0100–U+017F,
+/// including Ø, Æ, Œ, ß, Đ, Ł, ı, İ, Ŋ, and ſ), and Greek tonos/dialytika
+/// vowels in U+0370–U+03FF (including final sigma and the upsilon hook symbols
+/// U+03D3/U+03D4) to their base letters: <c>Jalapeño</c> → <c>jalapeno</c>,
+/// <c>Łódź</c> → <c>lodz</c>, <c>Σόφια</c> → <c>σοφια</c>. Composed Latin
+/// Extended-B and Latin Extended Additional letters are not folded and pass
+/// through; their decomposed forms still fold through non-spacing-mark
+/// stripping. Extending the table is a V2/M2.x enhancement. There is no
+/// transliteration and no plural folding.
 /// </para>
 /// <para>
 /// The type is pure and dependency-free; it reads no database. Control and
@@ -101,13 +112,16 @@ public static class ReferenceDataNormalizer
             return Invalid(ReferenceDataNormalizationFailureReason.Empty);
         }
 
-        var normalized = FoldDiacritics(display).ToLowerInvariant();
-        if (normalized.Length == 0)
+        // Stripping marks can expose whitespace runs that were not adjacent
+        // before folding, so the folded form is trimmed and collapsed again to
+        // keep Normalized a fixed point of this method.
+        var folded = CollapseWhitespace(FoldDiacritics(display).Trim());
+        if (folded.Length == 0)
         {
             return Invalid(ReferenceDataNormalizationFailureReason.Empty);
         }
 
-        return new ReferenceDataNormalizationResult.Success(display, normalized);
+        return new ReferenceDataNormalizationResult.Success(display, folded.ToLowerInvariant());
     }
 
     private static ReferenceDataNormalizationResult Invalid(ReferenceDataNormalizationFailureReason reason) =>
@@ -139,10 +153,10 @@ public static class ReferenceDataNormalizer
 
     /// <summary>
     /// Folds diacritics without relying on ICU normalization (which is a no-op
-    /// in globalization-invariant mode). Pass one drops non-spacing marks so
-    /// already-decomposed input folds too; pass two replaces composed letters
-    /// listed in <see cref="ComposedLetterBaseLetters"/> with their base
-    /// letters. Every other character, including other scripts, is kept as is.
+    /// in globalization-invariant mode). Pass one drops non-spacing marks in
+    /// every script, so already-decomposed input folds too; pass two replaces
+    /// composed letters listed in <see cref="ComposedLetterBaseLetters"/> with
+    /// their base letters. Every other character is kept as is.
     /// </summary>
     private static string FoldDiacritics(string value)
     {
@@ -222,7 +236,7 @@ public static class ReferenceDataNormalizer
         Map(table, "L", "\u0139\u013B\u013D\u013F\u0141"); // Ĺ Ļ Ľ Ŀ Ł
         Map(table, "l", "\u013A\u013C\u013E\u0140\u0142"); // ĺ ļ ľ ŀ ł
         Map(table, "N", "\u00D1\u0143\u0145\u0147\u014A"); // Ñ Ń Ņ Ň Ŋ
-        Map(table, "n", "\u00F1\u0144\u0146\u0148\u0149\u014B"); // ñ ń ņ ň ŉ ŋ
+        Map(table, "n", "\u00F1\u0144\u0146\u0148\u014B"); // ñ ń ņ ň ŋ
         Map(table, "O", "\u00D2\u00D3\u00D4\u00D5\u00D6\u00D8\u014C\u014E\u0150"); // Ò Ó Ô Õ Ö Ø Ō Ŏ Ő
         Map(table, "o", "\u00F2\u00F3\u00F4\u00F5\u00F6\u00F8\u014D\u014F\u0151"); // ò ó ô õ ö ø ō ŏ ő
         Map(table, "OE", "\u0152"); // Œ
@@ -245,20 +259,23 @@ public static class ReferenceDataNormalizer
         Map(table, "th", "\u00FE"); // þ
         Map(table, "ss", "\u00DF"); // ß
         Map(table, "SS", "\u1E9E"); // ẞ
+        Map(table, "\u02BCn", "\u0149"); // ŉ (apostrophe + n, matching its compatibility decomposition)
 
-        // Greek tonos/dialytika vowels fold to the plain vowel.
+        // Greek tonos/dialytika vowels and final sigma fold to the plain
+        // letters.
         Map(table, "\u0391", "\u0386"); // Ά
         Map(table, "\u0395", "\u0388"); // Έ
         Map(table, "\u0397", "\u0389"); // Ή
         Map(table, "\u0399", "\u038A\u03AA"); // Ί Ϊ
         Map(table, "\u039F", "\u038C"); // Ό
-        Map(table, "\u03A5", "\u038E\u03AB"); // Ύ Ϋ
+        Map(table, "\u03A5", "\u038E\u03AB\u03D3\u03D4"); // Ύ Ϋ ϓ ϔ
         Map(table, "\u03A9", "\u038F"); // Ώ
         Map(table, "\u03B1", "\u03AC"); // ά
         Map(table, "\u03B5", "\u03AD"); // έ
         Map(table, "\u03B7", "\u03AE"); // ή
         Map(table, "\u03B9", "\u03AF\u03CA\u0390"); // ί ϊ ΐ
         Map(table, "\u03BF", "\u03CC"); // ό
+        Map(table, "\u03C3", "\u03C2"); // ς
         Map(table, "\u03C5", "\u03CD\u03CB\u03B0"); // ύ ϋ ΰ
         Map(table, "\u03C9", "\u03CE"); // ώ
 
