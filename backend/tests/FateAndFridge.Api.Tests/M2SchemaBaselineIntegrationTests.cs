@@ -511,6 +511,116 @@ public sealed class M2SchemaBaselineIntegrationTests(M2SchemaBaselineFixture fix
     }
 
     [Fact]
+    public async Task Explicit_false_is_active_survives_the_store_default()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        long departmentId;
+        long unitId;
+
+        await using (var context = fixture.CreateContext())
+        {
+            var department = NewDepartment("M2 Explicit Inactive", "m2-explicit-inactive");
+            department.IsActive = false;
+            context.GroceryDepartments.Add(department);
+
+            var unit = NewUnit("m2-explicit-inactive", "M2 explicit inactive", "m2-explicit-inactive", UnitDimension.Count);
+            unit.IsActive = false;
+            unit.IsCustom = true;
+            context.Units.Add(unit);
+
+            await context.SaveChangesAsync(cancellationToken);
+            departmentId = department.Id;
+            unitId = unit.Id;
+        }
+
+        // Raw SQL bypasses the change tracker so the persisted values are
+        // proven, not just the values held by the tracked entities.
+        await using var verification = fixture.CreateContext();
+        var departmentState = await verification.Database
+            .SqlQueryRaw<DepartmentDefaultState>(
+                """
+                SELECT is_active
+                FROM grocery_departments
+                WHERE id = {0}
+                """,
+                departmentId)
+            .SingleAsync(cancellationToken);
+        departmentState.IsActive.Should().BeFalse();
+
+        var unitState = await verification.Database
+            .SqlQueryRaw<UnitDefaultState>(
+                """
+                SELECT is_active, is_custom
+                FROM units
+                WHERE id = {0}
+                """,
+                unitId)
+            .SingleAsync(cancellationToken);
+        unitState.IsActive.Should().BeFalse();
+        unitState.IsCustom.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Unset_is_active_and_is_custom_use_store_defaults()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        long departmentId;
+        long defaultUnitId;
+        long customUnitId;
+
+        await using (var context = fixture.CreateContext())
+        {
+            var department = NewDepartment("M2 Default Active", "m2-default-active");
+            var defaultUnit = NewUnit("m2-default-unit", "M2 default unit", "m2-default-unit", UnitDimension.Count);
+            var customUnit = NewUnit("m2-custom-unit", "M2 custom unit", "m2-custom-unit", UnitDimension.Count);
+            customUnit.IsCustom = true;
+
+            context.GroceryDepartments.Add(department);
+            context.Units.AddRange(defaultUnit, customUnit);
+            await context.SaveChangesAsync(cancellationToken);
+            departmentId = department.Id;
+            defaultUnitId = defaultUnit.Id;
+            customUnitId = customUnit.Id;
+        }
+
+        await using var verification = fixture.CreateContext();
+        var departmentState = await verification.Database
+            .SqlQueryRaw<DepartmentDefaultState>(
+                """
+                SELECT is_active
+                FROM grocery_departments
+                WHERE id = {0}
+                """,
+                departmentId)
+            .SingleAsync(cancellationToken);
+        departmentState.IsActive.Should().BeTrue();
+
+        var defaultUnitState = await verification.Database
+            .SqlQueryRaw<UnitDefaultState>(
+                """
+                SELECT is_active, is_custom
+                FROM units
+                WHERE id = {0}
+                """,
+                defaultUnitId)
+            .SingleAsync(cancellationToken);
+        defaultUnitState.IsActive.Should().BeTrue();
+        defaultUnitState.IsCustom.Should().BeFalse();
+
+        var customUnitState = await verification.Database
+            .SqlQueryRaw<UnitDefaultState>(
+                """
+                SELECT is_active, is_custom
+                FROM units
+                WHERE id = {0}
+                """,
+                customUnitId)
+            .SingleAsync(cancellationToken);
+        customUnitState.IsActive.Should().BeTrue();
+        customUnitState.IsCustom.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Audit_events_round_trip_jsonb_payloads()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -794,6 +904,10 @@ public sealed class M2SchemaBaselineIntegrationTests(M2SchemaBaselineFixture fix
     };
 
     private sealed record ExpectedColumn(string Type, bool Nullable, int? Precision = null, int? Scale = null);
+
+    private sealed record DepartmentDefaultState(bool IsActive);
+
+    private sealed record UnitDefaultState(bool IsActive, bool IsCustom);
 
     private sealed record ColumnInfo(string ColumnName, string DataType, bool IsNullable, int? NumericPrecision, int? NumericScale);
 
