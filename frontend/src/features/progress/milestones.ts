@@ -92,7 +92,7 @@ export const MILESTONES: Milestone[] = [
     id: 'M2',
     number: 2,
     name: 'Reference Data',
-    status: 'planned',
+    status: 'in_progress',
     summary:
       'The household vocabulary: grocery departments, units and aliases, ingredients and aliases, proteins, and tags.',
     features: [
@@ -103,9 +103,8 @@ export const MILESTONES: Milestone[] = [
       'Ingredient retire/delete safety',
       'Primary proteins and tags',
     ],
-    issues: [],
-    issuesNote:
-      'Planned in docs/MILESTONES.md; GitHub issues are created when the milestone starts.',
+    issues: [23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35],
+    issuesNote: 'Tracking #23; sub-issues #24–#35. Runbook: docs/M2_PLAN.md.',
   },
   {
     id: 'M3',

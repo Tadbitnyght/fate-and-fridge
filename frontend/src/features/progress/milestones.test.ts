@@ -57,19 +57,31 @@ describe('milestone manifest', () => {
   })
 
   it('keeps planned milestones free of GitHub issue links', () => {
-    const planned = MILESTONES.filter((milestone) => milestone.status !== 'complete')
+    const planned = MILESTONES.filter((milestone) => milestone.status === 'planned')
     expect(planned.length).toBeGreaterThan(0)
     for (const milestone of planned) {
       expect(milestone.issues).toEqual([])
       expect(milestone.issuesNote).toBeTruthy()
     }
+    const inProgress = MILESTONES.filter((milestone) => milestone.status === 'in_progress')
+    for (const milestone of inProgress) {
+      expect(milestone.issues.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('marks M2 in progress with its sub-issue links', () => {
+    const m2 = MILESTONES.find((milestone) => milestone.id === 'M2')
+    expect(m2?.status).toBe('in_progress')
+    expect(m2?.issues).toContain(23)
+    expect(m2?.issues).toContain(32)
+    expect(m2?.issuesNote).toMatch(/M2_PLAN/)
   })
 
   it('computes the progress summary from the manifest', () => {
     expect(progressSummary()).toEqual({
       total: 15,
       completed: 2,
-      inProgress: 0,
+      inProgress: 1,
       percent: Math.round((2 / 15) * 100),
     })
     expect(
