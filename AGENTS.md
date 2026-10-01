@@ -103,6 +103,7 @@ Rules:
 - After C# edits, run `roslyn_get_diagnostics` (and/or `roslyn_build_project`) before calling the change done; `dotnet build` remains the release gate.
 - Implementation reports and reviews must state which Roslyn tools were used for C# work.
 - Workspace notes: pass the `.csproj` path directly (the tool's `.slnx` discovery is unreliable); this workstation's SDK/artifacts env is pinned in `opencode.jsonc`.
+- Roslyn file-path rule: every `roslyn_*` file path (read **and** write) resolves against the **workspace root** — the directory tree of the loaded `.csproj` — not the shell working directory. For the backend project the workspace root is `/mnt/y/backend`, so use `src/FateAndFridge.Api/...` and `tests/FateAndFridge.Api.Tests/...` (or absolute paths). Shell-style paths such as `backend/src/...` silently resolve to the wrong place.
 
 ---
 
