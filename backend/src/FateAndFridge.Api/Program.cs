@@ -96,6 +96,10 @@ builder.Services.AddScoped<DepartmentService>();
 builder.Services.AddScoped<UnitService>();
 builder.Services.AddScoped<IReferenceUsageChecker, DefaultReferenceUsageChecker>();
 
+// M2-07: pure, dependency-free conversion between compatible units; stateless,
+// so a singleton. M8 grocery aggregation consumes it via DI.
+builder.Services.AddSingleton<UnitConversionService>();
+
 // M1-09 permission model: one uncached grant reader plus the evaluator service
 // shared by GET /auth/session and the route enforcement filter.
 builder.Services.AddScoped<IPermissionGrantReader, DbPermissionGrantReader>();
