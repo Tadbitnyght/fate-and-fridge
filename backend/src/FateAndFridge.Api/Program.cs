@@ -83,6 +83,11 @@ builder.Services.AddScoped<IAuthEventWriter, AuthEventWriter>();
 // AppDbContext so they commit atomically with the change they describe.
 builder.Services.AddScoped<IAuditService, AuditService>();
 
+// M2-04: idempotent startup seeder for the default reference data. It runs
+// once after migrations, never overwrites user edits, and serializes
+// concurrent startups with a transaction-scoped PostgreSQL advisory lock.
+builder.Services.AddScoped<ReferenceDataSeeder>();
+
 // M1-09 permission model: one uncached grant reader plus the evaluator service
 // shared by GET /auth/session and the route enforcement filter.
 builder.Services.AddScoped<IPermissionGrantReader, DbPermissionGrantReader>();
@@ -123,6 +128,7 @@ var migrateOnly = args.Contains("--migrate");
 if (migrateOnly || app.Configuration.GetValue("Database:MigrateOnStartup", false))
 {
     await DatabaseMigrator.MigrateWithRetryAsync(app.Services, app.Logger);
+    await ReferenceDataSeeder.SeedAtStartupAsync(app.Services, app.Logger);
 }
 
 if (migrateOnly)
