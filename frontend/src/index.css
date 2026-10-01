@@ -915,3 +915,45 @@ body {
     padding-top: 0.35rem;
   }
 }
+
+/* ---------- accessibility (M1-15 part B) ---------- */
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 50;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.skip-link:focus,
+.skip-link:focus-visible {
+  left: 0.75rem;
+  top: 0.75rem;
+}
+
+/* Safety net: every interactive element keeps a visible focus indicator. */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+[role='button']:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+/* Programmatic route focus targets (main container) need no ring. */
+main:focus {
+  outline: none;
+}
+
+main:focus-visible {
+  outline: none;
+}

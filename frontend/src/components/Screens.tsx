@@ -34,7 +34,9 @@ export function ErrorScreen({
 export function PagePlaceholder({ title, children }: { title: string; children?: ReactNode }) {
   return (
     <section className="page" aria-labelledby={`page-${title.toLowerCase().replace(/\s+/g, '-')}`}>
-      <h2 id={`page-${title.toLowerCase().replace(/\s+/g, '-')}`}>{title}</h2>
+      <h2 id={`page-${title.toLowerCase().replace(/\s+/g, '-')}`} tabIndex={-1}>
+        {title}
+      </h2>
       <p className="page-note">
         This area is planned for a later milestone and is not implemented yet.
       </p>

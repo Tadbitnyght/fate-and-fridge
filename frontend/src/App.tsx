@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 
 import { AppShell } from './components/AppShell'
 import { RequireSession } from './components/RequireSession'
+import { StandaloneLayout } from './components/StandaloneLayout'
 import { AuthProvider } from './features/auth/AuthProvider'
 import { AccountSection } from './features/settings/AccountSection'
 import { HouseholdSection } from './features/settings/HouseholdSection'
@@ -14,6 +15,7 @@ import { GroceriesPage } from './pages/GroceriesPage'
 import { LoginPage } from './pages/LoginPage'
 import { RecipesPage } from './pages/RecipesPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { StartupRedirect } from './features/startup/StartupRedirect'
 import { SetupPage } from './pages/SetupPage'
 import { StatisticsPage } from './pages/StatisticsPage'
 
@@ -21,13 +23,16 @@ export function App() {
   return (
     <AuthProvider>
       <Routes>
-        <Route path="/setup" element={<SetupPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/change-password" element={<ChangePasswordPage />} />
+        <Route element={<StandaloneLayout />}>
+          <Route path="/setup" element={<SetupPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/change-password" element={<ChangePasswordPage />} />
+        </Route>
 
         <Route element={<RequireSession />}>
           <Route element={<AppShell />}>
-            <Route index element={<CalendarPage />} />
+            <Route index element={<StartupRedirect />} />
+            <Route path="calendar" element={<CalendarPage />} />
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="recipes" element={<RecipesPage />} />
             <Route path="groceries" element={<GroceriesPage />} />

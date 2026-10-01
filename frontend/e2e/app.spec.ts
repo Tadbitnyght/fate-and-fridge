@@ -2,6 +2,16 @@ import { expect, test, type Page } from '@playwright/test'
 
 const setupIncomplete = { setup_completed: false, auth_mode: null, recovery_key_present: false }
 
+const calendarSettings = {
+  household_name: 'The Smiths',
+  timezone: 'America/Chicago',
+  week_starts_on: 0,
+  default_diner_count: 4,
+  startup_page: 'calendar',
+}
+
+const dashboardSettings = { ...calendarSettings, startup_page: 'dashboard' }
+
 const singleUserSession = {
   authenticated: true,
   auth_mode: 'single_user',
@@ -29,6 +39,8 @@ interface MockApiOptions {
   session?: unknown
   /** Response for `POST /setup/complete`; defaults to single-user success. */
   complete?: CompleteResponse
+  /** Household settings used for the startup-page redirect (default: calendar). */
+  household?: unknown
 }
 
 async function mockApi(page: Page, options: MockApiOptions): Promise<void> {
@@ -92,6 +104,11 @@ async function mockApi(page: Page, options: MockApiOptions): Promise<void> {
       return
     }
 
+    if (path.endsWith('/settings/household')) {
+      await route.fulfill({ json: options.household ?? calendarSettings })
+      return
+    }
+
     await route.fulfill({
       status: 404,
       json: { error: { code: 'NOT_FOUND', message: `No mock for ${path}`, details: {} } },
@@ -127,10 +144,37 @@ test('renders the app shell for an authenticated session', async ({ page }) => {
 
   await page.goto('/')
 
-  await expect(page).toHaveURL(/\/$/)
+  // The shell index redirects to the household's startup page.
+  await expect(page).toHaveURL(/\/calendar$/)
   await expect(page.getByRole('heading', { level: 2, name: 'Calendar' })).toBeVisible()
   await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Settings' })).toBeVisible()
+})
+
+test('honors the household startup page', async ({ page }) => {
+  await mockApi(page, {
+    setupCompleted: true,
+    session: multiuserSession,
+    household: dashboardSettings,
+  })
+
+  await page.goto('/')
+
+  await expect(page).toHaveURL(/\/dashboard$/)
+  await expect(page.getByRole('heading', { level: 2, name: 'Dashboard' })).toBeVisible()
+})
+
+test('skip link moves keyboard focus to the main content', async ({ page }) => {
+  await mockApi(page, { setupCompleted: true, session: multiuserSession })
+
+  await page.goto('/')
+  await expect(page.getByRole('heading', { level: 2, name: 'Calendar' })).toBeVisible()
+
+  await page.keyboard.press('Tab')
+  await expect(page.getByRole('link', { name: 'Skip to main content' })).toBeFocused()
+
+  await page.keyboard.press('Enter')
+  await expect(page.locator('#main-content')).toBeFocused()
 })
 
 test('completes single-user setup and gates the recovery key', async ({ page }) => {

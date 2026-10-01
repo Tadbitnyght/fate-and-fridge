@@ -9,11 +9,12 @@ import {
 
 export const householdSettingsQueryKey = ['settings', 'household'] as const
 
-export function useHouseholdSettings() {
+export function useHouseholdSettings(enabled = true) {
   return useQuery<HouseholdSettings>({
     queryKey: householdSettingsQueryKey,
     queryFn: fetchHouseholdSettings,
     retry: false,
+    enabled,
   })
 }
 

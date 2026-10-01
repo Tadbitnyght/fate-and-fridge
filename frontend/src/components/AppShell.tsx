@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 
 import { useAuth } from '../features/auth/AuthContext'
+import { useFocusOnRouteChange } from '../hooks/useFocusOnRouteChange'
+import { MAIN_CONTENT_ID, SkipLink } from './SkipLink'
 
 interface NavItem {
   to: string
@@ -11,7 +13,7 @@ interface NavItem {
 
 /** Primary navigation (docs/PRODUCT_SPEC.md §5); Calendar is the default page. */
 const NAV_ITEMS: NavItem[] = [
-  { to: '/', label: 'Calendar', end: true },
+  { to: '/calendar', label: 'Calendar' },
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/recipes', label: 'Recipes' },
   { to: '/groceries', label: 'Groceries' },
@@ -27,6 +29,8 @@ export function AppShell() {
   const { status, user, logout } = useAuth()
   const [signingOut, setSigningOut] = useState(false)
   const [logoutError, setLogoutError] = useState<string | null>(null)
+  const mainRef = useRef<HTMLElement>(null)
+  useFocusOnRouteChange(mainRef)
 
   async function handleLogout(): Promise<void> {
     setLogoutError(null)
@@ -42,6 +46,7 @@ export function AppShell() {
 
   return (
     <div className="app-shell">
+      <SkipLink />
       <header className="app-header">
         <div className="app-header__bar">
           <div>
@@ -80,7 +85,7 @@ export function AppShell() {
         </nav>
       </header>
 
-      <main className="app-main">
+      <main id={MAIN_CONTENT_ID} className="app-main" tabIndex={-1} ref={mainRef}>
         <Outlet />
       </main>
 

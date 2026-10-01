@@ -193,24 +193,45 @@ Frontend must not replicate business rules that belong on the server.
 
 Frontend may present warnings/previews, but backend is authoritative.
 
-Implemented foundation (M1-12):
+Implemented frontend (M1-12 … M1-15):
 
 ```text
 frontend/src/
-  api/          client.ts (JSON + error envelope + CSRF), auth.ts, setup.ts, errorCodes.ts
-  components/   AppShell.tsx (header/nav/outlet/footer), RequireSession.tsx, StatusPanel.tsx
+  api/          client.ts (JSON + error envelope + CSRF), auth, setup, household, users,
+                security, errorCodes
+  components/   AppShell (skip link, header/nav/outlet/footer), StandaloneLayout,
+                RequireSession, Modal/ConfirmDialog, Field/fieldProps, Screens, StatusPanel,
+                SkipLink
   features/
-    auth/       AuthProvider (TanStack Query session state), AuthContext/useAuth, messages
+    auth/       AuthProvider (TanStack Query session state), AuthContext/useAuth, redirect
+                safety, messages
     setup/      SetupWizard + steps (M1-13), validation, useSetupStatus, useCompleteSetup
+    settings/   Household/Users/Security/Account sections (M1-14), access, permissions,
+                dialogs, one-time password panel, query hooks
+    startup/    StartupRedirect (household `startup_page` consumption)
+  hooks/        useFocusOnRouteChange (route-change focus management)
   pages/        SetupPage, LoginPage, ChangePasswordPage, Calendar/Dashboard/… placeholders
-  test/         mockFetch + render helpers
+  utils/        validation, timezones, ipRanges, fieldErrors, labels
+  test/         mockFetch + render helpers + fixtures
 ```
 
 Routing rules: incomplete setup → `/setup`; unauthenticated multiuser → `/login`;
 `must_change_password` → `/change-password`; single-user households enter the shell
-directly. The API client stores the latest `X-CSRF-TOKEN` response header in memory
-and echoes it on unsafe requests. Routing and session state are UI conveniences;
-server-side authorization remains the only boundary.
+directly. Inside the shell, `/` is a redirect route that honors
+`household_settings.startup_page` (`/calendar` or `/dashboard`, with `/calendar` as
+the error/timeout fallback); Calendar and Dashboard also have explicit routes.
+Settings lives under `/settings` (Household), `/settings/users`, `/settings/security`
+and `/settings/account` (admin sections are hidden but server-enforced).
+
+Accessibility: every page starts with a skip link targeting the `#main-content`
+landmark; route changes move focus to the page heading (or the main container);
+dialogs are portaled, mark the rest of the page `inert`, trap Tab/Shift+Tab, close
+on Escape and restore focus to the trigger; all interactive elements keep visible
+`:focus-visible` outlines.
+
+The API client stores the latest `X-CSRF-TOKEN` response header in memory and echoes
+it on unsafe requests. Routing and session state are UI conveniences; server-side
+authorization remains the only boundary.
 
 Setup wizard (M1-13): mode → household → admin (multiuser only) → optional IP
 allowlist → review, then a one-time recovery key screen that requires an explicit

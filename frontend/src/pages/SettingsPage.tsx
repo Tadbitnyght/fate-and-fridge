@@ -26,7 +26,7 @@ export function SettingsPage() {
 
   return (
     <section className="page settings">
-      <h2>Settings</h2>
+      <h2 tabIndex={-1}>Settings</h2>
 
       <nav aria-label="Settings sections" className="settings-nav">
         <ul className="settings-nav__list">
