@@ -70,8 +70,11 @@ describe('departments tab', () => {
 
     fireEvent.click(screen.getByLabelText('Include retired'))
 
-    expect(within(table).getByRole('rowheader', { name: 'Spices' })).toBeInTheDocument()
-    expect(within(table).getByText('Retired')).toBeInTheDocument()
+    // Query the document again instead of reusing the captured table node:
+    // the filter toggle is a state change, and re-querying keeps the assertions
+    // honest even if React swaps the table subtree.
+    expect(screen.getByRole('rowheader', { name: 'Spices' })).toBeInTheDocument()
+    expect(screen.getByText('Retired')).toBeInTheDocument()
 
     // The query always asks for retired rows so reorder permutations stay complete.
     const listCall = mock.fetchMock.mock.calls.find(([url]) => String(url).includes('/departments'))
