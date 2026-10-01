@@ -5,6 +5,7 @@ import { RequireSession } from './components/RequireSession'
 import { StandaloneLayout } from './components/StandaloneLayout'
 import { AuthProvider } from './features/auth/AuthProvider'
 import { DepartmentsTab } from './features/reference-data/DepartmentsTab'
+import { IngredientsTab } from './features/reference-data/IngredientsTab'
 import { ReferenceDataPage } from './features/reference-data/ReferenceDataPage'
 import { ReferenceDataPlaceholder } from './features/reference-data/ReferenceDataPlaceholder'
 import { UnitsTab } from './features/reference-data/UnitsTab'
@@ -48,15 +49,7 @@ export function App() {
               <Route path="reference-data" element={<ReferenceDataPage />}>
                 <Route index element={<DepartmentsTab />} />
                 <Route path="units" element={<UnitsTab />} />
-                <Route
-                  path="ingredients"
-                  element={
-                    <ReferenceDataPlaceholder
-                      title="Ingredients"
-                      description="Canonical ingredients, departments, aliases, and merge."
-                    />
-                  }
-                />
+                <Route path="ingredients" element={<IngredientsTab />} />
                 <Route
                   path="proteins"
                   element={

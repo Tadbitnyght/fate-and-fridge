@@ -1,25 +1,37 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
+  addIngredientAlias,
   addUnitAlias,
   createDepartment,
+  createIngredient,
   createUnit,
   deleteDepartment,
+  deleteIngredient,
   deleteUnit,
   listDepartments,
+  listIngredients,
   listUnits,
+  mergeIngredients,
+  removeIngredientAlias,
   removeUnitAlias,
   reorderDepartments,
   retireDepartment,
+  retireIngredient,
   retireUnit,
   updateDepartment,
+  updateIngredient,
   updateUnit,
+  type CreateIngredientRequest,
   type CreateUnitRequest,
   type Department,
   type DepartmentListParams,
+  type Ingredient,
+  type IngredientMergeRequest,
   type ReferenceListParams,
   type Unit,
   type UpdateDepartmentRequest,
+  type UpdateIngredientRequest,
   type UpdateUnitRequest,
 } from '../../api/referenceData'
 
@@ -165,6 +177,94 @@ export function useRemoveUnitAlias() {
   const refresh = useRefreshUnits()
   return useMutation({
     mutationFn: ({ id, aliasId }: { id: number; aliasId: number }) => removeUnitAlias(id, aliasId),
+    onSuccess: refresh,
+  })
+}
+
+/* ---------- ingredients ---------- */
+
+/** Query-key prefix for every ingredient-list variant. */
+export const ingredientsQueryKey = ['reference-data', 'ingredients'] as const
+
+export function useIngredients(search: string, includeRetired: boolean) {
+  const params: ReferenceListParams = {
+    search: search.length > 0 ? search : undefined,
+    include_retired: includeRetired,
+    limit: 100,
+  }
+  return useQuery<Ingredient[]>({
+    queryKey: [...ingredientsQueryKey, params],
+    queryFn: () => listIngredients(params),
+    retry: false,
+  })
+}
+
+function useRefreshIngredients() {
+  const queryClient = useQueryClient()
+  return async () => {
+    await queryClient.invalidateQueries({ queryKey: ingredientsQueryKey })
+  }
+}
+
+export function useCreateIngredient() {
+  const refresh = useRefreshIngredients()
+  return useMutation({
+    mutationFn: (request: CreateIngredientRequest) => createIngredient(request),
+    onSuccess: refresh,
+  })
+}
+
+export function useUpdateIngredient() {
+  const refresh = useRefreshIngredients()
+  return useMutation({
+    mutationFn: ({ id, request }: { id: number; request: UpdateIngredientRequest }) =>
+      updateIngredient(id, request),
+    onSuccess: refresh,
+  })
+}
+
+export function useRetireIngredient() {
+  const refresh = useRefreshIngredients()
+  return useMutation({
+    mutationFn: (id: number) => retireIngredient(id),
+    onSuccess: refresh,
+  })
+}
+
+export function useDeleteIngredient() {
+  const refresh = useRefreshIngredients()
+  return useMutation({
+    mutationFn: (id: number) => deleteIngredient(id),
+    onSuccess: refresh,
+  })
+}
+
+export function useAddIngredientAlias() {
+  const refresh = useRefreshIngredients()
+  return useMutation({
+    mutationFn: ({ id, alias }: { id: number; alias: string }) => addIngredientAlias(id, alias),
+    onSuccess: refresh,
+  })
+}
+
+export function useRemoveIngredientAlias() {
+  const refresh = useRefreshIngredients()
+  return useMutation({
+    mutationFn: ({ id, aliasId }: { id: number; aliasId: number }) =>
+      removeIngredientAlias(id, aliasId),
+    onSuccess: refresh,
+  })
+}
+
+/**
+ * Merging retires the source and reassigns its references, so every ingredient
+ * list variant — the tab and the merge dialog's pickers, which share the key
+ * prefix — must refetch.
+ */
+export function useMergeIngredients() {
+  const refresh = useRefreshIngredients()
+  return useMutation({
+    mutationFn: (request: IngredientMergeRequest) => mergeIngredients(request),
     onSuccess: refresh,
   })
 }

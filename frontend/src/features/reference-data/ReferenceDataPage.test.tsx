@@ -2,7 +2,7 @@ import { screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { App } from '../../App'
-import type { Department, Unit } from '../../api/referenceData'
+import type { Department, Ingredient, Unit } from '../../api/referenceData'
 import {
   adminSession,
   memberSession,
@@ -30,6 +30,16 @@ const gram: Unit = {
   is_custom: false,
   is_active: true,
   aliases: [{ id: 1, alias: 'gram' }],
+}
+
+const tomato: Ingredient = {
+  id: 20,
+  canonical_name: 'Tomato',
+  department_id: 10,
+  is_active: true,
+  created_at: '2026-09-01T10:00:00Z',
+  updated_at: '2026-09-01T10:00:00Z',
+  aliases: [{ id: 1, alias: 'tomatoes' }],
 }
 
 /** Member with `reference_data.edit` but no Admin role: no hard deletes. */
@@ -84,8 +94,24 @@ describe('reference data shell', () => {
     expect(screen.getByRole('navigation', { name: 'Reference data sections' })).toBeInTheDocument()
   })
 
+  it('routes the Ingredients tab to the ingredients table instead of a placeholder', async () => {
+    installMockFetch([
+      { path: '/setup/status', body: setupCompleteStatus },
+      { path: '/auth/session', body: adminSession },
+      { path: '/departments', body: [produce] },
+      { path: '/ingredients', body: [tomato] },
+    ])
+
+    renderWithProviders(<App />, { route: '/settings/reference-data/ingredients' })
+
+    expect(await screen.findByRole('heading', { name: 'Ingredients' })).toBeInTheDocument()
+    const table = await screen.findByRole('table', { name: 'Ingredients' })
+    expect(within(table).getByRole('rowheader', { name: 'Tomato' })).toBeInTheDocument()
+    expect(screen.queryByText(/coming in this milestone/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('navigation', { name: 'Reference data sections' })).toBeInTheDocument()
+  })
+
   it.each([
-    { route: '/settings/reference-data/ingredients', title: 'Ingredients' },
     { route: '/settings/reference-data/proteins', title: 'Proteins' },
     { route: '/settings/reference-data/tags', title: 'Tags' },
   ])('renders the $title placeholder for later stages', async ({ route, title }) => {
