@@ -1,4 +1,7 @@
+using System.Buffers.Binary;
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using FateAndFridge.Api.Data;
 using FateAndFridge.Api.Data.Configurations;
@@ -155,8 +158,14 @@ public sealed class UnitService(
             return new UnitMutationResult.ValidationFailed(errors);
         }
 
+        // Two saves (the generated id feeds the audit entity id), so they share
+        // one explicit transaction: either both rows commit or neither does. The
+        // transaction also holds the per-symbol advisory lock below.
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await LockSymbolAsync(normalizedSymbol!.Normalized, cancellationToken);
+
         var conflictId = await FindConflictIdAsync(
-            normalizedSymbol!.Normalized,
+            normalizedSymbol.Normalized,
             normalizedDisplay!.Normalized,
             excludingId: null,
             cancellationToken);
@@ -176,17 +185,15 @@ public sealed class UnitService(
         };
 
         dbContext.Units.Add(unit);
-
-        // Two saves (the generated id feeds the audit entity id), so they share
-        // one explicit transaction: either both rows commit or neither does.
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         try
         {
             await dbContext.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateException exception) when (PostgresErrors.IsUniqueViolation(exception))
         {
-            // Lost a create race on symbol or normalized_name.
+            // Lost a create race on symbol or normalized_name; the advisory lock
+            // above serializes equal folded symbols, so this stays a backstop
+            // (for example the exact-case symbol index or a name-only race).
             dbContext.ChangeTracker.Clear();
             return new UnitMutationResult.Conflict(await FindConflictIdAsync(
                 normalizedSymbol.Normalized,
@@ -270,6 +277,17 @@ public sealed class UnitService(
             return new UnitMutationResult.ValidationFailed(errors);
         }
 
+        // A symbol rename can race another writer; hold the per-symbol advisory
+        // lock for the rest of the transaction so the folded-symbol conflict
+        // check and the write are serialized.
+        await using var transaction = normalizedSymbol is not null
+            ? await dbContext.Database.BeginTransactionAsync(cancellationToken)
+            : null;
+        if (normalizedSymbol is not null)
+        {
+            await LockSymbolAsync(normalizedSymbol.Normalized, cancellationToken);
+        }
+
         if (normalizedSymbol is not null || normalizedDisplay is not null)
         {
             var conflictId = await FindConflictIdAsync(
@@ -326,6 +344,11 @@ public sealed class UnitService(
                 normalizedDisplay?.Normalized,
                 excludingId: id,
                 cancellationToken));
+        }
+
+        if (transaction is not null)
+        {
+            await transaction.CommitAsync(cancellationToken);
         }
 
         logger.LogInformation("Updated unit {UnitId}", id);
@@ -637,13 +660,50 @@ public sealed class UnitService(
             query = query.Where(unit => unit.Id != excludingId.Value);
         }
 
-        return await query
-            .Where(unit =>
-                (normalizedSymbol != null && unit.Symbol.ToLower() == normalizedSymbol)
-                || (normalizedName != null && unit.NormalizedName == normalizedName))
+        var candidates = await query
             .OrderBy(unit => unit.Id)
-            .Select(unit => (long?)unit.Id)
-            .FirstOrDefaultAsync(cancellationToken);
+            .Select(unit => new { unit.Id, unit.Symbol, unit.NormalizedName })
+            .ToListAsync(cancellationToken);
+
+        foreach (var candidate in candidates)
+        {
+            if (normalizedName is not null && candidate.NormalizedName == normalizedName)
+            {
+                return candidate.Id;
+            }
+
+            if (normalizedSymbol is not null && NormalizedSymbol(candidate.Symbol) == normalizedSymbol)
+            {
+                return candidate.Id;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Takes the transaction-scoped PostgreSQL advisory lock for one folded
+    /// symbol. The create and symbol-rename paths call this after their
+    /// transaction begins and before the conflict check, so app-level
+    /// case/diacritic uniqueness is serialized even though the unique index is
+    /// exact-case. The lock is released automatically on commit or rollback.
+    /// </summary>
+    private Task LockSymbolAsync(string foldedSymbol, CancellationToken cancellationToken) =>
+        dbContext.Database.ExecuteSqlAsync(
+            $"SELECT pg_advisory_xact_lock({SymbolLockKey(foldedSymbol)})",
+            cancellationToken);
+
+    /// <summary>
+    /// Stable 64-bit advisory-lock key for a folded unit symbol: the first eight
+    /// bytes (big-endian) of SHA-256 over <c>"unit-symbol:" + foldedSymbol</c>.
+    /// The prefix namespaces the key away from other advisory-lock users (for
+    /// example the M2-04 seeder's fixed key), and the fold makes every casing or
+    /// diacritic variant of one symbol map to the same lock.
+    /// </summary>
+    private static long SymbolLockKey(string foldedSymbol)
+    {
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes($"unit-symbol:{foldedSymbol}"));
+        return BinaryPrimitives.ReadInt64BigEndian(hash);
     }
 
     private static bool IsPrefixMatch(

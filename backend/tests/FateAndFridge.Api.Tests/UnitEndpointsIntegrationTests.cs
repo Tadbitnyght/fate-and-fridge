@@ -252,6 +252,131 @@ public sealed class UnitEndpointsIntegrationTests(M1SetupFixture fixture) : IAsy
     }
 
     [Fact]
+    public async Task Create_conflicts_fold_stored_symbol_diacritics()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        await SeedUserAsync("root", AdminPassword, cancellationToken, UserRole.Admin);
+        await MarkSetupCompletedAsync(cancellationToken);
+        using var factory = await StartFactoryWithCleanUnitsAsync(cancellationToken);
+        using var session = await SignInAsync(factory, "root", AdminPassword, cancellationToken);
+
+        // Stored symbol carries diacritics; the incoming plain form must still
+        // conflict because both sides fold through ReferenceDataNormalizer.
+        var accented = await CreateUnitAsync(
+            session,
+            """{"symbol":"CÚP","display_name":"Cup One","dimension":"volume","base_factor":1}""",
+            cancellationToken);
+        accented.StatusCode.Should().Be(HttpStatusCode.Created);
+        var accentedRoot = await ReadJsonAsync(accented, cancellationToken);
+        var accentedId = accentedRoot.GetProperty("id").GetInt64();
+        accentedRoot.GetProperty("symbol").GetString().Should().Be("CÚP");
+
+        var plain = await CreateUnitAsync(
+            session,
+            """{"symbol":"cup","display_name":"Cup Two","dimension":"volume","base_factor":1}""",
+            cancellationToken);
+        plain.StatusCode.Should().Be(HttpStatusCode.Conflict, "the stored 'CÚP' folds to 'cup'");
+        (await ReadErrorAsync(plain, cancellationToken)).GetProperty("details")
+            .GetProperty("existing_id").GetInt64().Should().Be(accentedId);
+
+        // Reverse direction: stored plain symbol, incoming diacritic variant.
+        var pinch = await CreateUnitAsync(
+            session,
+            """{"symbol":"pinch","display_name":"Pinch One","dimension":"count"}""",
+            cancellationToken);
+        pinch.StatusCode.Should().Be(HttpStatusCode.Created);
+        var pinchId = (await ReadJsonAsync(pinch, cancellationToken)).GetProperty("id").GetInt64();
+
+        var accentedPinch = await CreateUnitAsync(
+            session,
+            """{"symbol":"PÍNCH","display_name":"Pinch Two","dimension":"count"}""",
+            cancellationToken);
+        accentedPinch.StatusCode.Should().Be(HttpStatusCode.Conflict, "'PÍNCH' folds to 'pinch'");
+        (await ReadErrorAsync(accentedPinch, cancellationToken)).GetProperty("details")
+            .GetProperty("existing_id").GetInt64().Should().Be(pinchId);
+
+        (await ReadAuditRowsAsync(cancellationToken)).Should().HaveCount(
+            2,
+            "the folded-symbol conflicts write no audit row");
+    }
+
+    [Fact]
+    public async Task Patch_rename_conflicts_and_self_exclusion()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        await SeedUserAsync("root", AdminPassword, cancellationToken, UserRole.Admin);
+        await MarkSetupCompletedAsync(cancellationToken);
+        using var factory = await StartFactoryWithCleanUnitsAsync(cancellationToken);
+        using var session = await SignInAsync(factory, "root", AdminPassword, cancellationToken);
+
+        var cup = await CreateUnitAsync(
+            session,
+            """{"symbol":"cup","display_name":"Cup","dimension":"volume","base_factor":236.5882365}""",
+            cancellationToken);
+        cup.StatusCode.Should().Be(HttpStatusCode.Created);
+        var cupId = (await ReadJsonAsync(cup, cancellationToken)).GetProperty("id").GetInt64();
+
+        var beaker = await CreateUnitAsync(
+            session,
+            """{"symbol":"beaker2","display_name":"Beaker","dimension":"volume","base_factor":1}""",
+            cancellationToken);
+        beaker.StatusCode.Should().Be(HttpStatusCode.Created);
+        var beakerId = (await ReadJsonAsync(beaker, cancellationToken)).GetProperty("id").GetInt64();
+
+        // Rename to an existing normalized display name.
+        var displayConflict = await PatchUnitAsync(
+            session,
+            beakerId,
+            """{"display_name":" CÚP "}""",
+            cancellationToken);
+        displayConflict.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var displayError = await ReadErrorAsync(displayConflict, cancellationToken);
+        displayError.GetProperty("code").GetString().Should().Be(ErrorCodes.UnitExists);
+        displayError.GetProperty("details").GetProperty("existing_id").GetInt64().Should().Be(cupId);
+
+        // Rename to case and diacritic variants of another unit's symbol.
+        foreach (var json in new[] { """{"symbol":"CUP"}""", """{"symbol":"cúp"}""" })
+        {
+            var symbolConflict = await PatchUnitAsync(session, beakerId, json, cancellationToken);
+            symbolConflict.StatusCode.Should().Be(
+                HttpStatusCode.Conflict,
+                "'{0}' conflicts with the existing 'cup' unit",
+                json);
+            var error = await ReadErrorAsync(symbolConflict, cancellationToken);
+            error.GetProperty("code").GetString().Should().Be(ErrorCodes.UnitExists);
+            error.GetProperty("details").GetProperty("existing_id").GetInt64().Should().Be(cupId);
+        }
+
+        // A no-op rename to the unit's own current name succeeds (self excluded).
+        var selfRename = await PatchUnitAsync(session, cupId, """{"symbol":" cup "}""", cancellationToken);
+        selfRename.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await ReadJsonAsync(selfRename, cancellationToken)).GetProperty("symbol").GetString()
+            .Should().Be("cup");
+
+        var renamed = await PatchUnitAsync(
+            session,
+            beakerId,
+            """{"symbol":"beaker"}""",
+            cancellationToken);
+        renamed.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await ReadJsonAsync(renamed, cancellationToken)).GetProperty("symbol").GetString()
+            .Should().Be("beaker");
+
+        var rows = await ReadAuditRowsAsync(cancellationToken);
+        rows.Select(row => row.EventType).Should().Equal(
+            "created",
+            "created",
+            "updated",
+            "updated");
+        rows.Count(row => row.EventType == AuditEventTypes.Updated).Should().Be(
+            2,
+            "the failed renames write no audit row");
+    }
+
+
+    [Fact]
     public async Task Create_validates_dimension_and_base_factor_rules()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
