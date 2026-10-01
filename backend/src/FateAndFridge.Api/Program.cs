@@ -91,6 +91,11 @@ builder.Services.AddScoped<ReferenceDataSeeder>();
 // M2-05: departments management (ordered reference data with audit).
 builder.Services.AddScoped<DepartmentService>();
 
+// M2-06: units and unit aliases, plus the recipe-usage seam consumed by the
+// reference-data hard deletes (M2-08/M2-10 consume the other methods).
+builder.Services.AddScoped<UnitService>();
+builder.Services.AddScoped<IReferenceUsageChecker, DefaultReferenceUsageChecker>();
+
 // M1-09 permission model: one uncached grant reader plus the evaluator service
 // shared by GET /auth/session and the route enforcement filter.
 builder.Services.AddScoped<IPermissionGrantReader, DbPermissionGrantReader>();
@@ -166,6 +171,7 @@ app.MapAuthEndpoints();
 app.MapUserEndpoints();
 app.MapSettingsEndpoints();
 app.MapDepartmentEndpoints();
+app.MapUnitEndpoints();
 
 // Test-only permission probes (M1-09): mapped solely in the Testing
 // environment so the permission matrix can exercise server-side enforcement.

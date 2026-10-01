@@ -40,8 +40,10 @@ public sealed class M1SetupFixture : IAsyncLifetime
         new(_options ?? throw new InvalidOperationException(
             "The M1 setup fixture has not been initialized."));
 
-    public ApiFactory CreateFactory(string? dataDir = null) =>
-        new(ConnectionString, migrateOnStartup: false, dataDir);
+    public ApiFactory CreateFactory(
+        string? dataDir = null,
+        Action<IServiceCollection>? configureServices = null) =>
+        new(ConnectionString, migrateOnStartup: false, dataDir, configureServices);
 
     /// <summary>
     /// Removes setup state, M1 authentication rows, and staged audit rows so

@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FateAndFridge.Api.Tests.Support;
 
@@ -11,7 +13,8 @@ namespace FateAndFridge.Api.Tests.Support;
 public sealed class ApiFactory(
     string connectionString = ApiFactory.DummyConnectionString,
     bool migrateOnStartup = false,
-    string? dataDir = null) : WebApplicationFactory<Program>
+    string? dataDir = null,
+    Action<IServiceCollection>? configureServices = null) : WebApplicationFactory<Program>
 {
     public const string DummyConnectionString =
         "Host=localhost;Port=5432;Database=fatefridge_tests;Username=fatefridge;Password=fatefridge";
@@ -32,6 +35,13 @@ public sealed class ApiFactory(
         if (dataDir is not null)
         {
             builder.UseSetting("DataDir", dataDir);
+        }
+
+        // Tests inject counting IReferenceUsageChecker fakes (M2-06 seam) and
+        // other overrides without replacing the whole factory.
+        if (configureServices is not null)
+        {
+            builder.ConfigureTestServices(configureServices);
         }
     }
 }

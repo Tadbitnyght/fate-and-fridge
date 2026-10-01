@@ -42,4 +42,12 @@ public static class ErrorCodes
     public const string DepartmentInUse = "DEPARTMENT_IN_USE";
 
     public const string UnsupportedMediaType = "UNSUPPORTED_MEDIA_TYPE";
+
+    public const string UnitExists = "UNIT_EXISTS";
+
+    public const string AliasExists = "ALIAS_EXISTS";
+
+    public const string UnitInUse = "UNIT_IN_USE";
+
+    public const string InvalidUnitDimensionChange = "INVALID_UNIT_DIMENSION_CHANGE";
 }
