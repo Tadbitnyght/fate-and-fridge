@@ -88,6 +88,9 @@ builder.Services.AddScoped<IAuditService, AuditService>();
 // concurrent startups with a transaction-scoped PostgreSQL advisory lock.
 builder.Services.AddScoped<ReferenceDataSeeder>();
 
+// M2-05: departments management (ordered reference data with audit).
+builder.Services.AddScoped<DepartmentService>();
+
 // M1-09 permission model: one uncached grant reader plus the evaluator service
 // shared by GET /auth/session and the route enforcement filter.
 builder.Services.AddScoped<IPermissionGrantReader, DbPermissionGrantReader>();
@@ -162,6 +165,7 @@ app.MapSetupEndpoints();
 app.MapAuthEndpoints();
 app.MapUserEndpoints();
 app.MapSettingsEndpoints();
+app.MapDepartmentEndpoints();
 
 // Test-only permission probes (M1-09): mapped solely in the Testing
 // environment so the permission matrix can exercise server-side enforcement.
