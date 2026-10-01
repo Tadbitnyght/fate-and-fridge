@@ -24,13 +24,15 @@ Required workflow:
 6. Validate UI behavior with Playwright when UI is affected.
 7. Report changed files, tests, migrations, API changes, and limitations.
 
-C# tool rule:
-ALWAYS prefer MadQ RoslynMcp when working with C#:
-- semantic symbol lookup instead of grep
-- member-body reads instead of whole-file reads
-- reference search instead of text matching
-- Roslyn diagnostics/build support
-- semantic refactoring where available
+C# tool rule (mandatory):
+Roslyn MCP (`roslyn_*`) is the primary toolset for ALL C# work — research, reading, writing, refactoring, diagnostics:
+- inspect types/members/files with Roslyn (outline, member body, type members) instead of grep/full-file reads
+- find references/callers/call graphs/hierarchies with Roslyn instead of text search
+- edit/refactor C# with Roslyn tools (replace_in_code, write_file, rename/signature previews) where they fit
+- run `roslyn_get_diagnostics` after edits; `dotnet build` remains the release gate
+- do not start C# inspection with grep/find/cat; fall back to shell only when Roslyn cannot serve the need and say why
+- report which Roslyn tools you used when reporting on C# work
+- pass the `.csproj` path directly; the tool's `.slnx` discovery is unreliable
 
 Use normal filesystem tools for non-C# files such as React, CSS, JSON, YAML, and Markdown.
 

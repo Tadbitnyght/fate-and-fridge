@@ -32,7 +32,7 @@ Focus on:
 - missing tests
 - scope creep
 
-Use MadQ RoslynMcp for C# semantic analysis.
+Roslyn MCP (`roslyn_*`) is the primary tool for all C# review work: use it for symbol definitions, references/callers, member bodies, file outlines, type hierarchies, and diagnostics. Do not fall back to grep/full-file reads for C# unless Roslyn cannot serve the need (state why), and report which Roslyn tools you used.
 Use Playwright to verify browser/UI behavior when relevant.
 Run build/test commands when needed.
 Docker rule: delegate all container/Compose/Docker MCP work to the docker-admin subagent; do not run docker/docker compose commands or docker_* tools. Testcontainers integration tests via `dotnet test` are normal test execution and are exempt.

@@ -87,6 +87,25 @@ The Reviewer must independently run relevant tests and not approve work solely b
 
 ---
 
+## C# Tooling Rule (Mandatory)
+For any C# work, the Roslyn MCP server (MadQ RoslynMcp, `roslyn_*` tools) is the **primary and default toolset for every agent** — Lead, Implementer, Reviewer, Docker-Admin, and any future agent.
+
+Use it for:
+- research/orientation: `roslyn_list_types`, `roslyn_get_file_outline`, `roslyn_get_member_body`, `roslyn_get_type_members`, `roslyn_search_files`, `roslyn_semantic_search`
+- symbol navigation: `roslyn_get_symbol_definition`, `roslyn_find_references`, `roslyn_find_callers`, `roslyn_get_call_graph`, `roslyn_get_type_hierarchy`, `roslyn_get_usings`
+- diagnostics/validation: `roslyn_get_diagnostics`, `roslyn_build_project`, `roslyn_check_syntax`
+- edits/refactors: `roslyn_replace_in_code`, `roslyn_write_file`, `roslyn_preview_rename`, `roslyn_apply_rename`, `roslyn_change_signature`
+- project facts: `roslyn_get_project_info`, `roslyn_restore_packages`
+
+Rules:
+- Never start C# inspection with grep/find/full-file reads — use Roslyn symbol and member tools first.
+- Shell/generic file tools are a fallback only when Roslyn cannot serve the need (non-C# files, generated code, a broken workspace, exact byte-level diffing). State why when falling back.
+- After C# edits, run `roslyn_get_diagnostics` (and/or `roslyn_build_project`) before calling the change done; `dotnet build` remains the release gate.
+- Implementation reports and reviews must state which Roslyn tools were used for C# work.
+- Workspace notes: pass the `.csproj` path directly (the tool's `.slnx` discovery is unreliable); this workstation's SDK/artifacts env is pinned in `opencode.jsonc`.
+
+---
+
 ## Required Repository Documents
 Before major implementation, agents must consult:
 - `docs/PRODUCT_SPEC.md`

@@ -29,9 +29,8 @@ Priorities:
 5. Delegate independent verification to the reviewer.
 6. Do not casually implement large features yourself.
 
-C# tool rule:
-ALWAYS prefer MadQ RoslynMcp semantic tools over grep/full-file reads when inspecting C#.
-Use Roslyn for symbol definitions, references, diagnostics, member bodies, and semantic renames.
+C# tool rule (mandatory): Roslyn MCP (`roslyn_*`) is the primary toolset for any C# work — inspection, research, diagnostics, refactoring, and edit verification. Never start C# inspection with grep/full-file reads; use symbol/member/reference tools instead, and state the fallback reason if Roslyn cannot serve the need.
+Enforce this rule in every delegation brief: implementers and reviewers must use Roslyn for C# and report which tools they used.
 
 Do not use Playwright unless browser behavior is directly needed; delegate UI verification to reviewer/implementer.
 
