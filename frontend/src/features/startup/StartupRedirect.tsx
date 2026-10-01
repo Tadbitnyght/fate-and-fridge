@@ -30,11 +30,13 @@ export function StartupRedirect() {
   }, [settings.isSuccess, settings.isError])
 
   const startupPage = settings.data?.startup_page
-  if (startupPage) {
-    return <Navigate to={`/${startupPage}`} replace />
+  if (startupPage === 'dashboard') {
+    return <Navigate to="/dashboard" replace />
   }
 
-  if (settings.isError || timedOut) {
+  // Calendar, an unknown/missing value on a successful response, an error, or
+  // a slow response all fall back to the calendar so the app always opens.
+  if (settings.isSuccess || settings.isError || timedOut) {
     return <Navigate to={`/${FALLBACK_PAGE}`} replace />
   }
 

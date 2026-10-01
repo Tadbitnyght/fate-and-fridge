@@ -18,7 +18,10 @@ public sealed class ExceptionHandlingMiddleware(
         {
             await next(context);
         }
-        catch (Exception exception)
+        // A client disconnect surfaces as OperationCanceledException; it is not a
+        // server error, so it is rethrown instead of being logged as a 500.
+        catch (Exception exception) when (exception is not OperationCanceledException
+            || !context.RequestAborted.IsCancellationRequested)
         {
             logger.LogError(
                 exception,

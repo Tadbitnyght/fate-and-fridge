@@ -296,12 +296,13 @@ public sealed class Argon2idPasswordHasher : IPasswordHasher
     /// <summary>
     /// Validates a PHC salt/hash segment as libsodium emits it: standard
     /// base64 <b>without</b> padding, restricted to the alphabet
-    /// <c>A-Z a-z 0-9 + /</c>, decoding to exactly
-    /// <paramref name="expectedBytes"/> bytes, and re-encoding to the same
-    /// text. The decode/re-encode comparison rejects non-canonical
-    /// final-quantum bits (trailing characters that decode to the same bytes
-    /// but carry non-zero unused bits). Padding (<c>=</c>), whitespace,
-    /// base64url characters, and anything else are rejected.
+    /// <c>A-Z a-z 0-9 + /</c>, with the character count implied by
+    /// <paramref name="expectedBytes"/>. The unused bits of the final quantum
+    /// must be zero — checked directly on the last character's index, since
+    /// .NET's base64 decoder rejects unpadded input — which rejects
+    /// non-canonical encodings that would decode to the same bytes. Padding
+    /// (<c>=</c>), whitespace, base64url characters, and anything else are
+    /// rejected.
     /// </summary>
     private static bool IsLibsodiumBase64WithByteLength(string segment, int expectedBytes)
     {

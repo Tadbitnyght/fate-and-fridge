@@ -248,7 +248,7 @@ public sealed class PasswordHasherTests
     public void Non_minimal_decimal_encodings_are_rejected(string replacement, string canonical)
     {
         var hash = _hasher.Hash(Password).Replace(canonical, replacement, StringComparison.Ordinal);
-        hash.Should().NotBe(_hasher.Hash(Password)); // sanity: the string was actually mutated
+        hash.Should().Contain(replacement); // sanity: the string was actually mutated
 
         _hasher.Verify(hash, Password).Should().BeFalse();
         _hasher.NeedsRehash(hash).Should().BeTrue();
