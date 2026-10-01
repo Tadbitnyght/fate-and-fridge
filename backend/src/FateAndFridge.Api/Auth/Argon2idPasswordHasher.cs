@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -73,19 +74,36 @@ public sealed class Argon2idPasswordHasher : IPasswordHasher
     /// rejected before libsodium runs (untrusted stored values must not let a
     /// login attempt allocate unbounded memory).
     /// </summary>
-    private const ulong MaxAcceptedMemoryKiB = 1024UL * 1024UL;
+    internal const ulong MaxAcceptedMemoryKiB = 1024UL * 1024UL;
 
     /// <summary>
     /// Upper bound <see cref="Verify"/> accepts for the PHC time cost
     /// (passes). Production uses <see cref="OpsLimit"/> (2).
     /// </summary>
-    private const ulong MaxAcceptedIterations = 10;
+    internal const ulong MaxAcceptedIterations = 10;
 
     /// <summary>
     /// Upper bound <see cref="Verify"/> accepts for the PHC parallelism.
     /// Production uses <see cref="Parallelism"/> (1).
     /// </summary>
-    private const ulong MaxAcceptedParallelism = 4;
+    internal const ulong MaxAcceptedParallelism = 4;
+
+    /// <summary>
+    /// Guards against bound drift: the accepted maxima must never fall below
+    /// the production parameters, or valid stored hashes would stop verifying.
+    /// </summary>
+    static Argon2idPasswordHasher()
+    {
+        Debug.Assert(
+            MaxAcceptedIterations >= (ulong)OpsLimit,
+            "MaxAcceptedIterations must not reject the production OpsLimit.");
+        Debug.Assert(
+            MaxAcceptedMemoryKiB >= (ulong)MemoryLimitKiB,
+            "MaxAcceptedMemoryKiB must not reject the production MemoryLimitBytes.");
+        Debug.Assert(
+            MaxAcceptedParallelism >= (ulong)Parallelism,
+            "MaxAcceptedParallelism must not reject the production Parallelism.");
+    }
 
     /// <inheritdoc />
     public string Hash(string password)
@@ -195,7 +213,10 @@ public sealed class Argon2idPasswordHasher : IPasswordHasher
         return true;
     }
 
-    /// <summary>Reads a single <c>key=value</c> segment with a non-negative integer value.</summary>
+    /// <summary>
+    /// Reads a single <c>key=value</c> segment whose value is a canonical
+    /// non-negative decimal (no leading zeros).
+    /// </summary>
     private static bool TryReadValue(string segment, string expectedKey, out ulong value)
     {
         value = 0;
@@ -203,12 +224,13 @@ public sealed class Argon2idPasswordHasher : IPasswordHasher
         var parts = segment.Split('=', StringSplitOptions.None);
         return parts.Length == 2
             && string.Equals(parts[0], expectedKey, StringComparison.Ordinal)
-            && ulong.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out value);
+            && TryParseCanonicalDecimal(parts[1], out value);
     }
 
     /// <summary>
-    /// Reads the PHC cost-parameter segment (<c>m=...,t=...,p=...</c>) and
-    /// requires all three known parameters exactly once.
+    /// Reads the PHC cost-parameter segment, requiring libsodium's literal
+    /// <c>m=...,t=...,p=...</c> order with exactly those three canonical
+    /// non-negative decimals.
     /// </summary>
     private static bool TryReadCostParameters(
         string segment,
@@ -220,65 +242,66 @@ public sealed class Argon2idPasswordHasher : IPasswordHasher
         iterations = 0;
         parallelism = 0;
 
-        var seenMemory = false;
-        var seenIterations = false;
-        var seenParallelism = false;
-
-        foreach (var pair in segment.Split(',', StringSplitOptions.None))
+        string[] expectedKeys = ["m", "t", "p"];
+        var values = new ulong[expectedKeys.Length];
+        var pairs = segment.Split(',', StringSplitOptions.None);
+        if (pairs.Length != expectedKeys.Length)
         {
-            var parts = pair.Split('=', StringSplitOptions.None);
+            return false;
+        }
+
+        for (var index = 0; index < pairs.Length; index++)
+        {
+            var parts = pairs[index].Split('=', StringSplitOptions.None);
             if (parts.Length != 2
-                || !ulong.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out var value))
+                || !string.Equals(parts[0], expectedKeys[index], StringComparison.Ordinal)
+                || !TryParseCanonicalDecimal(parts[1], out values[index]))
             {
-                return false;
-            }
-
-            if (string.Equals(parts[0], "m", StringComparison.Ordinal))
-            {
-                if (seenMemory)
-                {
-                    return false;
-                }
-
-                memoryKiB = value;
-                seenMemory = true;
-            }
-            else if (string.Equals(parts[0], "t", StringComparison.Ordinal))
-            {
-                if (seenIterations)
-                {
-                    return false;
-                }
-
-                iterations = value;
-                seenIterations = true;
-            }
-            else if (string.Equals(parts[0], "p", StringComparison.Ordinal))
-            {
-                if (seenParallelism)
-                {
-                    return false;
-                }
-
-                parallelism = value;
-                seenParallelism = true;
-            }
-            else
-            {
-                // Unknown parameters cannot be validated, so force a rehash.
                 return false;
             }
         }
 
-        return seenMemory && seenIterations && seenParallelism;
+        memoryKiB = values[0];
+        iterations = values[1];
+        parallelism = values[2];
+        return true;
+    }
+
+    /// <summary>
+    /// Parses a canonical non-negative decimal: digits only, and no leading
+    /// zeros (the single digit <c>0</c> is allowed). This rejects
+    /// non-minimal encodings such as <c>019</c>, <c>000065536</c>, or
+    /// <c>02</c> that libsodium would never emit.
+    /// </summary>
+    private static bool TryParseCanonicalDecimal(string text, out ulong value)
+    {
+        value = 0;
+
+        if (text.Length == 0 || (text.Length > 1 && text[0] == '0'))
+        {
+            return false;
+        }
+
+        foreach (var character in text)
+        {
+            if (character is < '0' or > '9')
+            {
+                return false;
+            }
+        }
+
+        return ulong.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out value);
     }
 
     /// <summary>
     /// Validates a PHC salt/hash segment as libsodium emits it: standard
     /// base64 <b>without</b> padding, restricted to the alphabet
-    /// <c>A-Z a-z 0-9 + /</c> and decoding to exactly
-    /// <paramref name="expectedBytes"/> bytes. Padding (<c>=</c>),
-    /// whitespace, base64url characters, and anything else are rejected.
+    /// <c>A-Z a-z 0-9 + /</c>, decoding to exactly
+    /// <paramref name="expectedBytes"/> bytes, and re-encoding to the same
+    /// text. The decode/re-encode comparison rejects non-canonical
+    /// final-quantum bits (trailing characters that decode to the same bytes
+    /// but carry non-zero unused bits). Padding (<c>=</c>), whitespace,
+    /// base64url characters, and anything else are rejected.
     /// </summary>
     private static bool IsLibsodiumBase64WithByteLength(string segment, int expectedBytes)
     {
@@ -295,8 +318,33 @@ public sealed class Argon2idPasswordHasher : IPasswordHasher
             }
         }
 
-        return true;
+        // Canonical final-quantum bits: libsodium's unpadded encoder leaves the
+        // unused bits of the last character at zero. Decoding with Convert is
+        // not an option because it rejects unpadded input, so the bit check is
+        // done directly on the last character's index.
+        var lastIndex = Base64Index(segment[^1]);
+        return (expectedBytes % 3) switch
+        {
+            // One byte in the final quantum: two characters, the last carrying
+            // two data bits, so its low four bits must be zero (index % 16 == 0).
+            1 => lastIndex % 16 == 0,
+            // Two bytes: three characters, the last carrying four data bits, so
+            // its low two bits must be zero (index % 4 == 0).
+            2 => lastIndex % 4 == 0,
+            _ => true,
+        };
     }
+
+    /// <summary>Base64 alphabet index of a validated alphabet character.</summary>
+    private static int Base64Index(char character) =>
+        character switch
+        {
+            >= 'A' and <= 'Z' => character - 'A',
+            >= 'a' and <= 'z' => character - 'a' + 26,
+            >= '0' and <= '9' => character - '0' + 52,
+            '+' => 62,
+            _ => 63,
+        };
 
     /// <summary>
     /// Character count of unpadded standard base64 for

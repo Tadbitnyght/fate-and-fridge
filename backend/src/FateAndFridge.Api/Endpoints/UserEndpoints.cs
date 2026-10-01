@@ -128,13 +128,12 @@ public static class UserEndpoints
         CancellationToken cancellationToken)
     {
         var parsed = await ReadObjectAsync(context, cancellationToken);
-        if (parsed is null)
+        if (parsed.Error is not null)
         {
-            return BodyError();
+            return parsed.Error;
         }
 
-        using var document = parsed.Value.Document;
-        var root = parsed.Value.Root;
+        var root = parsed.Root;
         var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
 
         var renameRequested = root.TryGetProperty("username", out var usernameElement);
@@ -199,13 +198,12 @@ public static class UserEndpoints
         CancellationToken cancellationToken)
     {
         var parsed = await ReadObjectAsync(context, cancellationToken);
-        if (parsed is null)
+        if (parsed.Error is not null)
         {
-            return BodyError();
+            return parsed.Error;
         }
 
-        using var document = parsed.Value.Document;
-        var root = parsed.Value.Root;
+        var root = parsed.Root;
         var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
         IReadOnlyList<string> permissions = [];
 
@@ -317,13 +315,12 @@ public static class UserEndpoints
         CancellationToken cancellationToken)
     {
         var parsed = await ReadObjectAsync(context, cancellationToken);
-        if (parsed is null)
+        if (parsed.Error is not null)
         {
-            return (null, BodyError());
+            return (null, parsed.Error);
         }
 
-        using var document = parsed.Value.Document;
-        var root = parsed.Value.Root;
+        var root = parsed.Root;
         var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
 
         string? username = null;
@@ -376,29 +373,23 @@ public static class UserEndpoints
         return (new CreateUserRequest(username, role, password, passwordProvided), null);
     }
 
-    private static async Task<(JsonDocument Document, JsonElement Root)?> ReadObjectAsync(
+    private static async Task<(JsonElement Root, IResult? Error)> ReadObjectAsync(
         HttpContext context,
         CancellationToken cancellationToken)
     {
-        JsonDocument document;
-        try
+        var body = await JsonBodyReader.ReadAsync(context, cancellationToken: cancellationToken);
+        if (!body.IsSuccess)
         {
-            document = await JsonDocument.ParseAsync(
-                context.Request.Body,
-                cancellationToken: cancellationToken);
-        }
-        catch (JsonException)
-        {
-            return null;
+            return (default, body.Error);
         }
 
+        using var document = body.Document!;
         if (document.RootElement.ValueKind != JsonValueKind.Object)
         {
-            document.Dispose();
-            return null;
+            return (default, BodyError());
         }
 
-        return (document, document.RootElement);
+        return (document.RootElement.Clone(), null);
     }
 
     private static IResult BodyError() =>

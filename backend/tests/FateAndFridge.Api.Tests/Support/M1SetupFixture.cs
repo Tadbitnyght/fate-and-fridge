@@ -1,5 +1,7 @@
 using FateAndFridge.Api.Data;
+using FateAndFridge.Api.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Testcontainers.PostgreSql;
 
 namespace FateAndFridge.Api.Tests.Support;
@@ -58,6 +60,24 @@ public sealed class M1SetupFixture : IAsyncLifetime
             DELETE FROM household_settings;
             """,
             cancellationToken);
+    }
+
+    /// <summary>
+    /// Resets all M1 state and returns a factory whose setup is already
+    /// completed (so gated routes are reachable in tests).
+    /// </summary>
+    public async Task<ApiFactory> CreateConfiguredFactoryAsync(
+        CancellationToken cancellationToken,
+        string? dataDir = null)
+    {
+        await ResetAsync(cancellationToken);
+        var factory = CreateFactory(dataDir);
+
+        using var scope = factory.Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<SetupStateService>()
+            .SetSetupCompletedAsync(true, cancellationToken);
+
+        return factory;
     }
 }
 

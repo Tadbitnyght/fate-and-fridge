@@ -332,18 +332,13 @@ public static class AuthEndpoints
         HttpContext context,
         CancellationToken cancellationToken)
     {
-        JsonDocument document;
-        try
+        var body = await JsonBodyReader.ReadAsync(context, cancellationToken: cancellationToken);
+        if (!body.IsSuccess)
         {
-            document = await JsonDocument.ParseAsync(
-                context.Request.Body,
-                cancellationToken: cancellationToken);
-        }
-        catch (JsonException)
-        {
-            return (null, BodyValidationError());
+            return (null, body.Error);
         }
 
+        var document = body.Document!;
         using (document)
         {
             var root = document.RootElement;
@@ -396,18 +391,13 @@ public static class AuthEndpoints
         HttpContext context,
         CancellationToken cancellationToken)
     {
-        JsonDocument document;
-        try
+        var body = await JsonBodyReader.ReadAsync(context, cancellationToken: cancellationToken);
+        if (!body.IsSuccess)
         {
-            document = await JsonDocument.ParseAsync(
-                context.Request.Body,
-                cancellationToken: cancellationToken);
-        }
-        catch (JsonException)
-        {
-            return (null, BodyValidationError());
+            return (null, body.Error);
         }
 
+        var document = body.Document!;
         using (document)
         {
             var root = document.RootElement;

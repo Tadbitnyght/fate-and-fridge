@@ -60,21 +60,13 @@ public static class SetupEndpoints
             return AlreadyCompleted();
         }
 
-        JsonDocument document;
-        try
+        var body = await JsonBodyReader.ReadAsync(context, cancellationToken: cancellationToken);
+        if (!body.IsSuccess)
         {
-            document = await JsonDocument.ParseAsync(
-                context.Request.Body,
-                cancellationToken: cancellationToken);
-        }
-        catch (JsonException)
-        {
-            return ApiResults.ValidationError(new Dictionary<string, string[]>
-            {
-                ["body"] = ["The request body must be a valid JSON object."],
-            });
+            return body.Error!;
         }
 
+        var document = body.Document!;
         using (document)
         {
             var validation = SetupCompletionValidator.Validate(document.RootElement);

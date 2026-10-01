@@ -1,3 +1,5 @@
+using FateAndFridge.Api.Errors;
+
 namespace FateAndFridge.Api.Endpoints;
 
 /// <summary>
@@ -22,8 +24,11 @@ public static class FrontendEndpoints
             {
                 if (context.Request.Path.StartsWithSegments("/api"))
                 {
-                    context.Response.StatusCode = StatusCodes.Status404NotFound;
-                    await context.Response.WriteAsJsonAsync(new { error = "Not Found" });
+                    // Unknown API paths use the shared error envelope (docs/API.md §4).
+                    await ApiResults.Error(
+                        StatusCodes.Status404NotFound,
+                        ErrorCodes.NotFound,
+                        "The requested endpoint does not exist.").ExecuteAsync(context);
                     return;
                 }
 

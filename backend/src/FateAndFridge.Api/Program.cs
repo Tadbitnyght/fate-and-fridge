@@ -126,12 +126,15 @@ if (migrateOnly)
     return;
 }
 
-// Order matters: the client address (trusted-proxy forwarded headers) resolves
-// first so the allowlist, Secure-cookie decisions, and antiforgery all see the
-// real client; the allowlist then rejects blocked clients before any
-// authentication or setup state is consulted; setup gating still wins pre-setup
-// (409) for allowed clients; the forced-password-change gate runs before CSRF
-// so a flagged session always gets PASSWORD_CHANGE_REQUIRED on gated routes.
+// Order matters: the exception handler wraps everything so unexpected failures
+// still use the shared error envelope; the client address (trusted-proxy
+// forwarded headers) resolves next so the allowlist, Secure-cookie decisions,
+// and antiforgery all see the real client; the allowlist then rejects blocked
+// clients before any authentication or setup state is consulted; setup gating
+// still wins pre-setup (409) for allowed clients; the forced-password-change
+// gate runs before CSRF so a flagged session always gets
+// PASSWORD_CHANGE_REQUIRED on gated routes.
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseMiddleware<ClientAddressMiddleware>();
 app.UseMiddleware<IpAllowlistMiddleware>();
 app.UseAuthentication();

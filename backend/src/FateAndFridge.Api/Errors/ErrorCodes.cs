@@ -37,4 +37,6 @@ public static class ErrorCodes
     public const string IpNotAllowed = "IP_NOT_ALLOWED";
 
     public const string AuthModeDowngradeNotSupported = "AUTH_MODE_DOWNGRADE_NOT_SUPPORTED";
+
+    public const string UnsupportedMediaType = "UNSUPPORTED_MEDIA_TYPE";
 }

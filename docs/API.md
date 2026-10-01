@@ -47,6 +47,7 @@ External API keys/service accounts are deferred.
 - household-local calendar dates represented as ISO date strings
 - pagination for potentially large collections
 - server-side authorization on every protected route
+- JSON request bodies are limited to 16 KiB for settings and user payloads; oversize or malformed bodies return `400 VALIDATION_FAILED` with `details.field_errors.body`. A present `Content-Type` must be `application/json` (charset parameters allowed) or the request returns `415 UNSUPPORTED_MEDIA_TYPE`; a missing `Content-Type` is accepted for compatibility.
 - no business logic duplicated in frontend
 
 ### Permission enforcement
@@ -81,6 +82,7 @@ Use stable error codes.
 | `SETUP_REQUIRED` | 409 | Setup is not complete; only `/health` and `/setup/*` are callable |
 | `SETUP_ALREADY_COMPLETED` | 409 | `POST /setup/complete` was called after setup finished |
 | `VALIDATION_FAILED` | 400 | Request body/query failed validation; `details.field_errors` present |
+| `UNSUPPORTED_MEDIA_TYPE` | 415 | A JSON-body endpoint received a present `Content-Type` that is not `application/json` (charset parameters allowed) |
 | `AUTH_REQUIRED` | 401 | No valid session |
 | `CSRF_VALIDATION_FAILED` | 403 | Unsafe request carried a session cookie but the antiforgery token was missing or invalid |
 | `INVALID_CREDENTIALS` | 401 | Login failed (generic; never reveals whether the username exists) |
@@ -457,7 +459,7 @@ The API should expose domain actions cleanly enough that future service accounts
 
 ### Household and security settings
 
-- `GET /settings/household`, `PATCH /settings/household` — name, timezone (IANA, validated), `week_starts_on`, `default_diner_count` (1–20), `startup_page`. Admin-only for PATCH; any authenticated/single-user caller may GET.
+- `GET /settings/household`, `PATCH /settings/household` — name, timezone (IANA, validated), `week_starts_on`, `default_diner_count` (1–20), `startup_page`. Admin-only for PATCH; any authenticated/single-user caller may GET. `household_name` length is measured in UTF-16 code units (the same unit the server validates), so astral characters such as emoji count as two. `PATCH` is a last-write-wins partial update: concurrent disjoint patches all persist, and concurrent writes to the same field keep the last committed value (no optimistic concurrency). `ETag`/`If-Match` preconditions are deferred to V1.x.
 - `GET /settings/security`, `PATCH /settings/security` — Admin-only. Fields: `ip_allowlist_enabled` (bool), `ip_allowlist_ranges` (array of IPv4/IPv6 addresses or CIDRs), `trusted_proxies` (array, same rules). Bare addresses normalize to single-host ranges (`/32` or `/128`); legacy IPv4 shorthand/hex forms and scope IDs are rejected. Enabling the allowlist requires `confirmed: true` in the same PATCH, at least one range, and coverage of the caller's resolved client address (a loopback caller is exempt because loopback is always allowed); otherwise `400 VALIDATION_FAILED` with `details.field_errors`. Disabling requires no confirmation. GET returns the normalized stored values and changes apply to the next request.
 - Allowlist enforcement: when enabled, every route except `/api/v1/health/*` is limited to loopback and clients covered by `ip_allowlist_ranges`; blocked clients receive `403 IP_NOT_ALLOWED` **before** authentication and setup gating, so a blocked client cannot observe setup state (an allowed client pre-setup still receives `409 SETUP_REQUIRED`).
 - Trusted proxies: forwarded headers are honored only when the immediate socket peer is inside `trusted_proxies`. `X-Forwarded-Proto: https` then sets the request scheme, so `Secure` session/CSRF cookies work behind a TLS-terminating proxy, and `X-Forwarded-For` is walked right-to-left skipping trusted proxies to resolve the real client address. Forwarded headers from untrusted peers are ignored entirely. `/api/v1/health/*` bypasses both the forwarded-header resolution and the allowlist.

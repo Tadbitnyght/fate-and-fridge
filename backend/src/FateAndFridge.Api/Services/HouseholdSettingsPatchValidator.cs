@@ -228,7 +228,19 @@ public static class HouseholdSettingsPatchValidator
         return false;
     }
 
-    private static IReadOnlyDictionary<string, string> BuildCanonicalTimeZoneIds()
+    private static IReadOnlyDictionary<string, string> BuildCanonicalTimeZoneIds() =>
+        BuildCanonicalTimeZoneIds(AddFileSystemTimeZones);
+
+    /// <summary>
+    /// Builds the canonical timezone map from
+    /// <see cref="TimeZoneInfo.GetSystemTimeZones"/> plus the optional tzdata
+    /// walk. The walk is best-effort: an unreadable or partially readable
+    /// tzdata tree must not poison the lazy map (which would turn every
+    /// timezone validation into a permanent 500), so IO failures fall back to
+    /// the OS-provided list alone.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, string> BuildCanonicalTimeZoneIds(
+        Action<Dictionary<string, string>> addFileSystemTimeZones)
     {
         var canonical = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -237,7 +249,16 @@ public static class HouseholdSettingsPatchValidator
             canonical.TryAdd(timeZone.Id, timeZone.Id);
         }
 
-        AddFileSystemTimeZones(canonical);
+        try
+        {
+            addFileSystemTimeZones(canonical);
+        }
+        catch (Exception exception) when (exception is IOException
+            or UnauthorizedAccessException
+            or System.Security.SecurityException)
+        {
+            // The OS list above is sufficient; ignore the failing walk.
+        }
 
         return canonical;
     }

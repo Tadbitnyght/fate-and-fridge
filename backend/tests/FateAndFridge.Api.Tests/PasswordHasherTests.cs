@@ -240,6 +240,78 @@ public sealed class PasswordHasherTests
         second.Should().BeSameAs(first);
     }
 
+    [Theory]
+    [InlineData("$v=019$", "$v=19$")]
+    [InlineData("m=000065536,t=2,p=1", "m=65536,t=2,p=1")]
+    [InlineData("m=65536,t=02,p=1", "m=65536,t=2,p=1")]
+    [InlineData("m=65536,t=2,p=01", "m=65536,t=2,p=1")]
+    public void Non_minimal_decimal_encodings_are_rejected(string replacement, string canonical)
+    {
+        var hash = _hasher.Hash(Password).Replace(canonical, replacement, StringComparison.Ordinal);
+        hash.Should().NotBe(_hasher.Hash(Password)); // sanity: the string was actually mutated
+
+        _hasher.Verify(hash, Password).Should().BeFalse();
+        _hasher.NeedsRehash(hash).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("p=1,m=65536,t=2")]
+    [InlineData("m=65536,p=1,t=2")]
+    [InlineData("t=2,m=65536,p=1")]
+    [InlineData("m=65536,t=2")]
+    [InlineData("m=65536,t=2,p=1,p=1")]
+    public void Cost_parameters_must_use_libsodiums_literal_order(string parameters)
+    {
+        var hash = ReplaceParameters(_hasher.Hash(Password), parameters);
+
+        _hasher.Verify(hash, Password).Should().BeFalse();
+        _hasher.NeedsRehash(hash).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Non_canonical_base64_final_quantum_is_rejected()
+    {
+        var hash = _hasher.Hash(Password);
+        _hasher.Verify(hash, Password).Should().BeTrue();
+
+        var segments = hash.Split('$');
+        var mutatedHashSegment = string.Join(
+            '$',
+            segments[..5].Append(MutateFinalQuantum(segments[5])));
+        var mutatedSaltSegment = string.Join(
+            '$',
+            segments[..4].Append(MutateFinalQuantum(segments[4])).Append(segments[5]));
+
+        _hasher.Verify(mutatedHashSegment, Password).Should().BeFalse();
+        _hasher.NeedsRehash(mutatedHashSegment).Should().BeTrue();
+        _hasher.Verify(mutatedSaltSegment, Password).Should().BeFalse();
+        _hasher.NeedsRehash(mutatedSaltSegment).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Accepted_cost_bounds_never_drop_below_production_parameters()
+    {
+        Argon2idPasswordHasher.MaxAcceptedIterations.Should()
+            .BeGreaterThanOrEqualTo((ulong)Argon2idPasswordHasher.OpsLimit);
+        Argon2idPasswordHasher.MaxAcceptedMemoryKiB.Should()
+            .BeGreaterThanOrEqualTo((ulong)(Argon2idPasswordHasher.MemoryLimitBytes / 1024));
+        Argon2idPasswordHasher.MaxAcceptedParallelism.Should()
+            .BeGreaterThanOrEqualTo((ulong)Argon2idPasswordHasher.Parallelism);
+    }
+
+    /// <summary>
+    /// Replaces the last base64 character with one that differs only in the
+    /// unused low bits of the final quantum, so it decodes to the same bytes
+    /// but is not what libsodium would emit.
+    /// </summary>
+    private static string MutateFinalQuantum(string segment)
+    {
+        const string alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        var lastIndex = alphabet.IndexOf(segment[^1], StringComparison.Ordinal);
+        lastIndex.Should().BeGreaterThanOrEqualTo(0);
+        return string.Concat(segment.AsSpan(0, segment.Length - 1), alphabet[lastIndex + 1].ToString());
+    }
+
     private static string SaltSegment(string hash) => hash.Split('$')[4];
 
     private static string ReplaceParameters(string hash, string parameters) =>

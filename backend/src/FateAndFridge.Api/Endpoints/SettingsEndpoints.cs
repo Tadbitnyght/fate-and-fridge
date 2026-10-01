@@ -52,13 +52,12 @@ public static class SettingsEndpoints
         CancellationToken cancellationToken)
     {
         var parsed = await ReadObjectAsync(context, cancellationToken);
-        if (parsed is null)
+        if (parsed.Error is not null)
         {
-            return BodyError();
+            return parsed.Error;
         }
 
-        using var document = parsed.Value.Document;
-        var root = parsed.Value.Root;
+        var root = parsed.Root;
         var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
 
         bool? enabled = null;
@@ -177,29 +176,23 @@ public static class SettingsEndpoints
         return normalized;
     }
 
-    private static async Task<(JsonDocument Document, JsonElement Root)?> ReadObjectAsync(
+    private static async Task<(JsonElement Root, IResult? Error)> ReadObjectAsync(
         HttpContext context,
         CancellationToken cancellationToken)
     {
-        JsonDocument document;
-        try
+        var body = await JsonBodyReader.ReadAsync(context, cancellationToken: cancellationToken);
+        if (!body.IsSuccess)
         {
-            document = await JsonDocument.ParseAsync(
-                context.Request.Body,
-                cancellationToken: cancellationToken);
-        }
-        catch (JsonException)
-        {
-            return null;
+            return (default, body.Error);
         }
 
+        using var document = body.Document!;
         if (document.RootElement.ValueKind != JsonValueKind.Object)
         {
-            document.Dispose();
-            return null;
+            return (default, BodyError());
         }
 
-        return (document, document.RootElement);
+        return (document.RootElement.Clone(), null);
     }
 
     private static IResult BodyError() =>
@@ -224,23 +217,19 @@ public static class SettingsEndpoints
         HouseholdSettingsService settingsService,
         CancellationToken cancellationToken)
     {
-        JsonElement body;
-        try
+        var body = await JsonBodyReader.ReadAsync(context, cancellationToken: cancellationToken);
+        if (!body.IsSuccess)
         {
-            using var document = await JsonDocument.ParseAsync(
-                context.Request.Body,
-                cancellationToken: cancellationToken);
-            body = document.RootElement.Clone();
-        }
-        catch (JsonException)
-        {
-            return ApiResults.ValidationError(new Dictionary<string, string[]>
-            {
-                ["body"] = ["The request body must be valid JSON."],
-            });
+            return body.Error!;
         }
 
-        var validation = HouseholdSettingsPatchValidator.Validate(body);
+        JsonElement root;
+        using (var document = body.Document!)
+        {
+            root = document.RootElement.Clone();
+        }
+
+        var validation = HouseholdSettingsPatchValidator.Validate(root);
         if (validation.Patch is null)
         {
             return ApiResults.ValidationError(validation.FieldErrors);
@@ -268,21 +257,13 @@ public static class SettingsEndpoints
     {
         ResponseCache.NoStore(context);
 
-        JsonDocument document;
-        try
+        var body = await JsonBodyReader.ReadAsync(context, cancellationToken: cancellationToken);
+        if (!body.IsSuccess)
         {
-            document = await JsonDocument.ParseAsync(
-                context.Request.Body,
-                cancellationToken: cancellationToken);
-        }
-        catch (JsonException)
-        {
-            return ApiResults.ValidationError(new Dictionary<string, string[]>
-            {
-                ["body"] = ["The request body must be a valid JSON object."],
-            });
+            return body.Error!;
         }
 
+        var document = body.Document!;
         using (document)
         {
             var root = document.RootElement;

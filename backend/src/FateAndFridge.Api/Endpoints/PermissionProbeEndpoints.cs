@@ -59,6 +59,11 @@ public static class PermissionProbeEndpoints
                 () => Results.Ok(new PermissionProbeResponse("misconfigured", Authorized: true)))
             .AddEndpointFilter<PermissionEndpointFilter>();
 
+        // Deliberately failing route (M1-15): proves the exception-handling
+        // middleware maps unexpected exceptions to the shared 500 envelope.
+        group.MapGet("/throw", (HttpContext _) =>
+            throw new InvalidOperationException("Test-only probe failure."));
+
         return app;
     }
 }

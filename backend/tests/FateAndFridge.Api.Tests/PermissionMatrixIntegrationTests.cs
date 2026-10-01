@@ -288,11 +288,14 @@ public sealed class PermissionMatrixIntegrationTests(M1SetupFixture fixture) : I
         using var client = factory.CreateClient();
 
         // Attaching the filter without a PermissionRequirement is a server
-        // misconfiguration: it must throw, never fail open.
-        var exception = await FluentActions
-            .Awaiting(() => client.GetAsync("/api/v1/permission-probe/misconfigured", cancellationToken))
-            .Should().ThrowAsync<InvalidOperationException>();
-        exception.Which.Message.Should().Contain(nameof(PermissionRequirement));
+        // misconfiguration: it must fail closed, never fail open. M1-15 maps the
+        // misconfiguration exception to the shared 500 envelope (and logs it)
+        // instead of letting it escape to the client.
+        var response = await client.GetAsync("/api/v1/permission-probe/misconfigured", cancellationToken);
+        ((int)response.StatusCode).Should().Be(500);
+        var raw = await response.Content.ReadAsStringAsync(cancellationToken);
+        raw.Should().Contain("INTERNAL_ERROR");
+        raw.Should().NotContain(nameof(PermissionRequirement));
     }
 
     [Fact]
