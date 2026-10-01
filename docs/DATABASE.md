@@ -387,6 +387,8 @@ Admin-only read access.
 
 Created in M2 (ahead of the M12 admin viewer) so that reference-data merges, retirements, deletions, and conversion-factor changes are audited from the start; M12 adds the viewer and extends usage to calendar/user/settings events.
 
+`AuditService` writes participate in the caller's transaction: callers stage the audit row before `SaveChanges`, so it commits atomically with the change; a failed audit write fails the operation rather than commit unaudited.
+
 Do not log ordinary page views.
 
 ---

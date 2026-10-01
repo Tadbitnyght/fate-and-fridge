@@ -44,8 +44,9 @@ public sealed class M1SetupFixture : IAsyncLifetime
         new(ConnectionString, migrateOnStartup: false, dataDir);
 
     /// <summary>
-    /// Removes setup state and M1 authentication rows so every test starts from
-    /// a fresh install. Sessions first: they reference users with RESTRICT.
+    /// Removes setup state, M1 authentication rows, and staged audit rows so
+    /// every test starts from a fresh install. Sessions and audit events first:
+    /// they reference users with RESTRICT.
     /// </summary>
     public async Task ResetAsync(CancellationToken cancellationToken)
     {
@@ -55,6 +56,7 @@ public sealed class M1SetupFixture : IAsyncLifetime
             DELETE FROM user_sessions;
             DELETE FROM user_permissions;
             DELETE FROM auth_events;
+            DELETE FROM audit_events;
             DELETE FROM users;
             DELETE FROM application_settings;
             DELETE FROM household_settings;

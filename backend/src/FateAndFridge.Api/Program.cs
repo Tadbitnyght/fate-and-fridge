@@ -79,6 +79,10 @@ builder.Services.AddScoped<SessionService>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<IAuthEventWriter, AuthEventWriter>();
 
+// M2-02: reference-data audit writer. Rows are staged on the caller's
+// AppDbContext so they commit atomically with the change they describe.
+builder.Services.AddScoped<IAuditService, AuditService>();
+
 // M1-09 permission model: one uncached grant reader plus the evaluator service
 // shared by GET /auth/session and the route enforcement filter.
 builder.Services.AddScoped<IPermissionGrantReader, DbPermissionGrantReader>();
