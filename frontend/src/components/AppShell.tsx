@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { Link, NavLink, Outlet } from 'react-router-dom'
 
 import { useAuth } from '../features/auth/AuthContext'
 import { useFocusOnRouteChange } from '../hooks/useFocusOnRouteChange'
@@ -91,6 +91,9 @@ export function AppShell() {
 
       <footer className="app-footer">
         <p>Self-hosted &middot; no telemetry &middot; your household data stays home</p>
+        <p>
+          <Link to="/progress">Milestone progress</Link>
+        </p>
       </footer>
     </div>
   )

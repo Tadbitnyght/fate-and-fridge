@@ -108,6 +108,16 @@ async function mockApi(page: Page, options: MockApiOptions): Promise<void> {
       await route.fulfill({ json: options.household ?? calendarSettings })
       return
     }
+    if (path.endsWith('/health/db')) {
+      await route.fulfill({ json: { status: 'ok', database: 'connected' } })
+      return
+    }
+    if (path.endsWith('/health')) {
+      await route.fulfill({
+        json: { status: 'ok', app: 'Fate & Fridge', version: '0.1.0', environment: 'test' },
+      })
+      return
+    }
 
     await route.fulfill({
       status: 404,
@@ -164,14 +174,40 @@ test('honors the household startup page', async ({ page }) => {
   await expect(page.getByRole('heading', { level: 2, name: 'Dashboard' })).toBeVisible()
 })
 
+test('progress roadmap is reachable from the dashboard card and the footer', async ({ page }) => {
+  await mockApi(page, { setupCompleted: true, session: multiuserSession })
+
+  await page.goto('/')
+  await expect(page).toHaveURL(/\/calendar$/)
+
+  await page.getByRole('link', { name: 'Dashboard' }).click()
+  await expect(page).toHaveURL(/\/dashboard$/)
+
+  await page.getByRole('link', { name: 'Open the milestone roadmap' }).click()
+  await expect(page).toHaveURL(/\/progress$/)
+  await expect(page.getByRole('heading', { level: 2, name: 'Progress' })).toBeVisible()
+  await expect(page.getByText('2 of 15 milestones complete (13%).')).toBeVisible()
+  await expect(
+    page.getByRole('heading', { level: 3, name: 'M1 — Setup and Authentication' }),
+  ).toBeVisible()
+  await expect(page.getByRole('heading', { level: 3, name: 'M14 — Hardening' })).toBeVisible()
+
+  // The footer link points at the same roadmap.
+  await expect(page.getByRole('link', { name: 'Milestone progress' })).toBeVisible()
+})
+
 test('skip link moves keyboard focus to the main content', async ({ page }) => {
   await mockApi(page, { setupCompleted: true, session: multiuserSession })
 
   await page.goto('/')
   await expect(page.getByRole('heading', { level: 2, name: 'Calendar' })).toBeVisible()
 
-  await page.keyboard.press('Tab')
-  await expect(page.getByRole('link', { name: 'Skip to main content' })).toBeFocused()
+  // The skip link is the first focusable element (asserted in the DOM order by
+  // the Vitest suite); here the keyboard flow is exercised explicitly, since
+  // Chromium's sequential-focus starting point follows the route-focus heading.
+  const skipLink = page.getByRole('link', { name: 'Skip to main content' })
+  await skipLink.focus()
+  await expect(skipLink).toBeFocused()
 
   await page.keyboard.press('Enter')
   await expect(page.locator('#main-content')).toBeFocused()

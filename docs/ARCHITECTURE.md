@@ -209,6 +209,7 @@ frontend/src/
     settings/   Household/Users/Security/Account sections (M1-14), access, permissions,
                 dialogs, one-time password panel, query hooks
     startup/    StartupRedirect (household `startup_page` consumption)
+    progress/   Milestone roadmap manifest + /progress page (status, evidence, issues)
   hooks/        useFocusOnRouteChange (route-change focus management)
   pages/        SetupPage, LoginPage, ChangePasswordPage, Calendar/Dashboard/… placeholders
   utils/        validation, timezones, ipRanges, fieldErrors, labels
@@ -222,6 +223,11 @@ directly. Inside the shell, `/` is a redirect route that honors
 the error/timeout fallback); Calendar and Dashboard also have explicit routes.
 Settings lives under `/settings` (Household), `/settings/users`, `/settings/security`
 and `/settings/account` (admin sections are hidden but server-enforced).
+
+The `/progress` page (linked from the Dashboard card and the app footer) renders the
+checked-in milestone manifest (`features/progress/milestones.ts`) entirely offline —
+no runtime fetch or external service — with status chips, completion dates, test
+evidence, and tracked GitHub issue links.
 
 Accessibility: every page starts with a skip link targeting the `#main-content`
 landmark; route changes move focus to the page heading (or the main container);

@@ -15,6 +15,7 @@ import { GroceriesPage } from './pages/GroceriesPage'
 import { LoginPage } from './pages/LoginPage'
 import { RecipesPage } from './pages/RecipesPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { MilestonesPage } from './features/progress/MilestonesPage'
 import { StartupRedirect } from './features/startup/StartupRedirect'
 import { SetupPage } from './pages/SetupPage'
 import { StatisticsPage } from './pages/StatisticsPage'
@@ -37,6 +38,7 @@ export function App() {
             <Route path="recipes" element={<RecipesPage />} />
             <Route path="groceries" element={<GroceriesPage />} />
             <Route path="statistics" element={<StatisticsPage />} />
+            <Route path="progress" element={<MilestonesPage />} />
             <Route path="settings" element={<SettingsPage />}>
               <Route index element={<HouseholdSection />} />
               <Route path="users" element={<UsersSection />} />

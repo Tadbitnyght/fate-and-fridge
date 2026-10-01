@@ -254,6 +254,7 @@ A task is complete only when:
 - mobile behavior is tested when relevant
 - accessibility is considered
 - docs are updated
+- the milestone progress manifest (`frontend/src/features/progress/milestones.ts`) is updated when a milestone completes
 - independent review is complete
 - no unrelated scope is introduced
 

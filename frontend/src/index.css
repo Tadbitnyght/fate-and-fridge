@@ -957,3 +957,163 @@ main:focus {
 main:focus-visible {
   outline: none;
 }
+
+/* ---------- milestone progress page (#22) ---------- */
+
+.card {
+  margin-top: 1rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface);
+}
+
+.card h3 {
+  margin: 0 0 0.4rem;
+  font-size: 1.05rem;
+}
+
+.progress-summary {
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+}
+
+.progress-bar {
+  height: 0.75rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.progress-bar__fill {
+  display: block;
+  height: 100%;
+  background: var(--ok-text);
+}
+
+.status-chip {
+  padding: 0.1rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.status-chip--complete {
+  background: var(--ok-bg);
+  color: var(--ok-text);
+  border-color: transparent;
+}
+
+.status-chip--in_progress {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.status-chip--planned {
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.milestone-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin: 1.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.milestone-card {
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface);
+}
+
+.milestone-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.milestone-card__head h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.milestone-card__dates {
+  margin: 0.35rem 0 0.5rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.milestone-card__meta {
+  color: var(--muted);
+}
+
+.milestone-card h4 {
+  margin: 0.75rem 0 0.3rem;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+.milestone-features {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.evidence-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.evidence-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  padding: 0.15rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  font-size: 0.85rem;
+}
+
+.evidence-chip__label {
+  color: var(--muted);
+}
+
+.evidence-chip__value {
+  font-weight: 700;
+}
+
+.issue-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.issue-links a {
+  color: var(--text);
+}
+
+.app-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.25rem 1rem;
+}

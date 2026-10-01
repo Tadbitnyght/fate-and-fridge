@@ -56,6 +56,9 @@ versions follow [Semantic Versioning](https://semver.org/).
     canonical PHC parsing, unified error envelopes (404/415/500 codes), and an
     expanded verification suite (643 backend tests; 94 Vitest, 11 hermetic
     Playwright, plus a real-stack e2e suite)
+- Frontend: `/progress` milestone roadmap page (M0–M14) rendering a checked-in
+  manifest with status chips, completion dates, feature lists, test evidence,
+  and GitHub issue links; linked from the Dashboard card and the app footer
 
 ### Changed
 
