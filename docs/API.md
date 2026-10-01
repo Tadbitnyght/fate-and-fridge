@@ -121,6 +121,7 @@ Session model (approved M1):
 - Login, session, change-password, and reset-password responses are sent with `Cache-Control: no-store`.
 - `GET /auth/session` returns the current user (or single-user household identity), effective permissions, auth mode, and `must_change_password`.
 - When `must_change_password` is true, every route except `/auth/session`, `/auth/change-password`, and `/auth/logout` fails with `PASSWORD_CHANGE_REQUIRED`.
+- Single-user mode has no session cookie and issues no antiforgery token; unsafe requests act as the system actor and are not CSRF-validated. Trusted-network deployment (and optionally the IP allowlist) is the protection model for this mode.
 
 ### M1 auth response shapes
 

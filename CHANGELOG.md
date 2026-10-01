@@ -31,6 +31,32 @@ versions follow [Semantic Versioning](https://semver.org/).
 - OpenCode MCP configuration: GitHub (PAT), Playwright, Roslyn, and Docker
   pointed at the NAS Docker daemon over SSH
 
+- Milestone 1 — setup and authentication:
+  - Database: household settings, application settings, users, per-user
+    permissions, sessions, and auth-event tables (EF Core migration
+    `M1SchemaBaseline`)
+  - Setup: single-shot, race-safe `POST /setup/complete` (household fields,
+    first Admin, optional IP allowlist, update-check preference) with a
+    one-time recovery key stored at `/data/config/recovery.key` (mode 0600)
+  - Auth: Argon2id password hashing (libsodium via Geralt), opaque DB-backed
+    sessions (`faf_session`, 30-day idle / 90-day absolute, rotation and
+    revocation), CSRF via `X-CSRF-TOKEN`, login lockout (5 failures →
+    progressive delay, 10 → 15 min, 5 lockouts/24 h → 24 h), per-IP failure
+    limiting, forced password change, and Admin password reset
+  - Authorization: seven server-enforced permission keys (edit implies view),
+    Admin-only user management with last-admin protection, and single → multiuser
+    conversion
+  - Security settings: app-wide IP allowlist (health/loopback exempt),
+    trusted-proxy-aware forwarded headers, and an Admin security screen
+  - Frontend: routing/session shell, setup wizard with recovery-key
+    confirmation, admin console (household/users/security), startup-page
+    routing, and an accessibility sweep (skip link, focus management, modal
+    focus traps)
+  - Hardening: request body limits and `application/json` policy, strict
+    canonical PHC parsing, unified error envelopes (404/415/500 codes), and an
+    expanded verification suite (643 backend tests; 94 Vitest, 11 hermetic
+    Playwright, plus a real-stack e2e suite)
+
 ### Changed
 
 - Default published port is now **50080** (`HOST_PORT` in `.env`, default in

@@ -72,6 +72,8 @@ Setup should warn:
 - use only on trusted network unless protected externally
 - do not expose unauthenticated instance directly to internet
 
+Single-user requests carry no session cookie and no antiforgery token: CSRF validation applies only to cookie-authenticated sessions (multiuser). In single-user mode any client that can reach the port acts as Admin, so network restriction (trusted LAN, IP allowlist) is the only protection; the wizard shows this warning.
+
 Optional IP allowlist may be enabled.
 
 V1 allowlist behavior:
