@@ -64,18 +64,43 @@ Acceptance:
 ---
 
 ## Milestone 2 — Reference Data
-Issues:
-1. Grocery departments.
-2. Units.
-3. Unit aliases.
-4. Ingredients.
-5. Ingredient aliases.
-6. Ingredient autocomplete.
-7. Inline ingredient create.
-8. Ingredient merge.
-9. Ingredient retire/delete safety.
-10. Primary proteins.
-11. Tags.
+
+Approved decisions (2026-09-30): see `docs/M2_PLAN.md` for the full runbook, seed data,
+and issue acceptance criteria.
+- Idempotent startup seeder (flag `reference_data_seeded`) inserts the default
+  departments, units + aliases, and proteins; existing installs are backfilled once and
+  user edits are never overwritten.
+- Conversion factors are configurable per unit (`base_factor`, mass/volume only, audited,
+  range-validated); dimensions are immutable after creation.
+- Names/aliases normalize with diacritic folding, no auto-plurals.
+- Ingredient merges record `merged_into_ingredient_id`; delete/retire rules are per type.
+- Minimal `audit_events` + `AuditService` land in M2 (viewer stays in M12).
+- `/api/v1/departments` family plus `PUT /departments/order`; autocomplete contract and
+  conflict codes in `docs/API.md` §22.
+- M2 includes a Reference Data management UI in the admin console; recipe-entry
+  autocomplete lands with M3.
+- `IReferenceUsageChecker` seam returns zero until M3 adds recipe tables.
+
+Issues (execution order; details in `docs/M2_PLAN.md` §3):
+| # | Issue | Depends on |
+|---|-------|-----------|
+| M2-01 | Schema + audit baseline | — |
+| M2-02 | Minimal audit service | M2-01 |
+| M2-03 | Normalization utilities | — |
+| M2-04 | Reference-data seeder | M2-01, M2-03 |
+| M2-05 | Departments API | M2-02…M2-04 |
+| M2-06 | Units API + aliases | M2-02…M2-04 |
+| M2-07 | Unit conversion service | M2-06 |
+| M2-08 | Ingredients API + aliases | M2-02, M2-03, M2-05 |
+| M2-09 | Ingredient merge | M2-08 |
+| M2-10 | Proteins + tags APIs | M2-02, M2-03 |
+| M2-11 | Reference-data admin UI | M2-05…M2-10 |
+| M2-12 | M2 verification sweep | M2-01…M2-11 |
+
+Acceptance: seed data matches `docs/M2_PLAN.md` §2; conversion math respects configured
+factors; merges are transactional and audited; delete safety holds; the management UI
+works on mobile and keyboard; the progress manifest marks M2 complete and the milestone
+is tagged `m2-complete`.
 
 ---
 

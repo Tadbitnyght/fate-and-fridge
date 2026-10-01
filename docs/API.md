@@ -96,6 +96,16 @@ Use stable error codes.
 | `FORBIDDEN` | 403 | Authenticated but missing the required permission |
 | `IP_NOT_ALLOWED` | 403 | Client address is outside the configured IP allowlist |
 | `AUTH_MODE_DOWNGRADE_NOT_SUPPORTED` | 409 | Multiuser → single-user conversion is deferred |
+| `INGREDIENT_EXISTS` | 409 | An ingredient with that normalized name exists; `details.existing_id` present |
+| `UNIT_EXISTS` | 409 | A unit with that normalized symbol exists; `details.existing_id` present |
+| `PROTEIN_EXISTS` | 409 | A protein with that normalized name exists; `details.existing_id` present |
+| `TAG_EXISTS` | 409 | A tag with that normalized name exists; `details.existing_id` present |
+| `ALIAS_EXISTS` | 409 | The normalized alias is already used by another entity; `details.entity_type`/`existing_id` present |
+| `DEPARTMENT_IN_USE` | 409 | Department still referenced by ingredients; retire instead |
+| `UNIT_IN_USE` | 409 | Unit still referenced; retire instead |
+| `PROTEIN_IN_USE` | 409 | Protein still referenced; retire instead |
+| `TAG_IN_USE` | 409 | Tag still referenced; remove it from recipes first |
+| `INVALID_UNIT_DIMENSION_CHANGE` | 400 | Unit dimensions are immutable; retire and create a new unit |
 
 Clients must branch on `code`, never on `message`.
 
@@ -488,3 +498,43 @@ All routes require an Admin (or the single-user system actor); members receive `
 ### Pre-setup gating
 
 Until `POST /setup/complete` succeeds, every `/api/v1` route except `/health` and `/setup/*` returns `409 SETUP_REQUIRED`. The frontend routes to the wizard on that code.
+
+---
+
+## 22. M2 Contract: Reference Data
+
+General rules (apply to departments, units, ingredients, proteins, tags):
+- Reads require any authenticated actor (single-user system actor included); writes require the `reference_data.edit` permission; hard deletes are Admin-only.
+- Names and aliases are normalized (lowercase, trimmed, whitespace-collapsed, diacritics folded) for uniqueness and matching; responses return the display form.
+- `GET` list endpoints accept `?search=&limit=&include_retired=`; `limit` defaults to 20 and is clamped to 100; prefix matches rank before substring matches; aliases participate in ingredient/unit search; retired entities are excluded unless `include_retired=true`.
+- `POST /{id}/retire` deactivates; retired entities still resolve for existing data but cannot be selected for new entries.
+- Duplicate creates return the specific `*_EXISTS` code with `details.existing_id`; alias conflicts return `ALIAS_EXISTS` with the owning entity.
+- Every write (create/update/retire/delete/merge/factor change) writes an `audit_events` row with actor and before/after; the audit read API remains M12.
+
+### Departments
+- `GET /departments?search=&include_retired=` — ordered by `sort_order`.
+- `POST /departments` — `{ name }`; duplicate name → `400 VALIDATION_FAILED`.
+- `PATCH /departments/{id}` — `{ name?, is_active? }`.
+- `POST /departments/{id}/retire` — deactivate.
+- `DELETE /departments/{id}` — Admin only; `409 DEPARTMENT_IN_USE` when ingredients reference it.
+- `PUT /departments/order` — `{ "ids": [...] }` must be a complete permutation of all department ids; returns the reordered list.
+
+### Units
+- `GET /units?search=&limit=&include_retired=`.
+- `POST /units` — `{ symbol, display_name, dimension, base_factor? }`; `base_factor` is required for mass/volume and forbidden otherwise; dimension is fixed thereafter.
+- `PATCH /units/{id}` — `{ symbol?, display_name?, base_factor? }`; `base_factor` is editable only for mass/volume units, must be positive and within `1e-6 … 1e6`, and is audited (`details.field_errors` on failure); attempting a dimension change returns `400 INVALID_UNIT_DIMENSION_CHANGE`.
+- Aliases: `POST /units/{id}/aliases` `{ alias }`, `DELETE /units/{id}/aliases/{aliasId}`.
+- `POST /units/{id}/retire`, `DELETE /units/{id}` (Admin, `409 UNIT_IN_USE` when referenced).
+
+### Ingredients
+- `GET /ingredients?search=&limit=&include_retired=` — search matches canonical names and aliases.
+- `POST /ingredients` — `{ canonical_name, department_id?, aliases? }`; duplicate → `409 INGREDIENT_EXISTS`.
+- `PATCH /ingredients/{id}` — `{ canonical_name?, department_id? }`.
+- Aliases: `POST /ingredients/{id}/aliases` `{ alias }`, `DELETE /ingredients/{id}/aliases/{aliasId}`.
+- `POST /ingredients/{id}/retire`.
+- `DELETE /ingredients/{id}` — Admin only; blocked while any recipe (including retired recipes) references it; before M3 the usage check returns zero via the documented seam. In-use responses offer merge or retire (`409 INGREDIENT_IN_USE` with usage details).
+- `POST /ingredients/merge` — `{ "source_id": N, "target_id": M }`, transactional: reassigns recipe references (seam in M2), copies the source's name and aliases to the target (conflicting aliases are skipped and returned in `skipped_aliases`), retires the source with `merged_into_ingredient_id = M`, and writes an audit event with before/after.
+
+### Proteins and Tags
+- Proteins: `GET/POST/PATCH`, `POST /{id}/retire`, `DELETE /{id}` (Admin, `409 PROTEIN_IN_USE` when referenced).
+- Tags: `GET/POST/PATCH`, `DELETE /{id}` (Admin, `409 TAG_IN_USE` when referenced); no retire flag.

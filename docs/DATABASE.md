@@ -14,7 +14,7 @@ Conventions (approved M1):
 - Instants are stored as `timestamptz` and are always UTC in code.
 - Calendar dates are stored as `date` and evaluated in the household timezone.
 - Enum-like columns are stored as text with application-level constants (no PostgreSQL enum types).
-- Normalized columns are lowercase, trimmed, and whitespace-collapsed.
+- Normalized columns are lowercase, trimmed, and whitespace-collapsed, with Unicode diacritics folded (`jalapeño` → `jalapeno`); no plural folding (plurals are explicit aliases).
 
 ---
 
@@ -171,8 +171,9 @@ Do not hard-delete through ordinary UI.
 ### ingredients
 - `id`
 - `canonical_name`
-- `normalized_name`
+- `normalized_name` (unique; lowercase, trimmed, whitespace-collapsed, diacritics folded)
 - `department_id`
+- `merged_into_ingredient_id` nullable — set when this ingredient is merged into another; the source is retired and kept for traceability
 - `is_active`
 - `created_at`
 - `updated_at`
@@ -202,6 +203,13 @@ Example dimensions:
 - volume
 - count
 - nonconvertible
+
+Dimension semantics (approved M2):
+- `base_factor` converts to the dimension base unit: grams for mass, millilitres for volume.
+- `base_factor` is editable per install for mass/volume units (`PATCH /api/v1/units/{id}`) and every change is audited; values must be positive and within a sane range.
+- Count units have no factor and only combine with the **same** unit; different count units never convert (no package-size guessing).
+- `to taste` is nonconvertible and may carry a null quantity.
+- A unit's dimension is immutable after creation; changing families requires retiring the unit and creating a new one.
 
 ### unit_aliases
 - `id`
@@ -375,6 +383,8 @@ Exact identity strategy should be designed carefully so:
 
 Admin-only read access.
 
+Created in M2 (ahead of the M12 admin viewer) so that reference-data merges, retirements, deletions, and conversion-factor changes are audited from the start; M12 adds the viewer and extends usage to calendar/user/settings events.
+
 Do not log ordinary page views.
 
 ---
@@ -388,6 +398,7 @@ Examples:
 - protein_neighbor_distance = 1
 - update_check_enabled
 - update_check_interval
+- reference_data_seeded — set once by the M2 startup seeder
 - ip_allowlist_enabled
 - ip_allowlist_ranges
 - grocery defaults
