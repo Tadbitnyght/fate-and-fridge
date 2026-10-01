@@ -66,8 +66,9 @@ public sealed class M1SchemaBaselineIntegrationTests(M1SchemaBaselineFixture fix
         var tablesAfterReapply = await GetTableNamesAsync(context, cancellationToken);
         tablesAfterReapply.Should().Contain(BaselineTables);
 
+        var definedMigrations = context.Database.GetMigrations();
         var appliedAfterReapply = await context.Database.GetAppliedMigrationsAsync(cancellationToken);
-        appliedAfterReapply.Should().HaveCount(2);
+        appliedAfterReapply.Should().BeEquivalentTo(definedMigrations);
     }
 
     [Fact]

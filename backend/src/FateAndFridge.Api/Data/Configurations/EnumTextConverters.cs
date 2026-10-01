@@ -27,6 +27,11 @@ internal static class EnumTextConverters
             page => StartupPageToText(page),
             text => StartupPageFromText(text));
 
+    public static ValueConverter<UnitDimension, string> UnitDimensionConverter { get; } =
+        new ValueConverter<UnitDimension, string>(
+            dimension => UnitDimensionToText(dimension),
+            text => UnitDimensionFromText(text));
+
     internal static string UserRoleToText(UserRole role) => role switch
     {
         UserRole.Admin => "admin",
@@ -110,4 +115,40 @@ internal static class EnumTextConverters
         TryStartupPageFromText(text, out var page)
             ? page
             : throw new ArgumentOutOfRangeException(nameof(text), text, "Unknown startup page text.");
+
+    internal static string UnitDimensionToText(UnitDimension dimension) => dimension switch
+    {
+        UnitDimension.Mass => "mass",
+        UnitDimension.Volume => "volume",
+        UnitDimension.Count => "count",
+        UnitDimension.Nonconvertible => "nonconvertible",
+        _ => throw new ArgumentOutOfRangeException(nameof(dimension), dimension, "Unknown unit dimension."),
+    };
+
+    internal static bool TryUnitDimensionFromText(string? text, out UnitDimension dimension)
+    {
+        switch (text)
+        {
+            case "mass":
+                dimension = UnitDimension.Mass;
+                return true;
+            case "volume":
+                dimension = UnitDimension.Volume;
+                return true;
+            case "count":
+                dimension = UnitDimension.Count;
+                return true;
+            case "nonconvertible":
+                dimension = UnitDimension.Nonconvertible;
+                return true;
+            default:
+                dimension = default;
+                return false;
+        }
+    }
+
+    private static UnitDimension UnitDimensionFromText(string text) =>
+        TryUnitDimensionFromText(text, out var dimension)
+            ? dimension
+            : throw new ArgumentOutOfRangeException(nameof(text), text, "Unknown unit dimension text.");
 }

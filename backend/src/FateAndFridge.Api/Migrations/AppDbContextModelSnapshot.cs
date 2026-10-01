@@ -42,6 +42,75 @@ namespace FateAndFridge.Api.Migrations
                     b.ToTable("application_settings", (string)null);
                 });
 
+            modelBuilder.Entity("FateAndFridge.Api.Domain.AuditEvent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long?>("ActorUserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("actor_user_id");
+
+                    b.Property<string>("AfterJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("after_json");
+
+                    b.Property<string>("BeforeJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("before_json");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("EntityId")
+                        .HasColumnType("text")
+                        .HasColumnName("entity_id");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("entity_type");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("event_type");
+
+                    b.Property<string>("IpAddress")
+                        .HasColumnType("text")
+                        .HasColumnName("ip_address");
+
+                    b.Property<string>("MetadataJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValue("{}")
+                        .HasColumnName("metadata_json");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("text")
+                        .HasColumnName("reason");
+
+                    b.HasKey("Id")
+                        .HasName("pk_audit_events");
+
+                    b.HasIndex("ActorUserId")
+                        .HasDatabaseName("ix_audit_events_actor_user_id");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("ix_audit_events_created_at");
+
+                    b.HasIndex("EntityType", "EntityId")
+                        .HasDatabaseName("ix_audit_events_entity_type_entity_id");
+
+                    b.ToTable("audit_events", (string)null);
+                });
+
             modelBuilder.Entity("FateAndFridge.Api.Domain.AuthEvent", b =>
                 {
                     b.Property<long>("Id")
@@ -90,6 +159,53 @@ namespace FateAndFridge.Api.Migrations
                         .HasDatabaseName("ix_auth_events_user_id");
 
                     b.ToTable("auth_events", (string)null);
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.GroceryDepartment", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("normalized_name");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_grocery_departments");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique()
+                        .HasDatabaseName("ix_grocery_departments_normalized_name");
+
+                    b.ToTable("grocery_departments", (string)null);
                 });
 
             modelBuilder.Entity("FateAndFridge.Api.Domain.HouseholdSettings", b =>
@@ -144,6 +260,256 @@ namespace FateAndFridge.Api.Migrations
                         {
                             t.HasCheckConstraint("ck_household_settings_singleton", "id = 1");
                         });
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.Ingredient", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("CanonicalName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("canonical_name");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<long?>("DepartmentId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("department_id");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<long?>("MergedIntoIngredientId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("merged_into_ingredient_id");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("normalized_name");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_ingredients");
+
+                    b.HasIndex("DepartmentId")
+                        .HasDatabaseName("ix_ingredients_department_id");
+
+                    b.HasIndex("MergedIntoIngredientId")
+                        .HasDatabaseName("ix_ingredients_merged_into_ingredient_id");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique()
+                        .HasDatabaseName("ix_ingredients_normalized_name");
+
+                    b.ToTable("ingredients", (string)null);
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.IngredientAlias", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Alias")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("alias");
+
+                    b.Property<long>("IngredientId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("ingredient_id");
+
+                    b.Property<string>("NormalizedAlias")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("normalized_alias");
+
+                    b.HasKey("Id")
+                        .HasName("pk_ingredient_aliases");
+
+                    b.HasIndex("IngredientId")
+                        .HasDatabaseName("ix_ingredient_aliases_ingredient_id");
+
+                    b.HasIndex("NormalizedAlias")
+                        .IsUnique()
+                        .HasDatabaseName("ix_ingredient_aliases_normalized_alias");
+
+                    b.ToTable("ingredient_aliases", (string)null);
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.Protein", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("normalized_name");
+
+                    b.HasKey("Id")
+                        .HasName("pk_proteins");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique()
+                        .HasDatabaseName("ix_proteins_normalized_name");
+
+                    b.ToTable("proteins", (string)null);
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.Tag", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("normalized_name");
+
+                    b.HasKey("Id")
+                        .HasName("pk_tags");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique()
+                        .HasDatabaseName("ix_tags_normalized_name");
+
+                    b.ToTable("tags", (string)null);
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.Unit", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal?>("BaseFactor")
+                        .HasPrecision(28, 14)
+                        .HasColumnType("numeric(28,14)")
+                        .HasColumnName("base_factor");
+
+                    b.Property<string>("Dimension")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("dimension");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("display_name");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<bool>("IsCustom")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_custom");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("normalized_name");
+
+                    b.Property<string>("Symbol")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("symbol");
+
+                    b.HasKey("Id")
+                        .HasName("pk_units");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique()
+                        .HasDatabaseName("ix_units_normalized_name");
+
+                    b.HasIndex("Symbol")
+                        .IsUnique()
+                        .HasDatabaseName("ix_units_symbol");
+
+                    b.ToTable("units", (string)null);
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.UnitAlias", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Alias")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("alias");
+
+                    b.Property<string>("NormalizedAlias")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("normalized_alias");
+
+                    b.Property<long>("UnitId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("unit_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_unit_aliases");
+
+                    b.HasIndex("UnitId", "NormalizedAlias")
+                        .IsUnique()
+                        .HasDatabaseName("ix_unit_aliases_unit_id_normalized_alias");
+
+                    b.ToTable("unit_aliases", (string)null);
                 });
 
             modelBuilder.Entity("FateAndFridge.Api.Domain.User", b =>
@@ -319,6 +685,15 @@ namespace FateAndFridge.Api.Migrations
                     b.ToTable("user_sessions", (string)null);
                 });
 
+            modelBuilder.Entity("FateAndFridge.Api.Domain.AuditEvent", b =>
+                {
+                    b.HasOne("FateAndFridge.Api.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_audit_events_users_actor_user_id");
+                });
+
             modelBuilder.Entity("FateAndFridge.Api.Domain.AuthEvent", b =>
                 {
                     b.HasOne("FateAndFridge.Api.Domain.User", null)
@@ -326,6 +701,41 @@ namespace FateAndFridge.Api.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_auth_events_users_user_id");
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.Ingredient", b =>
+                {
+                    b.HasOne("FateAndFridge.Api.Domain.GroceryDepartment", null)
+                        .WithMany()
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_ingredients_grocery_departments_department_id");
+
+                    b.HasOne("FateAndFridge.Api.Domain.Ingredient", null)
+                        .WithMany()
+                        .HasForeignKey("MergedIntoIngredientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_ingredients_ingredients_merged_into_ingredient_id");
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.IngredientAlias", b =>
+                {
+                    b.HasOne("FateAndFridge.Api.Domain.Ingredient", null)
+                        .WithMany()
+                        .HasForeignKey("IngredientId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_ingredient_aliases_ingredients_ingredient_id");
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.UnitAlias", b =>
+                {
+                    b.HasOne("FateAndFridge.Api.Domain.Unit", null)
+                        .WithMany()
+                        .HasForeignKey("UnitId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_unit_aliases_units_unit_id");
                 });
 
             modelBuilder.Entity("FateAndFridge.Api.Domain.UserPermission", b =>

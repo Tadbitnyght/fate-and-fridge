@@ -163,6 +163,7 @@ Do not hard-delete through ordinary UI.
 ### grocery_departments
 - `id`
 - `name`
+- `normalized_name` — unique; lowercase, trimmed, whitespace-collapsed, diacritics folded
 - `sort_order`
 - `is_active`
 - `created_at`
@@ -182,8 +183,7 @@ Do not hard-delete through ordinary UI.
 - `id`
 - `ingredient_id`
 - `alias`
-- `normalized_alias`
-- unique normalized alias where practical
+- `normalized_alias` — unique; an alias resolves to exactly one canonical ingredient
 
 ---
 
@@ -191,10 +191,11 @@ Do not hard-delete through ordinary UI.
 
 ### units
 - `id`
-- `symbol`
+- `symbol` — unique
 - `display_name`
+- `normalized_name` — unique; lowercase, trimmed, whitespace-collapsed, diacritics folded
 - `dimension`
-- `base_factor` nullable
+- `base_factor` — nullable `numeric(28,14)`
 - `is_custom`
 - `is_active`
 
@@ -216,6 +217,7 @@ Dimension semantics (approved M2):
 - `unit_id`
 - `alias`
 - `normalized_alias`
+- unique(`unit_id`, `normalized_alias`) — per unit, because the seed's `t` (teaspoon) and `T` (tablespoon) normalize to the same text
 
 ---
 
@@ -471,11 +473,16 @@ Add indexes for:
 - calendar_entries.meal_date
 - recipes.normalized_name
 - recipes.normalized_source_url
+- grocery_departments.normalized_name (unique)
 - ingredients.normalized_name
 - ingredient_aliases.normalized_alias
+- units.symbol (unique)
+- units.normalized_name (unique)
 - tags.normalized_name
 - proteins.normalized_name
 - audit_events.created_at
+- audit_events.actor_user_id
+- audit_events.(entity_type, entity_id)
 - auth_events.occurred_at
 - auth_events.user_id
 - users.normalized_username (unique)

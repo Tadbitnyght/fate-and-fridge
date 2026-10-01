@@ -20,17 +20,19 @@ public sealed class M1SchemaBaselineModelTests
         using var context = CreateContext();
         var model = context.Model;
 
+        // Later milestones add entities; this check verifies the M1 baseline
+        // entities remain mapped (the M2 model tests cover the full model).
         model.GetEntityTypes()
             .Select(entityType => entityType.ClrType)
-            .Should().BeEquivalentTo(
-            [
+            .Should().Contain(new[]
+            {
                 typeof(HouseholdSettings),
                 typeof(ApplicationSetting),
                 typeof(User),
                 typeof(UserPermission),
                 typeof(AuthEvent),
                 typeof(UserSession),
-            ]);
+            });
     }
 
     [Fact]

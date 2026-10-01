@@ -23,6 +23,22 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     public DbSet<UserSession> UserSessions => Set<UserSession>();
 
+    public DbSet<GroceryDepartment> GroceryDepartments => Set<GroceryDepartment>();
+
+    public DbSet<Ingredient> Ingredients => Set<Ingredient>();
+
+    public DbSet<IngredientAlias> IngredientAliases => Set<IngredientAlias>();
+
+    public DbSet<Unit> Units => Set<Unit>();
+
+    public DbSet<UnitAlias> UnitAliases => Set<UnitAlias>();
+
+    public DbSet<Protein> Proteins => Set<Protein>();
+
+    public DbSet<Tag> Tags => Set<Tag>();
+
+    public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -33,5 +49,15 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         modelBuilder.ApplyConfiguration(new UserPermissionConfiguration());
         modelBuilder.ApplyConfiguration(new AuthEventConfiguration());
         modelBuilder.ApplyConfiguration(new UserSessionConfiguration());
+
+        // M2-01 reference-data and audit baseline (docs/M2_PLAN.md §3).
+        modelBuilder.ApplyConfiguration(new GroceryDepartmentConfiguration());
+        modelBuilder.ApplyConfiguration(new IngredientConfiguration());
+        modelBuilder.ApplyConfiguration(new IngredientAliasConfiguration());
+        modelBuilder.ApplyConfiguration(new UnitConfiguration());
+        modelBuilder.ApplyConfiguration(new UnitAliasConfiguration());
+        modelBuilder.ApplyConfiguration(new ProteinConfiguration());
+        modelBuilder.ApplyConfiguration(new TagConfiguration());
+        modelBuilder.ApplyConfiguration(new AuditEventConfiguration());
     }
 }
