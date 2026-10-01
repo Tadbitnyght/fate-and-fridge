@@ -54,4 +54,12 @@ public static class ErrorCodes
     public const string IngredientInUse = "INGREDIENT_IN_USE";
 
     public const string InvalidUnitDimensionChange = "INVALID_UNIT_DIMENSION_CHANGE";
+
+    public const string ProteinExists = "PROTEIN_EXISTS";
+
+    public const string ProteinInUse = "PROTEIN_IN_USE";
+
+    public const string TagExists = "TAG_EXISTS";
+
+    public const string TagInUse = "TAG_IN_USE";
 }

@@ -99,6 +99,11 @@ builder.Services.AddScoped<UnitService>();
 // share one global uniqueness namespace.
 builder.Services.AddScoped<IngredientService>();
 
+// M2-10: proteins and tags management, plus the recipe-usage seams consumed
+// by their Admin-only hard deletes.
+builder.Services.AddScoped<ProteinService>();
+builder.Services.AddScoped<TagService>();
+
 builder.Services.AddScoped<IReferenceUsageChecker, DefaultReferenceUsageChecker>();
 
 // M2-07: pure, dependency-free conversion between compatible units; stateless,
@@ -182,6 +187,8 @@ app.MapSettingsEndpoints();
 app.MapDepartmentEndpoints();
 app.MapUnitEndpoints();
 app.MapIngredientEndpoints();
+app.MapProteinEndpoints();
+app.MapTagEndpoints();
 
 // Test-only permission probes (M1-09): mapped solely in the Testing
 // environment so the permission matrix can exercise server-side enforcement.
