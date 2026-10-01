@@ -104,6 +104,7 @@ Rules:
 - Implementation reports and reviews must state which Roslyn tools were used for C# work.
 - Workspace notes: pass the `.csproj` path directly (the tool's `.slnx` discovery is unreliable); this workstation's SDK/artifacts env is pinned in `opencode.jsonc`.
 - Roslyn file-path rule: every `roslyn_*` file path (read **and** write) resolves against the **workspace root** — the directory tree of the loaded `.csproj` — not the shell working directory. For the backend project the workspace root is `/mnt/y/backend`, so use `src/FateAndFridge.Api/...` and `tests/FateAndFridge.Api.Tests/...` (or absolute paths). Shell-style paths such as `backend/src/...` silently resolve to the wrong place.
+- Runtime globalization: this workstation runs with `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1`, where ICU-backed APIs are silent no-ops — `string.Normalize(...)` returns its input unchanged and culture names are empty. Never build normalization, casing, or collation logic on those APIs. Use explicit, table-driven logic that is deterministic in both modes, and cross-check tests with `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=0` (a real ICU mode) when Unicode is involved.
 
 ---
 
