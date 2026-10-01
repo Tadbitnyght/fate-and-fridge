@@ -81,6 +81,7 @@ public abstract record IngredientAliasMutationResult
 /// </summary>
 public sealed class IngredientService(
     AppDbContext dbContext,
+    TimeProvider timeProvider,
     IAuditService auditService,
     IReferenceUsageChecker usageChecker,
     ILogger<IngredientService> logger)
@@ -192,12 +193,15 @@ public sealed class IngredientService(
             }
         }
 
+        var now = timeProvider.GetUtcNow();
         var ingredient = new Ingredient
         {
             CanonicalName = normalizedName.Display,
             NormalizedName = normalizedName.Normalized,
             DepartmentId = departmentId,
             IsActive = true,
+            CreatedAt = now,
+            UpdatedAt = now,
         };
 
         dbContext.Ingredients.Add(ingredient);
@@ -336,6 +340,8 @@ public sealed class IngredientService(
             ingredient.DepartmentId = departmentId;
         }
 
+        ingredient.UpdatedAt = timeProvider.GetUtcNow();
+
         await auditService.WriteAsync(
             new AuditEventEntry(
                 AuditEventTypes.Updated,
@@ -355,7 +361,9 @@ public sealed class IngredientService(
         {
             dbContext.ChangeTracker.Clear();
             return new IngredientMutationResult.Conflict(
-                (await FindUniquenessConflictAsync(normalizedName!.Normalized, id, cancellationToken))?.IngredientId);
+                normalizedName is null
+                    ? null
+                    : (await FindUniquenessConflictAsync(normalizedName.Normalized, id, cancellationToken))?.IngredientId);
         }
 
         if (transaction is not null)
@@ -421,6 +429,7 @@ public sealed class IngredientService(
         };
 
         dbContext.IngredientAliases.Add(row);
+        ingredient.UpdatedAt = timeProvider.GetUtcNow();
 
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         try
@@ -483,6 +492,7 @@ public sealed class IngredientService(
 
         var before = SnapshotJson(ingredient, aliases);
         dbContext.IngredientAliases.Remove(alias);
+        ingredient.UpdatedAt = timeProvider.GetUtcNow();
 
         await auditService.WriteAsync(
             new AuditEventEntry(
@@ -524,6 +534,7 @@ public sealed class IngredientService(
 
         var before = SnapshotJson(ingredient, aliases);
         ingredient.IsActive = false;
+        ingredient.UpdatedAt = timeProvider.GetUtcNow();
 
         await auditService.WriteAsync(
             new AuditEventEntry(

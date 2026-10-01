@@ -378,6 +378,9 @@ public sealed class IngredientEndpointsIntegrationTests(M1SetupFixture fixture) 
         foreignAliasError.GetProperty("details").GetProperty("existing_id").GetInt64().Should().Be(basil.Id);
         foreignAliasError.GetProperty("details").GetProperty("alias_id").GetInt64().Should().Be(basilicoAliasId);
 
+        var missing = await AddAliasAsync(session, 999999, """{"alias":"ghost"}""", cancellationToken);
+        missing.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
         var search = await ReadJsonAsync(
             await session.Client.GetAsync($"{IngredientsPath}?search=tomatoes", cancellationToken),
             cancellationToken);
@@ -439,21 +442,27 @@ public sealed class IngredientEndpointsIntegrationTests(M1SetupFixture fixture) 
         await SeedUserAsync("root", AdminPassword, cancellationToken, UserRole.Admin);
         await MarkSetupCompletedAsync(cancellationToken);
         using var factory = await StartFactoryWithCleanIngredientsAsync(cancellationToken);
-        var sugar = await SeedIngredientAsync("Sugar", aliases: ["cane sugar"], cancellationToken: cancellationToken);
+        // The substring match is seeded first (lowest id); the canonical-prefix and
+        // alias-prefix matches are seeded later, so prefix ranking — not id order —
+        // must produce the result.
         var brown = await SeedIngredientAsync("Brown Sugar", cancellationToken: cancellationToken);
+        var sugar = await SeedIngredientAsync("Sugar", aliases: ["cane sugar"], cancellationToken: cancellationToken);
+        var syrup = await SeedIngredientAsync("Maple Syrup", aliases: ["sugar free syrup"], cancellationToken: cancellationToken);
         using var session = await SignInAsync(factory, "root", AdminPassword, cancellationToken);
 
         var bySubstring = await ReadJsonAsync(
             await session.Client.GetAsync($"{IngredientsPath}?search=sugar", cancellationToken),
             cancellationToken);
         bySubstring.EnumerateArray().Select(element => element.GetProperty("id").GetInt64())
-            .Should().Equal(new[] { sugar.Id, brown.Id }, "the canonical-name prefix ranks first");
+            .Should().Equal(
+                new[] { sugar.Id, syrup.Id, brown.Id },
+                "canonical and alias prefixes rank before the lower-id substring match");
 
         var byUpperCase = await ReadJsonAsync(
             await session.Client.GetAsync($"{IngredientsPath}?search=SUGAR", cancellationToken),
             cancellationToken);
         byUpperCase.EnumerateArray().Select(element => element.GetProperty("id").GetInt64())
-            .Should().Equal(new[] { sugar.Id, brown.Id });
+            .Should().Equal(new[] { sugar.Id, syrup.Id, brown.Id });
 
         var byAliasPrefix = await ReadJsonAsync(
             await session.Client.GetAsync($"{IngredientsPath}?search=cane", cancellationToken),
@@ -466,6 +475,12 @@ public sealed class IngredientEndpointsIntegrationTests(M1SetupFixture fixture) 
             cancellationToken);
         byFullAlias.EnumerateArray().Select(element => element.GetProperty("id").GetInt64())
             .Should().Equal(sugar.Id);
+
+        var bySecondAlias = await ReadJsonAsync(
+            await session.Client.GetAsync($"{IngredientsPath}?search=sugar%20free", cancellationToken),
+            cancellationToken);
+        bySecondAlias.EnumerateArray().Select(element => element.GetProperty("id").GetInt64())
+            .Should().Equal(syrup.Id);
     }
 
     [Fact]
@@ -940,6 +955,228 @@ public sealed class IngredientEndpointsIntegrationTests(M1SetupFixture fixture) 
         rows.Should().OnlyContain(row => row.ActorUserId == null);
     }
 
+    [Fact]
+    public async Task Patch_rename_to_own_alias_is_allowed()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        await SeedUserAsync("root", AdminPassword, cancellationToken, UserRole.Admin);
+        await MarkSetupCompletedAsync(cancellationToken);
+        using var factory = await StartFactoryWithCleanIngredientsAsync(cancellationToken);
+        var tomato = await SeedIngredientAsync("Tomato", aliases: ["Tomatoes"], cancellationToken: cancellationToken);
+        using var session = await SignInAsync(factory, "root", AdminPassword, cancellationToken);
+
+        var renamed = await PatchAsync(
+            session,
+            tomato.Id,
+            """{"canonical_name":"tomatoes"}""",
+            cancellationToken);
+        renamed.StatusCode.Should().Be(
+            HttpStatusCode.OK,
+            "a rename excludes the ingredient's own alias rows");
+        var root = await ReadJsonAsync(renamed, cancellationToken);
+        root.GetProperty("canonical_name").GetString().Should().Be("tomatoes");
+        root.GetProperty("aliases").GetArrayLength().Should().Be(1);
+
+        var search = await ReadJsonAsync(
+            await session.Client.GetAsync($"{IngredientsPath}?search=tomatoes", cancellationToken),
+            cancellationToken);
+        search.GetArrayLength().Should().Be(1);
+        search[0].GetProperty("id").GetInt64().Should().Be(tomato.Id);
+
+        var rows = await ReadAuditRowsAsync(cancellationToken);
+        rows.Should().ContainSingle().Which.EventType.Should().Be("updated");
+        Snapshot(rows[0].BeforeJson!)["canonical_name"]!.GetValue<string>().Should().Be("Tomato");
+        Snapshot(rows[0].AfterJson!)["canonical_name"]!.GetValue<string>().Should().Be("tomatoes");
+    }
+
+    [Fact]
+    public async Task Retired_ingredients_still_own_their_namespace()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        await SeedUserAsync("root", AdminPassword, cancellationToken, UserRole.Admin);
+        await MarkSetupCompletedAsync(cancellationToken);
+        using var factory = await StartFactoryWithCleanIngredientsAsync(cancellationToken);
+        var retired = await SeedIngredientAsync(
+            "Retired Basil",
+            isActive: false,
+            aliases: ["Old Basil"],
+            cancellationToken: cancellationToken);
+        var retiredAliasId = await ReadAliasIdAsync(retired.Id, "old basil", cancellationToken);
+        var parsley = await SeedIngredientAsync("Active Parsley", cancellationToken: cancellationToken);
+        using var session = await SignInAsync(factory, "root", AdminPassword, cancellationToken);
+
+        var canonicalConflict = await CreateAsync(
+            session,
+            """{"canonical_name":"Retired Basil"}""",
+            cancellationToken);
+        canonicalConflict.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var canonicalError = await ReadErrorAsync(canonicalConflict, cancellationToken);
+        canonicalError.GetProperty("code").GetString().Should().Be(ErrorCodes.IngredientExists);
+        canonicalError.GetProperty("details").GetProperty("existing_id").GetInt64().Should().Be(retired.Id);
+
+        var aliasConflict = await CreateAsync(
+            session,
+            """{"canonical_name":"Fresh Basil","aliases":["OLD BASIL"]}""",
+            cancellationToken);
+        aliasConflict.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var aliasError = await ReadErrorAsync(aliasConflict, cancellationToken);
+        aliasError.GetProperty("code").GetString().Should().Be(ErrorCodes.AliasExists);
+        aliasError.GetProperty("details").GetProperty("source").GetString().Should().Be("alias");
+        aliasError.GetProperty("details").GetProperty("existing_id").GetInt64().Should().Be(retired.Id);
+        aliasError.GetProperty("details").GetProperty("alias_id").GetInt64().Should().Be(retiredAliasId);
+
+        var addConflict = await AddAliasAsync(
+            session,
+            parsley.Id,
+            """{"alias":"retired basil"}""",
+            cancellationToken);
+        addConflict.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var addError = await ReadErrorAsync(addConflict, cancellationToken);
+        addError.GetProperty("code").GetString().Should().Be(ErrorCodes.AliasExists);
+        addError.GetProperty("details").GetProperty("source").GetString().Should().Be("canonical_name");
+        addError.GetProperty("details").GetProperty("existing_id").GetInt64().Should().Be(retired.Id);
+
+        (await ReadJsonAsync(
+                await session.Client.GetAsync($"{IngredientsPath}?search=Retired%20Basil", cancellationToken),
+                cancellationToken))
+            .GetArrayLength().Should().Be(0, "retired rows stay out of the default list");
+        (await ReadJsonAsync(
+                await session.Client.GetAsync(
+                    $"{IngredientsPath}?search=Retired%20Basil&include_retired=true",
+                    cancellationToken),
+                cancellationToken))
+            .GetArrayLength().Should().Be(1);
+
+        (await ReadAuditRowsAsync(cancellationToken)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Timestamps_are_written_and_bumped_on_every_mutation()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        await SeedUserAsync("root", AdminPassword, cancellationToken, UserRole.Admin);
+        await MarkSetupCompletedAsync(cancellationToken);
+        // Whole-second current UTC: deterministic for assertions, while the
+        // client-side CookieContainer still sees the session cookie as unexpired
+        // (a date in the past would be dropped before the request is sent).
+        var start = DateTimeOffset.UtcNow;
+        start -= TimeSpan.FromTicks(start.Ticks % TimeSpan.TicksPerSecond);
+        var clock = new TestTimeProvider(start);
+        using var factory = await StartFactoryWithCleanIngredientsAsync(cancellationToken, timeProvider: clock);
+        using var session = await SignInAsync(factory, "root", AdminPassword, cancellationToken);
+
+        var created = await CreateAsync(session, """{"canonical_name":"Dated Salt"}""", cancellationToken);
+        created.StatusCode.Should().Be(HttpStatusCode.Created);
+        var createdRoot = await ReadJsonAsync(created, cancellationToken);
+        var id = createdRoot.GetProperty("id").GetInt64();
+        createdRoot.GetProperty("created_at").GetDateTimeOffset().Should().Be(start);
+        createdRoot.GetProperty("updated_at").GetDateTimeOffset().Should().Be(start);
+
+        clock.Advance(TimeSpan.FromMinutes(5));
+        var patched = await PatchAsync(
+            session,
+            id,
+            """{"canonical_name":"Dated Sea Salt"}""",
+            cancellationToken);
+        var patchedRoot = await ReadJsonAsync(patched, cancellationToken);
+        patchedRoot.GetProperty("created_at").GetDateTimeOffset().Should().Be(start);
+        patchedRoot.GetProperty("updated_at").GetDateTimeOffset().Should().Be(start.AddMinutes(5));
+
+        clock.Advance(TimeSpan.FromMinutes(5));
+        var alias = await AddAliasAsync(session, id, """{"alias":"dated alias"}""", cancellationToken);
+        var aliasId = (await ReadJsonAsync(alias, cancellationToken)).GetProperty("id").GetInt64();
+        var afterAliasAdd = await ReadJsonAsync(
+            await session.Client.GetAsync($"{IngredientsPath}?search=dated%20alias", cancellationToken),
+            cancellationToken);
+        afterAliasAdd[0].GetProperty("created_at").GetDateTimeOffset().Should().Be(start);
+        afterAliasAdd[0].GetProperty("updated_at").GetDateTimeOffset().Should().Be(start.AddMinutes(10));
+
+        clock.Advance(TimeSpan.FromMinutes(5));
+        var removed = await SendJsonAsync(
+            session.Client,
+            HttpMethod.Delete,
+            $"{IngredientsPath}/{id}/aliases/{aliasId}",
+            json: null,
+            session.CsrfToken,
+            cancellationToken);
+        removed.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var afterAliasRemove = await ReadJsonAsync(
+            await session.Client.GetAsync($"{IngredientsPath}?search=Dated%20Sea%20Salt", cancellationToken),
+            cancellationToken);
+        afterAliasRemove[0].GetProperty("created_at").GetDateTimeOffset().Should().Be(start);
+        afterAliasRemove[0].GetProperty("updated_at").GetDateTimeOffset().Should().Be(start.AddMinutes(15));
+
+        clock.Advance(TimeSpan.FromMinutes(5));
+        var retired = await RetireAsync(session, id, cancellationToken);
+        var retiredRoot = await ReadJsonAsync(retired, cancellationToken);
+        retiredRoot.GetProperty("created_at").GetDateTimeOffset().Should().Be(start);
+        retiredRoot.GetProperty("updated_at").GetDateTimeOffset().Should().Be(start.AddMinutes(20));
+
+        await using (var context = fixture.CreateContext())
+        {
+            var stored = await context.Ingredients.AsNoTracking()
+                .SingleAsync(ingredient => ingredient.Id == id, cancellationToken);
+            stored.CreatedAt.Should().Be(start);
+            stored.UpdatedAt.Should().Be(start.AddMinutes(20));
+        }
+
+        (await ReadAuditRowsAsync(cancellationToken)).Should().HaveCount(5);
+    }
+
+    [Fact]
+    public async Task Explicit_transaction_remains_usable_after_a_unique_violation()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var context = fixture.CreateContext();
+        context.Ingredients.Add(new Ingredient
+        {
+            CanonicalName = "Savepoint Probe",
+            NormalizedName = "savepoint probe",
+            IsActive = true,
+            CreatedAt = SeedTimestamp,
+            UpdatedAt = SeedTimestamp,
+        });
+        await context.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+            context.Ingredients.Add(new Ingredient
+            {
+                CanonicalName = "Savepoint Probe",
+                NormalizedName = "savepoint probe",
+                IsActive = true,
+                CreatedAt = SeedTimestamp,
+                UpdatedAt = SeedTimestamp,
+            });
+
+            var save = async () => await context.SaveChangesAsync(cancellationToken);
+            await save.Should().ThrowAsync<DbUpdateException>();
+            context.ChangeTracker.Clear();
+
+            // EF Core (Npgsql) wraps each SaveChanges inside an explicit transaction
+            // in a savepoint and rolls back to it on failure, so the failed write
+            // does not abort the surrounding transaction: the same context must
+            // still be able to run the post-conflict re-query (no 25P02 "current
+            // transaction is aborted").
+            var count = await context.Ingredients.AsNoTracking()
+                .CountAsync(ingredient => ingredient.NormalizedName == "savepoint probe", cancellationToken);
+            count.Should().Be(1);
+
+            await transaction.RollbackAsync(cancellationToken);
+        }
+        finally
+        {
+            context.ChangeTracker.Clear();
+            await context.Database.ExecuteSqlRawAsync(
+                "DELETE FROM ingredients WHERE normalized_name = 'savepoint probe';",
+                cancellationToken);
+        }
+    }
+
     private sealed record SignedInClient(HttpClient Client, string CsrfToken) : IDisposable
     {
         public void Dispose() => Client.Dispose();
@@ -1076,20 +1313,31 @@ public sealed class IngredientEndpointsIntegrationTests(M1SetupFixture fixture) 
     /// </summary>
     private async Task<ApiFactory> StartFactoryWithCleanIngredientsAsync(
         CancellationToken cancellationToken,
-        IReferenceUsageChecker? usageChecker = null)
+        IReferenceUsageChecker? usageChecker = null,
+        TimeProvider? timeProvider = null)
     {
         ApiFactory factory;
-        if (usageChecker is null)
+        if (usageChecker is null && timeProvider is null)
         {
             factory = fixture.CreateFactory();
         }
         else
         {
             var checker = usageChecker;
+            var clock = timeProvider;
             factory = fixture.CreateFactory(configureServices: services =>
             {
-                services.RemoveAll<IReferenceUsageChecker>();
-                services.AddSingleton(checker);
+                if (checker is not null)
+                {
+                    services.RemoveAll<IReferenceUsageChecker>();
+                    services.AddSingleton(checker);
+                }
+
+                if (clock is not null)
+                {
+                    services.RemoveAll<TimeProvider>();
+                    services.AddSingleton(clock);
+                }
             });
         }
 
