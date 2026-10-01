@@ -86,12 +86,16 @@ public abstract record ConversionResult
 /// <para>
 /// Rounding policy: all arithmetic uses <see cref="decimal"/> only (no
 /// <c>double</c>/<c>float</c> anywhere). The service never rounds or truncates
-/// on its own. Count identity and exact factor ratios are exact; mass/volume
-/// conversion computes <c>quantity * from.BaseFactor / to.BaseFactor</c> and
-/// therefore inherits <see cref="decimal"/> division semantics — a
-/// non-terminating quotient is rounded to the nearest representable decimal by
-/// the runtime. Display formatting and any presentation rounding belong to the
-/// caller.
+/// on its own. Identity conversions are exact and bypass arithmetic entirely:
+/// the same persisted <c>Id</c>, an equal symbol when either id is absent, or
+/// two equal non-null base factors return the quantity unchanged. Only when
+/// factors differ does the service compute
+/// <c>quantity * from.BaseFactor / to.BaseFactor</c> and inherit
+/// <see cref="decimal"/> division semantics — a non-terminating quotient is
+/// rounded to the nearest representable decimal by the runtime, and an
+/// intermediate product may overflow even when the final quotient would fit,
+/// which surfaces as <see cref="ConversionFailureReason.Overflow"/>. Display
+/// formatting and any presentation rounding belong to the caller.
 /// </para>
 /// </remarks>
 public sealed class UnitConversionService
@@ -120,7 +124,7 @@ public sealed class UnitConversionService
 
         if (from.Dimension == UnitDimension.Count)
         {
-            return IsSameCountUnit(from, to)
+            return IsSameUnit(from, to)
                 ? new ConversionResult.Success(quantity)
                 : Failure(ConversionFailureReason.DifferentCountUnits);
         }
@@ -128,6 +132,11 @@ public sealed class UnitConversionService
         if (!TryGetFactor(from, out var fromFactor) || !TryGetFactor(to, out var toFactor))
         {
             return Failure(ConversionFailureReason.MissingFactor);
+        }
+
+        if (IsSameUnit(from, to) || fromFactor == toFactor)
+        {
+            return new ConversionResult.Success(quantity);
         }
 
         return TryConvert(quantity, fromFactor, toFactor, out var converted)
@@ -169,9 +178,13 @@ public sealed class UnitConversionService
 
     /// <summary>
     /// Whether two units may be combined in one aggregation bucket: two mass
-    /// units, two volume units, or the same count unit. Missing factors are a
-    /// <see cref="Convert"/> concern, so a factor-less mass unit still combines
-    /// structurally with another mass unit. Nonconvertible units never combine.
+    /// units, two volume units, or the same count unit. The check is structural —
+    /// it does not validate factors or arithmetic — so a factor-less mass unit
+    /// still combines with another mass unit, and callers (M8) must still handle
+    /// <see cref="ConversionFailureReason.MissingFactor"/> and
+    /// <see cref="ConversionFailureReason.Overflow"/> failures from
+    /// <see cref="Convert"/> and <see cref="ToBase"/>. Nonconvertible units never
+    /// combine.
     /// </summary>
     public bool CanCombine(ConversionUnit a, ConversionUnit b)
     {
@@ -183,14 +196,14 @@ public sealed class UnitConversionService
         return a.Dimension switch
         {
             UnitDimension.Mass or UnitDimension.Volume => true,
-            UnitDimension.Count => IsSameCountUnit(a, b),
+            UnitDimension.Count => IsSameUnit(a, b),
             _ => false,
         };
     }
 
     private static ConversionResult.Failure Failure(ConversionFailureReason reason) => new(reason);
 
-    private static bool IsSameCountUnit(ConversionUnit a, ConversionUnit b) =>
+    private static bool IsSameUnit(ConversionUnit a, ConversionUnit b) =>
         a.Id.HasValue && b.Id.HasValue
             ? a.Id.Value == b.Id.Value
             : string.Equals(a.Symbol, b.Symbol, StringComparison.OrdinalIgnoreCase);

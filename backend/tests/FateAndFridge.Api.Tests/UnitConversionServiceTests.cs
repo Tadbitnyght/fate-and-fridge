@@ -89,9 +89,46 @@ public sealed class UnitConversionServiceTests
         -1e-28m,
     };
 
+    public static TheoryData<decimal> IdentityQuantities { get; } = new()
+    {
+        7.5m,
+        24902479511587.382670223819288m,
+        decimal.MaxValue / 1000m,
+        1e-28m,
+    };
+
     [Fact]
     public void Seed_units_are_the_documented_twenty_one()
     {
+        // docs/M2_PLAN.md §2 oracle: the authoritative symbol list is hard-coded
+        // here so a catalog change cannot silently redefine the expectation.
+        var documentedSymbols = new[]
+        {
+            "tsp",
+            "tbsp",
+            "fl oz",
+            "cup",
+            "pint",
+            "quart",
+            "gallon",
+            "oz",
+            "lb",
+            "g",
+            "kg",
+            "each",
+            "package",
+            "can",
+            "bottle",
+            "jar",
+            "bunch",
+            "clove",
+            "slice",
+            "pinch",
+            "to taste",
+        };
+
+        documentedSymbols.Should().HaveCount(21);
+        ReferenceDataSeedCatalog.Units.Select(unit => unit.Symbol).Should().Equal(documentedSymbols);
         SeedUnits.Should().HaveCount(21);
         SeedUnits.Values.Count(unit => unit.Dimension == UnitDimension.Volume).Should().Be(7);
         SeedUnits.Values.Count(unit => unit.Dimension == UnitDimension.Mass).Should().Be(4);
@@ -135,14 +172,27 @@ public sealed class UnitConversionServiceTests
         }
     }
 
-    [Fact]
-    public void Converting_a_mass_or_volume_unit_to_itself_is_identity_for_every_seed_unit()
+    [Theory]
+    [MemberData(nameof(IdentityQuantities))]
+    public void Converting_a_mass_or_volume_unit_to_itself_is_exact_for_every_seed_unit(decimal quantity)
     {
         foreach (var unit in SeedUnits.Values.Where(
             candidate => candidate.Dimension is UnitDimension.Mass or UnitDimension.Volume))
         {
-            Converted(unit, unit, 7.5m).Should().Be(7.5m, unit.Symbol);
+            Converted(unit, unit, quantity).Should().Be(quantity, unit.Symbol);
         }
+    }
+
+    [Fact]
+    public void Units_with_equal_base_factors_are_exact_without_intermediate_rounding()
+    {
+        // Different units that share a factor also short-circuit; the
+        // intermediate product of the deep-decimal quantity would overflow.
+        var left = new ConversionUnit(101, "unit-a", UnitDimension.Mass, 250m);
+        var right = new ConversionUnit(102, "unit-b", UnitDimension.Mass, 250m);
+
+        Converted(left, right, 24902479511587.382670223819288m)
+            .Should().Be(24902479511587.382670223819288m);
     }
 
     [Fact]
@@ -277,6 +327,17 @@ public sealed class UnitConversionServiceTests
         AssertConvertFailure(SeedUnits["each"], SeedUnits["each"], quantity, ConversionFailureReason.ZeroOrNegativeQuantity);
         AssertToBaseFailure(SeedUnits["g"], quantity, ConversionFailureReason.ZeroOrNegativeQuantity);
         AssertToBaseFailure(SeedUnits["each"], quantity, ConversionFailureReason.ZeroOrNegativeQuantity);
+    }
+
+    [Fact]
+    public void Decimal_min_value_is_rejected_as_non_positive()
+    {
+        AssertConvertFailure(
+            SeedUnits["g"],
+            SeedUnits["kg"],
+            decimal.MinValue,
+            ConversionFailureReason.ZeroOrNegativeQuantity);
+        AssertToBaseFailure(SeedUnits["kg"], decimal.MinValue, ConversionFailureReason.ZeroOrNegativeQuantity);
     }
 
     [Fact]
