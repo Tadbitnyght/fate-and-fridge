@@ -11,6 +11,7 @@ interface SettingsNavItem {
 
 const SETTINGS_NAV: SettingsNavItem[] = [
   { to: '/settings', label: 'Household', end: true },
+  { to: '/settings/reference-data', label: 'Reference Data' },
   { to: '/settings/users', label: 'Users', adminOnly: true },
   { to: '/settings/security', label: 'Security', adminOnly: true },
   { to: '/settings/account', label: 'Account' },

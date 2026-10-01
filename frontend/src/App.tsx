@@ -4,6 +4,9 @@ import { AppShell } from './components/AppShell'
 import { RequireSession } from './components/RequireSession'
 import { StandaloneLayout } from './components/StandaloneLayout'
 import { AuthProvider } from './features/auth/AuthProvider'
+import { DepartmentsTab } from './features/reference-data/DepartmentsTab'
+import { ReferenceDataPage } from './features/reference-data/ReferenceDataPage'
+import { ReferenceDataPlaceholder } from './features/reference-data/ReferenceDataPlaceholder'
 import { AccountSection } from './features/settings/AccountSection'
 import { HouseholdSection } from './features/settings/HouseholdSection'
 import { SecuritySection } from './features/settings/SecuritySection'
@@ -41,6 +44,45 @@ export function App() {
             <Route path="progress" element={<MilestonesPage />} />
             <Route path="settings" element={<SettingsPage />}>
               <Route index element={<HouseholdSection />} />
+              <Route path="reference-data" element={<ReferenceDataPage />}>
+                <Route index element={<DepartmentsTab />} />
+                <Route
+                  path="units"
+                  element={
+                    <ReferenceDataPlaceholder
+                      title="Units"
+                      description="Unit symbols, dimensions, conversion factors, and aliases."
+                    />
+                  }
+                />
+                <Route
+                  path="ingredients"
+                  element={
+                    <ReferenceDataPlaceholder
+                      title="Ingredients"
+                      description="Canonical ingredients, departments, aliases, and merge."
+                    />
+                  }
+                />
+                <Route
+                  path="proteins"
+                  element={
+                    <ReferenceDataPlaceholder
+                      title="Proteins"
+                      description="Primary proteins used to space out dinner repeats."
+                    />
+                  }
+                />
+                <Route
+                  path="tags"
+                  element={
+                    <ReferenceDataPlaceholder
+                      title="Tags"
+                      description="Recipe tags used for filtering and browsing."
+                    />
+                  }
+                />
+              </Route>
               <Route path="users" element={<UsersSection />} />
               <Route path="security" element={<SecuritySection />} />
               <Route path="account" element={<AccountSection />} />

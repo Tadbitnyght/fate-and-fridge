@@ -19,6 +19,18 @@ export const ErrorCodes = {
   Forbidden: 'FORBIDDEN',
   IpNotAllowed: 'IP_NOT_ALLOWED',
   AuthModeDowngradeNotSupported: 'AUTH_MODE_DOWNGRADE_NOT_SUPPORTED',
+  // M2 reference-data codes (docs/API.md §22).
+  DepartmentInUse: 'DEPARTMENT_IN_USE',
+  UnitExists: 'UNIT_EXISTS',
+  AliasExists: 'ALIAS_EXISTS',
+  UnitInUse: 'UNIT_IN_USE',
+  IngredientExists: 'INGREDIENT_EXISTS',
+  IngredientInUse: 'INGREDIENT_IN_USE',
+  InvalidUnitDimensionChange: 'INVALID_UNIT_DIMENSION_CHANGE',
+  ProteinExists: 'PROTEIN_EXISTS',
+  ProteinInUse: 'PROTEIN_IN_USE',
+  TagExists: 'TAG_EXISTS',
+  TagInUse: 'TAG_IN_USE',
 } as const
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes]
