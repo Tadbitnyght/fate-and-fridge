@@ -9,6 +9,12 @@ namespace FateAndFridge.Api.Services;
 /// Stable <c>audit_events.event_type</c> values for reference-data changes
 /// (docs/DATABASE.md §10, docs/M2_PLAN.md §3 M2-02).
 /// </summary>
+/// <remarks>
+/// The vocabulary is intentionally open: <c>event_type</c> and
+/// <c>entity_type</c> are plain strings with no database CHECK constraint, so
+/// M12 can add calendar/user/settings events without a service or schema
+/// change. These constants are the canonical M2 reference-data set.
+/// </remarks>
 public static class AuditEventTypes
 {
     public const string Created = "created";
@@ -30,6 +36,11 @@ public static class AuditEventTypes
 /// Stable <c>audit_events.entity_type</c> values for the M2 reference data
 /// (docs/DATABASE.md §10).
 /// </summary>
+/// <remarks>
+/// The vocabulary is intentionally open (see <see cref="AuditEventTypes"/>):
+/// M12 extends both sets without service or schema changes; these constants
+/// are the canonical M2 reference-data set.
+/// </remarks>
 public static class AuditEntityTypes
 {
     public const string Department = "department";
@@ -69,6 +80,11 @@ public interface IAuditService
     /// before their own <c>SaveChanges</c>/commit so the audit row and the
     /// change it describes commit or roll back together.
     /// </summary>
+    /// <remarks>
+    /// Argument validation runs synchronously, so invalid entries throw
+    /// directly from this method (it is not <c>async</c>). Staging failures are
+    /// logged and rethrown; callers must not swallow them.
+    /// </remarks>
     Task WriteAsync(AuditEventEntry entry, CancellationToken cancellationToken = default);
 }
 

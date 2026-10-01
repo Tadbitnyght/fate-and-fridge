@@ -389,6 +389,8 @@ Created in M2 (ahead of the M12 admin viewer) so that reference-data merges, ret
 
 `AuditService` writes participate in the caller's transaction: callers stage the audit row before `SaveChanges`, so it commits atomically with the change; a failed audit write fails the operation rather than commit unaudited.
 
+Event and entity types are open strings by design (no database CHECK constraint); the M2 constants in `AuditService` are the canonical reference-data set, and M12 extends them without schema changes.
+
 Do not log ordinary page views.
 
 ---

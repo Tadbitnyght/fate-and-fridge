@@ -4,6 +4,7 @@ using FateAndFridge.Api.Services;
 using FateAndFridge.Api.Tests.Support;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace FateAndFridge.Api.Tests;
@@ -92,6 +93,26 @@ public sealed class AuditServiceUnitTests
     }
 
     [Fact]
+    public async Task WriteAsync_logs_an_error_and_rethrows_when_metadata_cannot_be_serialized()
+    {
+        await using var context = CreateContext();
+        var logger = new RecordingLogger<AuditService>();
+        var service = new AuditService(context, new TestTimeProvider(Start), logger);
+
+        // System.Text.Json rejects NaN, so metadata serialization fails before
+        // the row reaches the change tracker.
+        await FluentActions.Awaiting(() => service.WriteAsync(new AuditEventEntry(
+                AuditEventTypes.Updated,
+                AuditEntityTypes.Unit,
+                Metadata: new Dictionary<string, object?> { ["base_factor"] = double.NaN })))
+            .Should().ThrowAsync<ArgumentException>();
+
+        logger.Entries.Should().ContainSingle(entry => entry.Level == LogLevel.Error);
+        context.ChangeTracker.Entries<AuditEvent>().Should().BeEmpty(
+            "a failed staging attempt must not leave a partial audit row");
+    }
+
+    [Fact]
     public async Task WriteAsync_rejects_a_null_entry()
     {
         using var context = CreateContext();
@@ -131,4 +152,22 @@ public sealed class AuditServiceUnitTests
 
     private static AuditService CreateService(AppDbContext context, TestTimeProvider clock) =>
         new(context, clock, NullLogger<AuditService>.Instance);
+
+    private sealed class RecordingLogger<T> : ILogger<T>
+    {
+        public List<(LogLevel Level, string Message)> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter) =>
+            Entries.Add((logLevel, formatter(state, exception)));
+    }
 }
