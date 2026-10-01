@@ -128,8 +128,11 @@ var migrateOnly = args.Contains("--migrate");
 if (migrateOnly || app.Configuration.GetValue("Database:MigrateOnStartup", false))
 {
     await DatabaseMigrator.MigrateWithRetryAsync(app.Services, app.Logger);
-    await ReferenceDataSeeder.SeedAtStartupAsync(app.Services, app.Logger);
 }
+
+// M2-04: seeding runs on every startup, even when automatic migrations are
+// disabled, so the reference defaults exist regardless of deployment config.
+await ReferenceDataSeeder.SeedAtStartupAsync(app.Services, app.Logger);
 
 if (migrateOnly)
 {

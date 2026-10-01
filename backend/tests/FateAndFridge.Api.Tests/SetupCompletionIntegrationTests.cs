@@ -255,7 +255,8 @@ public sealed class SetupCompletionIntegrationTests(M1SetupFixture fixture) : IA
         await using (var context = fixture.CreateContext())
         {
             (await context.HouseholdSettings.CountAsync(cancellationToken)).Should().Be(0);
-            (await context.ApplicationSettings.CountAsync(cancellationToken)).Should().Be(0);
+            (await context.ApplicationSettings.CountAsync(
+                setting => setting.Key != ReferenceDataSeeder.SeededKey, cancellationToken)).Should().Be(0);
             (await context.Users.CountAsync(cancellationToken)).Should().Be(0);
         }
 
@@ -377,7 +378,8 @@ public sealed class SetupCompletionIntegrationTests(M1SetupFixture fixture) : IA
         {
             (await context.HouseholdSettings.CountAsync(cancellationToken)).Should().Be(0);
             (await context.Users.CountAsync(cancellationToken)).Should().Be(0);
-            (await context.ApplicationSettings.CountAsync(cancellationToken)).Should().Be(0);
+            (await context.ApplicationSettings.CountAsync(
+                setting => setting.Key != ReferenceDataSeeder.SeededKey, cancellationToken)).Should().Be(0);
         }
 
         var statusResponse = await client.GetAsync("/api/v1/setup/status", cancellationToken);
@@ -419,7 +421,8 @@ public sealed class SetupCompletionIntegrationTests(M1SetupFixture fixture) : IA
 
             await using var context = fixture.CreateContext();
             (await context.HouseholdSettings.CountAsync(cancellationToken)).Should().Be(0);
-            (await context.ApplicationSettings.CountAsync(cancellationToken)).Should().Be(0);
+            (await context.ApplicationSettings.CountAsync(
+                setting => setting.Key != ReferenceDataSeeder.SeededKey, cancellationToken)).Should().Be(0);
         }
         finally
         {
@@ -455,7 +458,8 @@ public sealed class SetupCompletionIntegrationTests(M1SetupFixture fixture) : IA
 
         await using var context = fixture.CreateContext();
         (await context.HouseholdSettings.CountAsync(cancellationToken)).Should().Be(0);
-        (await context.ApplicationSettings.CountAsync(cancellationToken)).Should().Be(0);
+        (await context.ApplicationSettings.CountAsync(
+            setting => setting.Key != ReferenceDataSeeder.SeededKey, cancellationToken)).Should().Be(0);
     }
 
     [Fact]
@@ -530,7 +534,8 @@ public sealed class SetupCompletionIntegrationTests(M1SetupFixture fixture) : IA
         {
             (await context.HouseholdSettings.CountAsync(cancellationToken)).Should().Be(0);
             (await context.Users.CountAsync(cancellationToken)).Should().Be(0);
-            (await context.ApplicationSettings.CountAsync(cancellationToken)).Should().Be(0);
+            (await context.ApplicationSettings.CountAsync(
+                setting => setting.Key != ReferenceDataSeeder.SeededKey, cancellationToken)).Should().Be(0);
         }
 
         var status = await client.GetAsync("/api/v1/setup/status", cancellationToken);

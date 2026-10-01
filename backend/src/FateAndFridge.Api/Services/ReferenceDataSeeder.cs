@@ -6,11 +6,13 @@ namespace FateAndFridge.Api.Services;
 
 /// <summary>
 /// Idempotent startup seeder for the default reference data
-/// (docs/M2_PLAN.md §1.1, §2). The seeder runs only while
-/// <c>application_settings.reference_data_seeded</c> is absent; it inserts what
-/// is missing, never updates or deletes an existing row, and records the flag
-/// in the same transaction as the inserts. Concurrent invocations serialize on
-/// a transaction-scoped PostgreSQL advisory lock, and the unique indexes remain
+/// (docs/M2_PLAN.md §1.1, §2). <c>Program</c> invokes it on every startup (after
+/// migrations when automatic migration is enabled or <c>--migrate</c> is
+/// passed), and it is a no-op once
+/// <c>application_settings.reference_data_seeded</c> exists. It inserts what is
+/// missing, never updates or deletes an existing row, and records the flag in
+/// the same transaction as the inserts. Concurrent invocations serialize on a
+/// transaction-scoped PostgreSQL advisory lock, and the unique indexes remain
 /// the backstop.
 /// </summary>
 public sealed class ReferenceDataSeeder(AppDbContext dbContext)
@@ -27,9 +29,10 @@ public sealed class ReferenceDataSeeder(AppDbContext dbContext)
     public const long AdvisoryLockKey = 0x4641465244463031L;
 
     /// <summary>
-    /// Startup hook used by <c>Program</c> after migrations: runs the seeder in
-    /// its own scope, logs the outcome, and rethrows failures so an unseeded
-    /// reference dataset never becomes a valid boot state.
+    /// Startup hook used by <c>Program</c> on every startup, after any
+    /// configured migrations: runs the seeder in its own scope, logs the
+    /// outcome, and rethrows failures so an unseeded reference dataset never
+    /// becomes a valid boot state.
     /// </summary>
     public static async Task SeedAtStartupAsync(
         IServiceProvider services,
@@ -210,16 +213,8 @@ public sealed class ReferenceDataSeeder(AppDbContext dbContext)
     {
         var units = await dbContext.Units
             .AsNoTracking()
-            .Select(unit => new { unit.Id, unit.Symbol, unit.NormalizedName })
+            .Select(unit => new { unit.Id, unit.Symbol, unit.NormalizedName, unit.Dimension })
             .ToListAsync(cancellationToken);
-
-        var idsBySymbol = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
-        var idsByName = new Dictionary<string, long>(StringComparer.Ordinal);
-        foreach (var unit in units)
-        {
-            idsBySymbol.TryAdd(unit.Symbol, unit.Id);
-            idsByName.TryAdd(unit.NormalizedName, unit.Id);
-        }
 
         var knownAliases = (await dbContext.UnitAliases
                 .AsNoTracking()
@@ -232,11 +227,21 @@ public sealed class ReferenceDataSeeder(AppDbContext dbContext)
         foreach (var seed in ReferenceDataSeedCatalog.Units)
         {
             var (_, normalizedName) = NormalizeSeedText(seed.DisplayName);
-            if (!idsBySymbol.TryGetValue(seed.Symbol, out var unitId)
-                && !idsByName.TryGetValue(normalizedName, out unitId))
+            var unit = units.FirstOrDefault(candidate =>
+                    string.Equals(candidate.Symbol, seed.Symbol, StringComparison.OrdinalIgnoreCase))
+                ?? units.FirstOrDefault(candidate => candidate.NormalizedName == normalizedName);
+            if (unit is null)
             {
                 throw new InvalidOperationException(
                     $"Seed unit '{seed.Symbol}' is missing after the unit insert.");
+            }
+
+            if (unit.Dimension != seed.Dimension)
+            {
+                // Same symbol or normalized name but a recognizably different
+                // unit (for example a count "oz"): leave the user's unit and its
+                // aliases completely alone.
+                continue;
             }
 
             // Per-unit uniqueness: "t" (tsp) and "T" (tbsp) normalize to the same
@@ -246,11 +251,11 @@ public sealed class ReferenceDataSeeder(AppDbContext dbContext)
             foreach (var alias in seed.Aliases)
             {
                 var (aliasDisplay, aliasNormalized) = NormalizeSeedText(alias);
-                if (knownAliases.Add((unitId, aliasNormalized)))
+                if (knownAliases.Add((unit.Id, aliasNormalized)))
                 {
                     missing.Add(new UnitAlias
                     {
-                        UnitId = unitId,
+                        UnitId = unit.Id,
                         Alias = aliasDisplay,
                         NormalizedAlias = aliasNormalized,
                     });

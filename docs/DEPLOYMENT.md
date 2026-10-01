@@ -143,7 +143,8 @@ sudo docker compose ps
 
 Migrations run automatically at container start
 (`Database__MigrateOnStartup=true` in `compose.yaml`, with retries while
-PostgreSQL warms up). Health endpoints:
+PostgreSQL warms up). `--migrate` now also backfills the default reference data
+once (idempotent). Health endpoints:
 
 - App: `http://192.168.0.2:50080/api/v1/health`
 - Database: `http://192.168.0.2:50080/api/v1/health/db`

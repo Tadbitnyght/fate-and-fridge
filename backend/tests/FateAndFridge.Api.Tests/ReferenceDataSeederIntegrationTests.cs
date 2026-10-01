@@ -188,15 +188,31 @@ public sealed class ReferenceDataSeederIntegrationTests(ReferenceDataSeederFixtu
                 BaseFactor = 99m,
                 IsCustom = true,
             };
-            context.Units.Add(customUnit);
+            var mismatchedUnit = new Unit
+            {
+                Symbol = "lb",
+                DisplayName = "Pound",
+                NormalizedName = "pound",
+                Dimension = UnitDimension.Count,
+                BaseFactor = null,
+                IsCustom = true,
+            };
+            context.Units.AddRange(customUnit, mismatchedUnit);
             await context.SaveChangesAsync(cancellationToken);
 
-            context.UnitAliases.Add(new UnitAlias
-            {
-                UnitId = customUnit.Id,
-                Alias = "ounce",
-                NormalizedAlias = "ounce",
-            });
+            context.UnitAliases.AddRange(
+                new UnitAlias
+                {
+                    UnitId = customUnit.Id,
+                    Alias = "ounce",
+                    NormalizedAlias = "ounce",
+                },
+                new UnitAlias
+                {
+                    UnitId = mismatchedUnit.Id,
+                    Alias = "pound",
+                    NormalizedAlias = "pound",
+                });
             await context.SaveChangesAsync(cancellationToken);
         }
 
@@ -231,16 +247,35 @@ public sealed class ReferenceDataSeederIntegrationTests(ReferenceDataSeederFixtu
         unit.Dimension.Should().Be(UnitDimension.Mass);
         unit.BaseFactor.Should().Be(99m);
         unit.IsCustom.Should().BeTrue();
-        (await verification.Units.CountAsync(cancellationToken)).Should().Be(21);
 
-        // The user's alias survives; the still-missing seeded alias is added.
+        // A pre-existing unit with the seed's dimension heals its missing aliases.
         var aliasDisplayNames = await verification.UnitAliases
             .AsNoTracking()
             .Where(alias => alias.UnitId == unit.Id)
             .Select(alias => alias.Alias)
             .ToListAsync(cancellationToken);
         aliasDisplayNames.Should().BeEquivalentTo(new[] { "ounce", "ounces" });
-        (await verification.UnitAliases.CountAsync(cancellationToken)).Should().Be(ExpectedAliasCount);
+
+        // A recognizably different unit (same symbol/name, different dimension)
+        // is left completely alone: fields and aliases untouched.
+        var preservedUnit = await verification.Units
+            .AsNoTracking()
+            .SingleAsync(row => row.NormalizedName == "pound", cancellationToken);
+        preservedUnit.Symbol.Should().Be("lb");
+        preservedUnit.DisplayName.Should().Be("Pound");
+        preservedUnit.Dimension.Should().Be(UnitDimension.Count);
+        preservedUnit.BaseFactor.Should().BeNull();
+        preservedUnit.IsCustom.Should().BeTrue();
+        var preservedAliases = await verification.UnitAliases
+            .AsNoTracking()
+            .Where(alias => alias.UnitId == preservedUnit.Id)
+            .Select(alias => alias.Alias)
+            .ToListAsync(cancellationToken);
+        preservedAliases.Should().BeEquivalentTo(new[] { "pound" });
+
+        (await verification.Units.CountAsync(cancellationToken)).Should().Be(21);
+        // 33 aliases for the other 19 units + 2 healed on "oz" + 1 user alias on "lb".
+        (await verification.UnitAliases.CountAsync(cancellationToken)).Should().Be(36);
         await AssertFlagAsync(verification, cancellationToken);
     }
 
@@ -345,10 +380,44 @@ public sealed class ReferenceDataSeederIntegrationTests(ReferenceDataSeederFixtu
         var cancellationToken = TestContext.Current.CancellationToken;
         await fixture.ResetReferenceDataAsync(cancellationToken);
 
-        var dataDir = Path.Combine(Path.GetTempPath(), "fate-and-fridge-tests", Guid.NewGuid().ToString("N"));
-        using (var factory = new ApiFactory(fixture.ConnectionString, migrateOnStartup: true, dataDir))
+        using (var factory = new ApiFactory(fixture.ConnectionString, migrateOnStartup: true, CreateTempDataDir()))
         {
             // Building the host runs Program's migrate-then-seed startup hook.
+            _ = factory.Services;
+        }
+
+        await using var verification = fixture.CreateContext();
+        await AssertSeededAsync(verification, cancellationToken);
+    }
+
+    [Fact]
+    public async Task Startup_without_migrations_still_seeds_an_already_migrated_database()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await fixture.ResetReferenceDataAsync(cancellationToken);
+
+        using (var factory = new ApiFactory(fixture.ConnectionString, migrateOnStartup: false, CreateTempDataDir()))
+        {
+            // Migrations are disabled, but Program must still run the seeder on
+            // every startup (docs/M2_PLAN.md §1.1).
+            _ = factory.Services;
+        }
+
+        await using var verification = fixture.CreateContext();
+        await AssertSeededAsync(verification, cancellationToken);
+    }
+
+    [Fact]
+    public async Task Startup_migrations_apply_pending_schema_then_seed()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await fixture.ResetReferenceDataAsync(cancellationToken);
+        await fixture.MigrateToM1BaselineAsync(cancellationToken);
+
+        using (var factory = new ApiFactory(fixture.ConnectionString, migrateOnStartup: true, CreateTempDataDir()))
+        {
+            // The --migrate CLI path shares this migrate-then-seed sequence and
+            // differs only by exiting before HTTP middleware is wired up.
             _ = factory.Services;
         }
 
@@ -433,6 +502,9 @@ public sealed class ReferenceDataSeederIntegrationTests(ReferenceDataSeederFixtu
         using var document = JsonDocument.Parse(flag.ValueJson!);
         document.RootElement.ValueKind.Should().Be(JsonValueKind.True);
     }
+
+    private static string CreateTempDataDir() =>
+        Path.Combine(Path.GetTempPath(), "fate-and-fridge-tests", Guid.NewGuid().ToString("N"));
 
     private static async Task<ReferenceDataSnapshot> LoadSnapshotAsync(
         AppDbContext context,

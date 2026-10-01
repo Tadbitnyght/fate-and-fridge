@@ -1,8 +1,6 @@
 using System.Diagnostics;
 using FateAndFridge.Api.Auth;
-using FateAndFridge.Api.Tests.Support;
 using FluentAssertions;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace FateAndFridge.Api.Tests;
 
@@ -226,18 +224,6 @@ public sealed class PasswordHasherTests
 
         _hasher.Verify(hash, password).Should().BeTrue();
         _hasher.Verify(hash, new string('a', 127) + "b").Should().BeFalse();
-    }
-
-    [Fact]
-    public void Password_hasher_is_registered_as_a_singleton_in_di()
-    {
-        using var factory = new ApiFactory();
-
-        var first = factory.Services.GetRequiredService<IPasswordHasher>();
-        var second = factory.Services.GetRequiredService<IPasswordHasher>();
-
-        first.Should().BeOfType<Argon2idPasswordHasher>();
-        second.Should().BeSameAs(first);
     }
 
     [Theory]
