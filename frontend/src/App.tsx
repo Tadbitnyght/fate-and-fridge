@@ -6,8 +6,9 @@ import { StandaloneLayout } from './components/StandaloneLayout'
 import { AuthProvider } from './features/auth/AuthProvider'
 import { DepartmentsTab } from './features/reference-data/DepartmentsTab'
 import { IngredientsTab } from './features/reference-data/IngredientsTab'
+import { ProteinsTab } from './features/reference-data/ProteinsTab'
 import { ReferenceDataPage } from './features/reference-data/ReferenceDataPage'
-import { ReferenceDataPlaceholder } from './features/reference-data/ReferenceDataPlaceholder'
+import { TagsTab } from './features/reference-data/TagsTab'
 import { UnitsTab } from './features/reference-data/UnitsTab'
 import { AccountSection } from './features/settings/AccountSection'
 import { HouseholdSection } from './features/settings/HouseholdSection'
@@ -50,24 +51,8 @@ export function App() {
                 <Route index element={<DepartmentsTab />} />
                 <Route path="units" element={<UnitsTab />} />
                 <Route path="ingredients" element={<IngredientsTab />} />
-                <Route
-                  path="proteins"
-                  element={
-                    <ReferenceDataPlaceholder
-                      title="Proteins"
-                      description="Primary proteins used to space out dinner repeats."
-                    />
-                  }
-                />
-                <Route
-                  path="tags"
-                  element={
-                    <ReferenceDataPlaceholder
-                      title="Tags"
-                      description="Recipe tags used for filtering and browsing."
-                    />
-                  }
-                />
+                <Route path="proteins" element={<ProteinsTab />} />
+                <Route path="tags" element={<TagsTab />} />
               </Route>
               <Route path="users" element={<UsersSection />} />
               <Route path="security" element={<SecuritySection />} />

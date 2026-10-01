@@ -5,12 +5,18 @@ import {
   addUnitAlias,
   createDepartment,
   createIngredient,
+  createProtein,
+  createTag,
   createUnit,
   deleteDepartment,
   deleteIngredient,
+  deleteProtein,
+  deleteTag,
   deleteUnit,
   listDepartments,
   listIngredients,
+  listProteins,
+  listTags,
   listUnits,
   mergeIngredients,
   removeIngredientAlias,
@@ -18,20 +24,29 @@ import {
   reorderDepartments,
   retireDepartment,
   retireIngredient,
+  retireProtein,
   retireUnit,
   updateDepartment,
   updateIngredient,
+  updateProtein,
+  updateTag,
   updateUnit,
   type CreateIngredientRequest,
+  type CreateProteinRequest,
+  type CreateTagRequest,
   type CreateUnitRequest,
   type Department,
   type DepartmentListParams,
   type Ingredient,
   type IngredientMergeRequest,
+  type Protein,
   type ReferenceListParams,
+  type Tag,
   type Unit,
   type UpdateDepartmentRequest,
   type UpdateIngredientRequest,
+  type UpdateProteinRequest,
+  type UpdateTagRequest,
   type UpdateUnitRequest,
 } from '../../api/referenceData'
 
@@ -265,6 +280,116 @@ export function useMergeIngredients() {
   const refresh = useRefreshIngredients()
   return useMutation({
     mutationFn: (request: IngredientMergeRequest) => mergeIngredients(request),
+    onSuccess: refresh,
+  })
+}
+
+/* ---------- proteins ---------- */
+
+/** Query-key prefix for every protein-list variant. */
+export const proteinsQueryKey = ['reference-data', 'proteins'] as const
+
+export function useProteins(search: string, includeRetired: boolean) {
+  const params: ReferenceListParams = {
+    search: search.length > 0 ? search : undefined,
+    include_retired: includeRetired,
+    limit: 100,
+  }
+  return useQuery<Protein[]>({
+    queryKey: [...proteinsQueryKey, params],
+    queryFn: () => listProteins(params),
+    retry: false,
+  })
+}
+
+function useRefreshProteins() {
+  const queryClient = useQueryClient()
+  return async () => {
+    await queryClient.invalidateQueries({ queryKey: proteinsQueryKey })
+  }
+}
+
+export function useCreateProtein() {
+  const refresh = useRefreshProteins()
+  return useMutation({
+    mutationFn: (request: CreateProteinRequest) => createProtein(request),
+    onSuccess: refresh,
+  })
+}
+
+export function useUpdateProtein() {
+  const refresh = useRefreshProteins()
+  return useMutation({
+    mutationFn: ({ id, request }: { id: number; request: UpdateProteinRequest }) =>
+      updateProtein(id, request),
+    onSuccess: refresh,
+  })
+}
+
+export function useRetireProtein() {
+  const refresh = useRefreshProteins()
+  return useMutation({
+    mutationFn: (id: number) => retireProtein(id),
+    onSuccess: refresh,
+  })
+}
+
+export function useDeleteProtein() {
+  const refresh = useRefreshProteins()
+  return useMutation({
+    mutationFn: (id: number) => deleteProtein(id),
+    onSuccess: refresh,
+  })
+}
+
+/* ---------- tags ---------- */
+
+/**
+ * Query-key prefix for every tag-list variant. Tags have no retirement or
+ * `is_active` flag in the M2 contract, so there is no retired filter here.
+ */
+export const tagsQueryKey = ['reference-data', 'tags'] as const
+
+export function useTags(search: string) {
+  const params: ReferenceListParams = {
+    search: search.length > 0 ? search : undefined,
+    limit: 100,
+  }
+  return useQuery<Tag[]>({
+    queryKey: [...tagsQueryKey, params],
+    queryFn: () => listTags(params),
+    retry: false,
+  })
+}
+
+function useRefreshTags() {
+  const queryClient = useQueryClient()
+  return async () => {
+    await queryClient.invalidateQueries({ queryKey: tagsQueryKey })
+  }
+}
+
+export function useCreateTag() {
+  const refresh = useRefreshTags()
+  return useMutation({
+    mutationFn: (request: CreateTagRequest) => createTag(request),
+    onSuccess: refresh,
+  })
+}
+
+export function useUpdateTag() {
+  const refresh = useRefreshTags()
+  return useMutation({
+    mutationFn: ({ id, request }: { id: number; request: UpdateTagRequest }) =>
+      updateTag(id, request),
+    onSuccess: refresh,
+  })
+}
+
+export function useDeleteTag() {
+  const refresh = useRefreshTags()
+  return useMutation({
+    mutationFn: (id: number) => deleteTag(id),
     onSuccess: refresh,
   })
 }

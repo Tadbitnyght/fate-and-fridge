@@ -2,7 +2,7 @@ import { screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { App } from '../../App'
-import type { Department, Ingredient, Unit } from '../../api/referenceData'
+import type { Department, Ingredient, Protein, Tag, Unit } from '../../api/referenceData'
 import {
   adminSession,
   memberSession,
@@ -40,6 +40,17 @@ const tomato: Ingredient = {
   created_at: '2026-09-01T10:00:00Z',
   updated_at: '2026-09-01T10:00:00Z',
   aliases: [{ id: 1, alias: 'tomatoes' }],
+}
+
+const chicken: Protein = {
+  id: 30,
+  name: 'Chicken',
+  is_active: true,
+}
+
+const weeknight: Tag = {
+  id: 40,
+  name: 'Weeknight',
 }
 
 /** Member with `reference_data.edit` but no Admin role: no hard deletes. */
@@ -111,19 +122,35 @@ describe('reference data shell', () => {
     expect(screen.getByRole('navigation', { name: 'Reference data sections' })).toBeInTheDocument()
   })
 
-  it.each([
-    { route: '/settings/reference-data/proteins', title: 'Proteins' },
-    { route: '/settings/reference-data/tags', title: 'Tags' },
-  ])('renders the $title placeholder for later stages', async ({ route, title }) => {
+  it('routes the Proteins tab to the proteins table instead of a placeholder', async () => {
     installMockFetch([
       { path: '/setup/status', body: setupCompleteStatus },
       { path: '/auth/session', body: adminSession },
+      { path: '/proteins', body: [chicken] },
     ])
 
-    renderWithProviders(<App />, { route })
+    renderWithProviders(<App />, { route: '/settings/reference-data/proteins' })
 
-    expect(await screen.findByRole('heading', { name: title })).toBeInTheDocument()
-    expect(screen.getByText(/coming in this milestone/i)).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Proteins' })).toBeInTheDocument()
+    const table = await screen.findByRole('table', { name: 'Proteins' })
+    expect(within(table).getByRole('rowheader', { name: 'Chicken' })).toBeInTheDocument()
+    expect(screen.queryByText(/coming in this milestone/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('navigation', { name: 'Reference data sections' })).toBeInTheDocument()
+  })
+
+  it('routes the Tags tab to the tags table instead of a placeholder', async () => {
+    installMockFetch([
+      { path: '/setup/status', body: setupCompleteStatus },
+      { path: '/auth/session', body: adminSession },
+      { path: '/tags', body: [weeknight] },
+    ])
+
+    renderWithProviders(<App />, { route: '/settings/reference-data/tags' })
+
+    expect(await screen.findByRole('heading', { name: 'Tags' })).toBeInTheDocument()
+    const table = await screen.findByRole('table', { name: 'Tags' })
+    expect(within(table).getByRole('rowheader', { name: 'Weeknight' })).toBeInTheDocument()
+    expect(screen.queryByText(/coming in this milestone/i)).not.toBeInTheDocument()
     expect(screen.getByRole('navigation', { name: 'Reference data sections' })).toBeInTheDocument()
   })
 
