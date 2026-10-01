@@ -12,7 +12,8 @@
     "format:check": "prettier --check .",
     "typecheck": "tsc -b",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:stack": "playwright test e2e/stack"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.0",
