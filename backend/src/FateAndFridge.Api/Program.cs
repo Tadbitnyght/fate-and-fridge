@@ -94,6 +94,11 @@ builder.Services.AddScoped<DepartmentService>();
 // M2-06: units and unit aliases, plus the recipe-usage seam consumed by the
 // reference-data hard deletes (M2-08/M2-10 consume the other methods).
 builder.Services.AddScoped<UnitService>();
+
+// M2-08: ingredients and their aliases; the canonical name and every alias
+// share one global uniqueness namespace.
+builder.Services.AddScoped<IngredientService>();
+
 builder.Services.AddScoped<IReferenceUsageChecker, DefaultReferenceUsageChecker>();
 
 // M2-07: pure, dependency-free conversion between compatible units; stateless,
@@ -176,6 +181,7 @@ app.MapUserEndpoints();
 app.MapSettingsEndpoints();
 app.MapDepartmentEndpoints();
 app.MapUnitEndpoints();
+app.MapIngredientEndpoints();
 
 // Test-only permission probes (M1-09): mapped solely in the Testing
 // environment so the permission matrix can exercise server-side enforcement.

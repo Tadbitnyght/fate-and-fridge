@@ -49,5 +49,9 @@ public static class ErrorCodes
 
     public const string UnitInUse = "UNIT_IN_USE";
 
+    public const string IngredientExists = "INGREDIENT_EXISTS";
+
+    public const string IngredientInUse = "INGREDIENT_IN_USE";
+
     public const string InvalidUnitDimensionChange = "INVALID_UNIT_DIMENSION_CHANGE";
 }
