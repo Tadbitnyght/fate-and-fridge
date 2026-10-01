@@ -7,6 +7,7 @@ import { AuthProvider } from './features/auth/AuthProvider'
 import { DepartmentsTab } from './features/reference-data/DepartmentsTab'
 import { ReferenceDataPage } from './features/reference-data/ReferenceDataPage'
 import { ReferenceDataPlaceholder } from './features/reference-data/ReferenceDataPlaceholder'
+import { UnitsTab } from './features/reference-data/UnitsTab'
 import { AccountSection } from './features/settings/AccountSection'
 import { HouseholdSection } from './features/settings/HouseholdSection'
 import { SecuritySection } from './features/settings/SecuritySection'
@@ -46,15 +47,7 @@ export function App() {
               <Route index element={<HouseholdSection />} />
               <Route path="reference-data" element={<ReferenceDataPage />}>
                 <Route index element={<DepartmentsTab />} />
-                <Route
-                  path="units"
-                  element={
-                    <ReferenceDataPlaceholder
-                      title="Units"
-                      description="Unit symbols, dimensions, conversion factors, and aliases."
-                    />
-                  }
-                />
+                <Route path="units" element={<UnitsTab />} />
                 <Route
                   path="ingredients"
                   element={

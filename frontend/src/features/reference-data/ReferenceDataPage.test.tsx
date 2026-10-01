@@ -2,7 +2,7 @@ import { screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { App } from '../../App'
-import type { Department } from '../../api/referenceData'
+import type { Department, Unit } from '../../api/referenceData'
 import {
   adminSession,
   memberSession,
@@ -19,6 +19,17 @@ const produce: Department = {
   is_active: true,
   created_at: '2026-09-01T10:00:00Z',
   updated_at: '2026-09-01T10:00:00Z',
+}
+
+const gram: Unit = {
+  id: 10,
+  symbol: 'g',
+  display_name: 'gram',
+  dimension: 'mass',
+  base_factor: 1,
+  is_custom: false,
+  is_active: true,
+  aliases: [{ id: 1, alias: 'gram' }],
 }
 
 /** Member with `reference_data.edit` but no Admin role: no hard deletes. */
@@ -57,8 +68,23 @@ describe('reference data shell', () => {
     expect(await screen.findByRole('table', { name: 'Grocery departments' })).toBeInTheDocument()
   })
 
+  it('routes the Units tab to the units table instead of a placeholder', async () => {
+    installMockFetch([
+      { path: '/setup/status', body: setupCompleteStatus },
+      { path: '/auth/session', body: adminSession },
+      { path: '/units', body: [gram] },
+    ])
+
+    renderWithProviders(<App />, { route: '/settings/reference-data/units' })
+
+    expect(await screen.findByRole('heading', { name: 'Units' })).toBeInTheDocument()
+    const table = await screen.findByRole('table', { name: 'Units of measure' })
+    expect(within(table).getByRole('rowheader', { name: 'g' })).toBeInTheDocument()
+    expect(screen.queryByText(/coming in this milestone/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('navigation', { name: 'Reference data sections' })).toBeInTheDocument()
+  })
+
   it.each([
-    { route: '/settings/reference-data/units', title: 'Units' },
     { route: '/settings/reference-data/ingredients', title: 'Ingredients' },
     { route: '/settings/reference-data/proteins', title: 'Proteins' },
     { route: '/settings/reference-data/tags', title: 'Tags' },

@@ -1,15 +1,26 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
+  addUnitAlias,
   createDepartment,
+  createUnit,
   deleteDepartment,
+  deleteUnit,
   listDepartments,
+  listUnits,
+  removeUnitAlias,
   reorderDepartments,
   retireDepartment,
+  retireUnit,
   updateDepartment,
+  updateUnit,
+  type CreateUnitRequest,
   type Department,
   type DepartmentListParams,
+  type ReferenceListParams,
+  type Unit,
   type UpdateDepartmentRequest,
+  type UpdateUnitRequest,
 } from '../../api/referenceData'
 
 /**
@@ -80,6 +91,80 @@ export function useReorderDepartments() {
   const refresh = useRefreshDepartments()
   return useMutation({
     mutationFn: (ids: number[]) => reorderDepartments(ids),
+    onSuccess: refresh,
+  })
+}
+
+/* ---------- units ---------- */
+
+/** Query-key prefix for every units variant. */
+export const unitsQueryKey = ['reference-data', 'units'] as const
+
+export function useUnits(search: string, includeRetired: boolean) {
+  const params: ReferenceListParams = {
+    search: search.length > 0 ? search : undefined,
+    include_retired: includeRetired,
+    limit: 100,
+  }
+  return useQuery<Unit[]>({
+    queryKey: [...unitsQueryKey, params],
+    queryFn: () => listUnits(params),
+    retry: false,
+  })
+}
+
+function useRefreshUnits() {
+  const queryClient = useQueryClient()
+  return async () => {
+    await queryClient.invalidateQueries({ queryKey: unitsQueryKey })
+  }
+}
+
+export function useCreateUnit() {
+  const refresh = useRefreshUnits()
+  return useMutation({
+    mutationFn: (request: CreateUnitRequest) => createUnit(request),
+    onSuccess: refresh,
+  })
+}
+
+export function useUpdateUnit() {
+  const refresh = useRefreshUnits()
+  return useMutation({
+    mutationFn: ({ id, request }: { id: number; request: UpdateUnitRequest }) =>
+      updateUnit(id, request),
+    onSuccess: refresh,
+  })
+}
+
+export function useRetireUnit() {
+  const refresh = useRefreshUnits()
+  return useMutation({
+    mutationFn: (id: number) => retireUnit(id),
+    onSuccess: refresh,
+  })
+}
+
+export function useDeleteUnit() {
+  const refresh = useRefreshUnits()
+  return useMutation({
+    mutationFn: (id: number) => deleteUnit(id),
+    onSuccess: refresh,
+  })
+}
+
+export function useAddUnitAlias() {
+  const refresh = useRefreshUnits()
+  return useMutation({
+    mutationFn: ({ id, alias }: { id: number; alias: string }) => addUnitAlias(id, alias),
+    onSuccess: refresh,
+  })
+}
+
+export function useRemoveUnitAlias() {
+  const refresh = useRefreshUnits()
+  return useMutation({
+    mutationFn: ({ id, aliasId }: { id: number; aliasId: number }) => removeUnitAlias(id, aliasId),
     onSuccess: refresh,
   })
 }
