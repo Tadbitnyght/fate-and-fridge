@@ -269,3 +269,6 @@ Every new issue must identify:
 - rejected
 
 The Lead Developer must reject "while we're here" feature expansion unless it is necessary to satisfy an approved requirement.
+
+### V1.x Enhancements (tracked)
+- Milestone progress page (issue #22) — delivered post-M1; classification stays V1.x (not part of the M0–M14 V1 plan). The Definition of Done now requires updating the progress manifest when a milestone completes.
