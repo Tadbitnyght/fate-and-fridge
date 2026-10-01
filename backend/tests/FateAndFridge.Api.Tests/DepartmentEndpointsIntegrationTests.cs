@@ -247,14 +247,12 @@ public sealed class DepartmentEndpointsIntegrationTests(M1SetupFixture fixture) 
         await MarkSetupCompletedAsync(cancellationToken);
         using var factory = await StartFactoryWithCleanReferenceDataAsync(cancellationToken);
 
-        for (var index = 1; index <= 25; index++)
-        {
-            await SeedDepartmentAsync($"Bulk {index:00}", index, cancellationToken: cancellationToken);
-        }
-
+        // More rows than the clamp so a broken clamp (Take(1000) without the
+        // Math.Min) would return 102 and fail the assertions below.
+        await SeedDepartmentRangeAsync(101, cancellationToken);
         await SeedDepartmentAsync(
             "Bulk Retired",
-            26,
+            102,
             isActive: false,
             cancellationToken: cancellationToken);
 
@@ -264,26 +262,44 @@ public sealed class DepartmentEndpointsIntegrationTests(M1SetupFixture fixture) 
             await session.Client.GetAsync(DepartmentsPath, cancellationToken),
             cancellationToken);
         defaults.GetArrayLength().Should().Be(20, "limit defaults to 20");
-        defaults.EnumerateArray().First().GetProperty("name").GetString().Should().Be("Bulk 01");
-        defaults.EnumerateArray().Last().GetProperty("name").GetString().Should().Be("Bulk 20");
+        defaults.EnumerateArray().First().GetProperty("name").GetString().Should().Be("Bulk 001");
+        defaults.EnumerateArray().Last().GetProperty("name").GetString().Should().Be("Bulk 020");
 
         var clamped = await ReadJsonAsync(
             await session.Client.GetAsync($"{DepartmentsPath}?limit=1000", cancellationToken),
             cancellationToken);
-        clamped.GetArrayLength().Should().Be(25, "the limit is clamped to 100, not exceeded");
+        clamped.GetArrayLength().Should().Be(100, "the limit is clamped to 100");
 
-        var withRetired = await ReadJsonAsync(
-            await session.Client.GetAsync($"{DepartmentsPath}?include_retired=true&limit=1000", cancellationToken),
+        var explicit100 = await ReadJsonAsync(
+            await session.Client.GetAsync($"{DepartmentsPath}?limit=100", cancellationToken),
             cancellationToken);
-        withRetired.GetArrayLength().Should().Be(26);
+        explicit100.GetArrayLength().Should().Be(100);
 
-        foreach (var query in new[] { "?limit=0", "?limit=banana" })
+        var retiredIncluded = await ReadJsonAsync(
+            await session.Client.GetAsync(
+                $"{DepartmentsPath}?search=Bulk Retired&include_retired=true",
+                cancellationToken),
+            cancellationToken);
+        retiredIncluded.GetArrayLength().Should().Be(1);
+        var retiredExcluded = await ReadJsonAsync(
+            await session.Client.GetAsync($"{DepartmentsPath}?search=Bulk Retired", cancellationToken),
+            cancellationToken);
+        retiredExcluded.GetArrayLength().Should().Be(0);
+
+        foreach (var query in new[] { "?limit=0", "?limit=-1", "?limit=banana" })
         {
             var invalid = await session.Client.GetAsync($"{DepartmentsPath}{query}", cancellationToken);
             invalid.StatusCode.Should().Be(HttpStatusCode.BadRequest);
             (await ReadErrorAsync(invalid, cancellationToken)).GetProperty("details")
                 .GetProperty("field_errors").TryGetProperty("limit", out _).Should().BeTrue();
         }
+
+        var controlCharacterSearch = await session.Client.GetAsync(
+            $"{DepartmentsPath}?search=%01",
+            cancellationToken);
+        controlCharacterSearch.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await ReadErrorAsync(controlCharacterSearch, cancellationToken)).GetProperty("details")
+            .GetProperty("field_errors").TryGetProperty("search", out _).Should().BeTrue();
 
         var invalidRetired = await session.Client.GetAsync(
             $"{DepartmentsPath}?include_retired=maybe",
@@ -904,6 +920,28 @@ public sealed class DepartmentEndpointsIntegrationTests(M1SetupFixture fixture) 
         context.GroceryDepartments.Add(department);
         await context.SaveChangesAsync(cancellationToken);
         return department;
+    }
+
+    /// <summary>Seeds a batch of active departments in one SaveChanges for bulk scenarios.</summary>
+    private async Task SeedDepartmentRangeAsync(int count, CancellationToken cancellationToken)
+    {
+        await using var context = fixture.CreateContext();
+        for (var index = 1; index <= count; index++)
+        {
+            var name = $"Bulk {index:000}";
+            var normalized = (ReferenceDataNormalizationResult.Success)ReferenceDataNormalizer.Normalize(name)!;
+            context.GroceryDepartments.Add(new GroceryDepartment
+            {
+                Name = normalized.Display,
+                NormalizedName = normalized.Normalized,
+                SortOrder = index,
+                IsActive = true,
+                CreatedAt = SeedTimestamp,
+                UpdatedAt = SeedTimestamp,
+            });
+        }
+
+        await context.SaveChangesAsync(cancellationToken);
     }
 
     private async Task SeedIngredientAsync(

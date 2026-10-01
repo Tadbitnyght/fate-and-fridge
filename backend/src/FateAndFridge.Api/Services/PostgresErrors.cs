@@ -12,4 +12,11 @@ internal static class PostgresErrors
         {
             SqlState: PostgresErrorCodes.UniqueViolation,
         };
+
+    /// <summary>True when the failure is a foreign-key violation (SQLSTATE 23503).</summary>
+    public static bool IsForeignKeyViolation(DbUpdateException exception) =>
+        exception.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.ForeignKeyViolation,
+        };
 }

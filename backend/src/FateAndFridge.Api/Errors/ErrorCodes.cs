@@ -38,7 +38,7 @@ public static class ErrorCodes
 
     public const string AuthModeDowngradeNotSupported = "AUTH_MODE_DOWNGRADE_NOT_SUPPORTED";
 
-    // M2 reference-data codes (docs/API.md §4).
+    // M2 reference-data codes (docs/API.md §22).
     public const string DepartmentInUse = "DEPARTMENT_IN_USE";
 
     public const string UnsupportedMediaType = "UNSUPPORTED_MEDIA_TYPE";

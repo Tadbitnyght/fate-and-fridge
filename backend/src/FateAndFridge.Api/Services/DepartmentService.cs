@@ -313,7 +313,21 @@ public sealed class DepartmentService(
                 ActorUserId: actorUserId),
             cancellationToken);
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception) when (PostgresErrors.IsForeignKeyViolation(exception))
+        {
+            // An ingredient can start referencing the department between the
+            // count check above and this delete; surface the same 409 as the
+            // pre-check instead of failing the request with a 500.
+            dbContext.ChangeTracker.Clear();
+            var concurrentCount = await dbContext.Ingredients.CountAsync(
+                ingredient => ingredient.DepartmentId == id,
+                cancellationToken);
+            return new DepartmentMutationResult.InUse(Math.Max(concurrentCount, 1));
+        }
 
         logger.LogInformation("Deleted department {DepartmentId}", id);
         return new DepartmentMutationResult.Success(ToRecord(department));
