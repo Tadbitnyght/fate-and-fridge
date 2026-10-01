@@ -1,9 +1,11 @@
+using System.Data;
 using System.Globalization;
 using System.Text.Json;
 using FateAndFridge.Api.Data;
 using FateAndFridge.Api.Data.Configurations;
 using FateAndFridge.Api.Domain;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace FateAndFridge.Api.Services;
 
@@ -73,6 +75,27 @@ public abstract record IngredientAliasMutationResult
 }
 
 /// <summary>
+/// Outcome of an ingredient merge attempt (docs/API.md §22). Success carries
+/// both post-mutation records so the caller can return the final state.
+/// </summary>
+public abstract record IngredientMergeResult
+{
+    private IngredientMergeResult()
+    {
+    }
+
+    public sealed record Success(
+        IngredientRecord Source,
+        IngredientRecord Target,
+        IReadOnlyList<string> SkippedAliases,
+        int ReassignedReferenceCount) : IngredientMergeResult;
+
+    public sealed record ValidationFailed(IReadOnlyDictionary<string, string[]> FieldErrors) : IngredientMergeResult;
+
+    public sealed record NotFound : IngredientMergeResult;
+}
+
+/// <summary>
 /// M2-08 ingredients management (docs/API.md §22, docs/DATABASE.md §4):
 /// searchable reference data whose canonical names and aliases share one global
 /// uniqueness namespace, an optional active department, per-ingredient aliases,
@@ -91,6 +114,10 @@ public sealed class IngredientService(
     private const string DuplicateAliasMessage = "aliases must not repeat the same normalized text.";
 
     private const string MergeReferenceReason = "merge_reference";
+
+    private const string InactiveReason = "inactive";
+
+    private const string AlreadyMergedReason = "already_merged";
 
     /// <summary>
     /// Lists ingredients ordered by id, prefix matches first when searching. The
@@ -609,6 +636,245 @@ public sealed class IngredientService(
 
         logger.LogInformation("Deleted ingredient {IngredientId}", id);
         return new IngredientMutationResult.Success(ToRecord(ingredient, []));
+    }
+
+    /// <summary>
+    /// Merges one ingredient into another (docs/API.md §22): in a single
+    /// transaction it locks both rows, reassigns recipe references through the
+    /// usage seam, moves the source's aliases to the target when their
+    /// normalized text is free of the target and of every other ingredient,
+    /// copies the source's canonical name to the target as an alias under the
+    /// same rule, retires the source with <c>merged_into_ingredient_id</c> set,
+    /// and stages one <c>merged</c> audit event with before/after snapshots.
+    /// </summary>
+    /// <remarks>
+    /// The source rows are excluded from the alias conflict checks because they
+    /// are removed as part of the move. Display strings that cannot move stay
+    /// on the retired source and are reported in <c>skipped_aliases</c>; the
+    /// source always keeps its canonical name.
+    /// </remarks>
+    public async Task<IngredientMergeResult> MergeAsync(
+        long sourceId,
+        long targetId,
+        string? ipAddress,
+        long? actorUserId,
+        CancellationToken cancellationToken = default)
+    {
+        if (sourceId == targetId)
+        {
+            return new IngredientMergeResult.ValidationFailed(
+                new Dictionary<string, string[]>(StringComparer.Ordinal)
+                {
+                    ["source_id"] = ["source_id and target_id must differ."],
+                });
+        }
+
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        var lockedIds = await LockIngredientRowsForUpdateAsync(sourceId, targetId, cancellationToken);
+        if (!lockedIds.Contains(sourceId) || !lockedIds.Contains(targetId))
+        {
+            return new IngredientMergeResult.NotFound();
+        }
+
+        var source = await dbContext.Ingredients.SingleAsync(
+            ingredient => ingredient.Id == sourceId,
+            cancellationToken);
+        var target = await dbContext.Ingredients.SingleAsync(
+            ingredient => ingredient.Id == targetId,
+            cancellationToken);
+
+        var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        ValidateMergeEndpoint(source, "source_id", errors);
+        ValidateMergeEndpoint(target, "target_id", errors);
+        if (errors.Count > 0)
+        {
+            return new IngredientMergeResult.ValidationFailed(errors);
+        }
+
+        var sourceAliases = await LoadAliasesAsync(sourceId, cancellationToken);
+        var targetAliases = await LoadAliasesAsync(targetId, cancellationToken);
+        var before = SnapshotJson(source, sourceAliases);
+
+        var reassigned = await usageChecker.ReassignIngredientReferencesAsync(
+            sourceId,
+            targetId,
+            cancellationToken);
+
+        var (removals, additions, skipped) = await PlanMergeAliasesAsync(
+            source,
+            target,
+            sourceAliases,
+            cancellationToken);
+
+        if (removals.Count > 0)
+        {
+            // Delete before insert so the global normalized-alias unique index
+            // never sees the same value on both ingredients.
+            dbContext.IngredientAliases.RemoveRange(removals);
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        dbContext.IngredientAliases.AddRange(additions);
+
+        var now = timeProvider.GetUtcNow();
+        source.IsActive = false;
+        source.MergedIntoIngredientId = targetId;
+        source.UpdatedAt = now;
+        if (additions.Count > 0)
+        {
+            target.UpdatedAt = now;
+        }
+
+        var removalIds = removals.Select(alias => alias.Id).ToHashSet();
+        var sourceAliasesAfter = sourceAliases
+            .Where(alias => !removalIds.Contains(alias.Id))
+            .ToArray();
+        var targetAliasesAfter = targetAliases.Concat(additions).ToArray();
+
+        await auditService.WriteAsync(
+            new AuditEventEntry(
+                AuditEventTypes.Merged,
+                AuditEntityTypes.Ingredient,
+                EntityId: source.Id.ToString(CultureInfo.InvariantCulture),
+                BeforeJson: before,
+                AfterJson: SnapshotJson(source, sourceAliasesAfter),
+                IpAddress: ipAddress,
+                ActorUserId: actorUserId,
+                Metadata: new Dictionary<string, object?>
+                {
+                    ["target_id"] = target.Id,
+                    ["reassigned_reference_count"] = reassigned,
+                    ["skipped_aliases"] = skipped.ToArray(),
+                }),
+            cancellationToken);
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        logger.LogInformation("Merged ingredient {SourceId} into {TargetId}", sourceId, targetId);
+        return new IngredientMergeResult.Success(
+            ToRecord(source, sourceAliasesAfter),
+            ToRecord(target, targetAliasesAfter),
+            skipped,
+            reassigned);
+    }
+
+    /// <summary>
+    /// Locks the source and target ingredient rows for the enclosing
+    /// transaction, in ascending id order, and returns the ids that exist.
+    /// </summary>
+    private async Task<HashSet<long>> LockIngredientRowsForUpdateAsync(
+        long sourceId,
+        long targetId,
+        CancellationToken cancellationToken)
+    {
+        var connection = dbContext.Database.GetDbConnection();
+        if (connection.State != ConnectionState.Open)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        await using var command = connection.CreateCommand();
+        command.Transaction = dbContext.Database.CurrentTransaction?.GetDbTransaction();
+        command.CommandText =
+            """
+            SELECT id
+            FROM ingredients
+            WHERE id IN (@sourceId, @targetId)
+            ORDER BY id
+            FOR UPDATE
+            """;
+
+        var sourceParameter = command.CreateParameter();
+        sourceParameter.ParameterName = "sourceId";
+        sourceParameter.Value = sourceId;
+        command.Parameters.Add(sourceParameter);
+
+        var targetParameter = command.CreateParameter();
+        targetParameter.ParameterName = "targetId";
+        targetParameter.Value = targetId;
+        command.Parameters.Add(targetParameter);
+
+        var ids = new HashSet<long>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            ids.Add(reader.GetInt64(0));
+        }
+
+        return ids;
+    }
+
+    /// <summary>
+    /// Splits the source's canonical name and aliases into rows that can move
+    /// to the target and display strings that must stay on the source because
+    /// the target or a third ingredient already owns the normalized value.
+    /// </summary>
+    private async Task<(List<IngredientAlias> Removals, List<IngredientAlias> Additions, List<string> Skipped)>
+        PlanMergeAliasesAsync(
+            Ingredient source,
+            Ingredient target,
+            IReadOnlyList<IngredientAlias> sourceAliases,
+            CancellationToken cancellationToken)
+    {
+        var removals = new List<IngredientAlias>();
+        var additions = new List<IngredientAlias>();
+        var skipped = new List<string>();
+        var planned = new HashSet<string>(StringComparer.Ordinal);
+
+        async Task PlanAsync(string display, string normalized, IngredientAlias? sourceAlias)
+        {
+            if (!planned.Add(normalized))
+            {
+                skipped.Add(display);
+                return;
+            }
+
+            // The source is excluded entirely: its values are moving, so a
+            // conflict here can only be the target or a third ingredient.
+            var conflict = await FindUniquenessConflictAsync(normalized, source.Id, cancellationToken);
+            if (conflict is not null)
+            {
+                skipped.Add(display);
+                return;
+            }
+
+            if (sourceAlias is not null)
+            {
+                removals.Add(sourceAlias);
+            }
+
+            additions.Add(new IngredientAlias
+            {
+                IngredientId = target.Id,
+                Alias = display,
+                NormalizedAlias = normalized,
+            });
+        }
+
+        await PlanAsync(source.CanonicalName, source.NormalizedName, sourceAlias: null);
+        foreach (var alias in sourceAliases)
+        {
+            await PlanAsync(alias.Alias, alias.NormalizedAlias, alias);
+        }
+
+        return (removals, additions, skipped);
+    }
+
+    private static void ValidateMergeEndpoint(
+        Ingredient ingredient,
+        string field,
+        Dictionary<string, string[]> errors)
+    {
+        if (ingredient.MergedIntoIngredientId is not null)
+        {
+            errors[field] = [AlreadyMergedReason];
+        }
+        else if (!ingredient.IsActive)
+        {
+            errors[field] = [InactiveReason];
+        }
     }
 
     private async Task ValidateDepartmentAsync(

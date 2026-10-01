@@ -35,6 +35,21 @@ public sealed record IngredientResponse(
             record.Aliases.Select(IngredientAliasResponse.From).ToArray());
 }
 
+/// <summary>Result of an ingredient merge (docs/API.md §22).</summary>
+public sealed record IngredientMergeResponse(
+    long SourceId,
+    long TargetId,
+    IReadOnlyList<string> SkippedAliases,
+    int ReassignedReferenceCount)
+{
+    public static IngredientMergeResponse From(IngredientMergeResult.Success success) =>
+        new(
+            success.Source.Id,
+            success.Target.Id,
+            success.SkippedAliases,
+            success.ReassignedReferenceCount);
+}
+
 /// <summary>
 /// M2-08 ingredients routes (docs/API.md §22): authenticated reads, writes gated
 /// by <c>reference_data.edit</c>, Admin-only hard delete, per-ingredient aliases,
@@ -54,6 +69,8 @@ public static class IngredientEndpoints
 
         group.MapGet("", ListIngredientsAsync).RequireAuthenticated();
         group.MapPost("", CreateIngredientAsync).RequirePermission(PermissionKeys.ReferenceDataEdit);
+        group.MapPost("/merge", MergeIngredientsAsync).RequirePermission(PermissionKeys.ReferenceDataEdit);
+
         group.MapPatch("/{id:long}", UpdateIngredientAsync)
             .RequirePermission(PermissionKeys.ReferenceDataEdit);
         group.MapPost("/{id:long}/aliases", AddAliasAsync)
@@ -228,6 +245,69 @@ public static class IngredientEndpoints
             IngredientMutationResult.AliasConflict conflict => AliasConflict(conflict.Details),
             _ => NotFound(),
         };
+    }
+
+    private static async Task<IResult> MergeIngredientsAsync(
+        HttpContext context,
+        ICurrentActorProvider actorProvider,
+        IngredientService ingredients,
+        CancellationToken cancellationToken)
+    {
+        var (root, bodyError) = await ReadObjectAsync(context, cancellationToken);
+        if (bodyError is not null)
+        {
+            return bodyError;
+        }
+
+        var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        var sourceId = ReadRequiredId(root, "source_id", errors);
+        var targetId = ReadRequiredId(root, "target_id", errors);
+        if (errors.Count > 0)
+        {
+            return ApiResults.ValidationError(errors);
+        }
+
+        var (actorUserId, ipAddress, actorError) = await ResolveActorAsync(
+            context,
+            actorProvider,
+            cancellationToken);
+        if (actorError is not null)
+        {
+            return actorError;
+        }
+
+        var result = await ingredients.MergeAsync(
+            sourceId!.Value,
+            targetId!.Value,
+            ipAddress,
+            actorUserId,
+            cancellationToken);
+        return result switch
+        {
+            IngredientMergeResult.Success success => Results.Ok(IngredientMergeResponse.From(success)),
+            IngredientMergeResult.ValidationFailed failed => ApiResults.ValidationError(failed.FieldErrors),
+            _ => NotFound(),
+        };
+    }
+
+    private static long? ReadRequiredId(
+        JsonElement root,
+        string field,
+        Dictionary<string, string[]> errors)
+    {
+        if (!root.TryGetProperty(field, out var element))
+        {
+            errors[field] = [$"{field} is required."];
+            return null;
+        }
+
+        if (element.ValueKind != JsonValueKind.Number || !element.TryGetInt64(out var value))
+        {
+            errors[field] = [$"{field} must be an integer."];
+            return null;
+        }
+
+        return value;
     }
 
     private static async Task<IResult> UpdateIngredientAsync(

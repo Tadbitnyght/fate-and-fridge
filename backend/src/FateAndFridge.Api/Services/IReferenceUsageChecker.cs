@@ -19,6 +19,12 @@ public interface IReferenceUsageChecker
     /// <summary>Number of recipe ingredients that reference the ingredient.</summary>
     Task<int> CountIngredientReferencesAsync(long ingredientId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Reassigns every recipe reference from the source ingredient to the
+    /// target ingredient and returns the number of reassigned references.
+    /// </summary>
+    Task<int> ReassignIngredientReferencesAsync(long sourceId, long targetId, CancellationToken cancellationToken = default);
+
     /// <summary>Number of recipes that reference the protein.</summary>
     Task<int> CountProteinReferencesAsync(long proteinId, CancellationToken cancellationToken = default);
 
@@ -52,6 +58,15 @@ public sealed class DefaultReferenceUsageChecker : IReferenceUsageChecker
     }
 
     /// <inheritdoc />
+    public Task<int> ReassignIngredientReferencesAsync(
+        long sourceId,
+        long targetId,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(0);
+    }
+
     public Task<int> CountProteinReferencesAsync(
         long proteinId,
         CancellationToken cancellationToken = default)

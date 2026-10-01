@@ -776,6 +776,7 @@ public sealed class IngredientEndpointsIntegrationTests(M1SetupFixture fixture) 
     [InlineData("DELETE", "/api/v1/ingredients/1/aliases/1", null, HttpStatusCode.Forbidden)]
     [InlineData("POST", "/api/v1/ingredients/1/retire", null, HttpStatusCode.Forbidden)]
     [InlineData("DELETE", "/api/v1/ingredients/1", null, HttpStatusCode.Forbidden)]
+    [InlineData("POST", "/api/v1/ingredients/merge", """{"source_id":1,"target_id":2}""", HttpStatusCode.Forbidden)]
     public async Task Member_without_grants_reads_but_cannot_write(
         string method,
         string path,
@@ -1177,6 +1178,469 @@ public sealed class IngredientEndpointsIntegrationTests(M1SetupFixture fixture) 
         }
     }
 
+    [Fact]
+    public async Task Merge_moves_free_aliases_copies_canonical_and_retires_source()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        await SeedUserAsync("root", AdminPassword, cancellationToken, UserRole.Admin);
+        await MarkSetupCompletedAsync(cancellationToken);
+        var start = DateTimeOffset.UtcNow;
+        start -= TimeSpan.FromTicks(start.Ticks % TimeSpan.TicksPerSecond);
+        var clock = new TestTimeProvider(start);
+        var checker = new CountingReferenceUsageChecker { ReassignedCount = 3 };
+        using var factory = await StartFactoryWithCleanIngredientsAsync(cancellationToken, checker, clock);
+        var source = await SeedIngredientAsync(
+            "Old Tomato",
+            aliases: ["Heirloom", "Ruby"],
+            cancellationToken: cancellationToken);
+        var target = await SeedIngredientAsync("Tomato", cancellationToken: cancellationToken);
+        await SeedIngredientAsync("Ruby", cancellationToken: cancellationToken);
+        using var session = await SignInAsync(factory, "root", AdminPassword, cancellationToken);
+        clock.Advance(TimeSpan.FromMinutes(5));
+
+        var merged = await MergeAsync(session, source.Id, target.Id, cancellationToken);
+        merged.StatusCode.Should().Be(HttpStatusCode.OK);
+        var root = await ReadJsonAsync(merged, cancellationToken);
+        root.GetProperty("source_id").GetInt64().Should().Be(source.Id);
+        root.GetProperty("target_id").GetInt64().Should().Be(target.Id);
+        root.GetProperty("skipped_aliases").EnumerateArray()
+            .Select(node => node.GetString()).Should().Equal("Ruby");
+        root.GetProperty("reassigned_reference_count").GetInt32().Should().Be(3);
+
+        checker.LastReassignSourceId.Should().Be(source.Id, "the seam is called with the merge endpoints");
+        checker.LastReassignTargetId.Should().Be(target.Id);
+
+        await using (var context = fixture.CreateContext())
+        {
+            var storedSource = await context.Ingredients.AsNoTracking()
+                .SingleAsync(ingredient => ingredient.Id == source.Id, cancellationToken);
+            storedSource.IsActive.Should().BeFalse();
+            storedSource.MergedIntoIngredientId.Should().Be(target.Id);
+            storedSource.UpdatedAt.Should().Be(start.AddMinutes(5));
+
+            var storedTarget = await context.Ingredients.AsNoTracking()
+                .SingleAsync(ingredient => ingredient.Id == target.Id, cancellationToken);
+            storedTarget.UpdatedAt.Should().Be(start.AddMinutes(5), "moving aliases bumps the target timestamp");
+
+            var targetAliases = await context.IngredientAliases.AsNoTracking()
+                .Where(alias => alias.IngredientId == target.Id)
+                .OrderBy(alias => alias.Id)
+                .Select(alias => alias.Alias)
+                .ToListAsync(cancellationToken);
+            targetAliases.Should().Equal("Old Tomato", "Heirloom");
+
+            var sourceAliases = await context.IngredientAliases.AsNoTracking()
+                .Where(alias => alias.IngredientId == source.Id)
+                .OrderBy(alias => alias.Id)
+                .Select(alias => alias.Alias)
+                .ToListAsync(cancellationToken);
+            sourceAliases.Should().Equal("Ruby");
+        }
+
+        var movedSearch = await ReadJsonAsync(
+            await session.Client.GetAsync($"{IngredientsPath}?search=heirloom", cancellationToken),
+            cancellationToken);
+        movedSearch.GetArrayLength().Should().Be(1);
+        movedSearch[0].GetProperty("id").GetInt64().Should().Be(target.Id);
+    }
+
+    [Fact]
+    public async Task Merge_writes_one_audit_row_with_before_after_and_metadata()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        var admin = await SeedUserAsync("root", AdminPassword, cancellationToken, UserRole.Admin);
+        await MarkSetupCompletedAsync(cancellationToken);
+        var checker = new CountingReferenceUsageChecker { ReassignedCount = 3 };
+        using var factory = await StartFactoryWithCleanIngredientsAsync(cancellationToken, checker);
+        var source = await SeedIngredientAsync(
+            "Old Tomato",
+            aliases: ["Heirloom", "Ruby"],
+            cancellationToken: cancellationToken);
+        var target = await SeedIngredientAsync("Tomato", cancellationToken: cancellationToken);
+        await SeedIngredientAsync("Ruby", cancellationToken: cancellationToken);
+        using var session = await SignInAsync(factory, "root", AdminPassword, cancellationToken);
+
+        (await MergeAsync(session, source.Id, target.Id, cancellationToken)).StatusCode
+            .Should().Be(HttpStatusCode.OK);
+
+        var row = (await ReadAuditRowsAsync(cancellationToken)).Should().ContainSingle().Subject;
+        row.EventType.Should().Be("merged");
+        row.EntityType.Should().Be(AuditEntityTypes.Ingredient);
+        row.EntityId.Should().Be(source.Id.ToString(CultureInfo.InvariantCulture));
+        row.ActorUserId.Should().Be(admin.Id);
+
+        var before = Snapshot(row.BeforeJson!);
+        before["is_active"]!.GetValue<bool>().Should().BeTrue();
+        before["merged_into_ingredient_id"].Should().BeNull();
+        before["canonical_name"]!.GetValue<string>().Should().Be("Old Tomato");
+        before["aliases"]!.AsArray().Select(node => node!["alias"]!.GetValue<string>())
+            .Should().Equal("Heirloom", "Ruby");
+
+        var after = Snapshot(row.AfterJson!);
+        after["is_active"]!.GetValue<bool>().Should().BeFalse();
+        after["merged_into_ingredient_id"]!.GetValue<long>().Should().Be(target.Id);
+        after["aliases"]!.AsArray().Select(node => node!["alias"]!.GetValue<string>())
+            .Should().Equal(new[] { "Ruby" }, "the skipped alias stays on the source");
+
+        var metadata = Snapshot(row.MetadataJson);
+        metadata["target_id"]!.GetValue<long>().Should().Be(target.Id);
+        metadata["reassigned_reference_count"]!.GetValue<int>().Should().Be(3);
+        metadata["skipped_aliases"]!.AsArray().Select(node => node!.GetValue<string>())
+            .Should().Equal("Ruby");
+    }
+
+    [Fact]
+    public async Task Merge_rolls_back_when_the_reference_seam_fails()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        await SeedUserAsync("root", AdminPassword, cancellationToken, UserRole.Admin);
+        await MarkSetupCompletedAsync(cancellationToken);
+        var checker = new CountingReferenceUsageChecker
+        {
+            ReassignException = new InvalidOperationException("seam unavailable"),
+        };
+        using var factory = await StartFactoryWithCleanIngredientsAsync(cancellationToken, checker);
+        var source = await SeedIngredientAsync(
+            "Rollback Source",
+            aliases: ["Rollback Alias"],
+            cancellationToken: cancellationToken);
+        var target = await SeedIngredientAsync("Rollback Target", cancellationToken: cancellationToken);
+        using var session = await SignInAsync(factory, "root", AdminPassword, cancellationToken);
+
+        var failed = await MergeAsync(session, source.Id, target.Id, cancellationToken);
+        failed.StatusCode.Should().Be(HttpStatusCode.InternalServerError);
+        (await ReadErrorAsync(failed, cancellationToken)).GetProperty("code").GetString()
+            .Should().Be(ErrorCodes.InternalError);
+
+        await using (var context = fixture.CreateContext())
+        {
+            var storedSource = await context.Ingredients.AsNoTracking()
+                .SingleAsync(ingredient => ingredient.Id == source.Id, cancellationToken);
+            storedSource.IsActive.Should().BeTrue("the failed merge must not retire the source");
+            storedSource.MergedIntoIngredientId.Should().BeNull();
+
+            var sourceAliases = await context.IngredientAliases.AsNoTracking()
+                .Where(alias => alias.IngredientId == source.Id)
+                .Select(alias => alias.Alias)
+                .ToListAsync(cancellationToken);
+            sourceAliases.Should().Equal("Rollback Alias");
+
+            (await context.IngredientAliases.AsNoTracking()
+                    .AnyAsync(alias => alias.IngredientId == target.Id, cancellationToken))
+                .Should().BeFalse("no alias may be copied before the seam succeeds");
+        }
+
+        (await ReadAuditRowsAsync(cancellationToken)).Should().BeEmpty("the audit row rolls back with the merge");
+    }
+
+    [Fact]
+    public async Task Merge_guards_cover_same_missing_inactive_and_already_merged_endpoints()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        await SeedUserAsync("root", AdminPassword, cancellationToken, UserRole.Admin);
+        await MarkSetupCompletedAsync(cancellationToken);
+        using var factory = await StartFactoryWithCleanIngredientsAsync(cancellationToken);
+        var activeSource = await SeedIngredientAsync("Guard Source", cancellationToken: cancellationToken);
+        var activeTarget = await SeedIngredientAsync("Guard Target", cancellationToken: cancellationToken);
+        var inactiveSource = await SeedIngredientAsync(
+            "Inactive Guard Source",
+            isActive: false,
+            cancellationToken: cancellationToken);
+        var inactiveTarget = await SeedIngredientAsync(
+            "Inactive Guard Target",
+            isActive: false,
+            cancellationToken: cancellationToken);
+        var mergedTarget = await SeedIngredientAsync("Merged Guard Target", cancellationToken: cancellationToken);
+        var alreadyMergedSource = await SeedIngredientAsync(
+            "Merged Guard Source",
+            isActive: false,
+            mergedIntoIngredientId: mergedTarget.Id,
+            cancellationToken: cancellationToken);
+        using var session = await SignInAsync(factory, "root", AdminPassword, cancellationToken);
+
+        var same = await MergeAsync(session, activeSource.Id, activeSource.Id, cancellationToken);
+        same.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var sameError = await ReadErrorAsync(same, cancellationToken);
+        sameError.GetProperty("code").GetString().Should().Be(ErrorCodes.ValidationFailed);
+        sameError.GetProperty("details").GetProperty("field_errors")
+            .TryGetProperty("source_id", out _).Should().BeTrue();
+
+        var malformedBodies = new (string Json, string Field)[]
+        {
+            ("""{"target_id":1}""", "source_id"),
+            ("""{"source_id":1}""", "target_id"),
+            ("""{"source_id":"one","target_id":1}""", "source_id"),
+            ("""{"source_id":1,"target_id":null}""", "target_id"),
+        };
+        foreach (var (json, field) in malformedBodies)
+        {
+            var malformed = await SendJsonAsync(
+                session.Client,
+                HttpMethod.Post,
+                $"{IngredientsPath}/merge",
+                json,
+                session.CsrfToken,
+                cancellationToken);
+            malformed.StatusCode.Should().Be(HttpStatusCode.BadRequest, "'{0}' must fail", json);
+            (await ReadErrorAsync(malformed, cancellationToken)).GetProperty("details")
+                .GetProperty("field_errors").TryGetProperty(field, out _).Should().BeTrue();
+        }
+
+        var missing = await MergeAsync(session, 999998, 999999, cancellationToken);
+        missing.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await ReadErrorAsync(missing, cancellationToken)).GetProperty("code").GetString()
+            .Should().Be(ErrorCodes.NotFound);
+
+        var inactiveSourceResponse = await MergeAsync(
+            session,
+            inactiveSource.Id,
+            activeTarget.Id,
+            cancellationToken);
+        inactiveSourceResponse.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await ReadErrorAsync(inactiveSourceResponse, cancellationToken)).GetProperty("details")
+            .GetProperty("field_errors").GetProperty("source_id").EnumerateArray()
+            .Select(node => node.GetString()).Should().Equal("inactive");
+
+        var inactiveTargetResponse = await MergeAsync(
+            session,
+            activeSource.Id,
+            inactiveTarget.Id,
+            cancellationToken);
+        inactiveTargetResponse.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var inactiveTargetErrors = (await ReadErrorAsync(inactiveTargetResponse, cancellationToken))
+            .GetProperty("details").GetProperty("field_errors");
+        inactiveTargetErrors.GetProperty("target_id").EnumerateArray()
+            .Select(node => node.GetString()).Should().Equal("inactive");
+        inactiveTargetErrors.TryGetProperty("source_id", out _).Should().BeFalse();
+
+        var alreadyMergedResponse = await MergeAsync(
+            session,
+            alreadyMergedSource.Id,
+            mergedTarget.Id,
+            cancellationToken);
+        alreadyMergedResponse.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await ReadErrorAsync(alreadyMergedResponse, cancellationToken)).GetProperty("details")
+            .GetProperty("field_errors").GetProperty("source_id").EnumerateArray()
+            .Select(node => node.GetString()).Should().Equal("already_merged");
+
+        (await ReadAuditRowsAsync(cancellationToken)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Merge_concurrent_requests_leave_one_winner_and_no_partial_state()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        await SeedUserAsync("root", AdminPassword, cancellationToken, UserRole.Admin);
+        await MarkSetupCompletedAsync(cancellationToken);
+        using var factory = await StartFactoryWithCleanIngredientsAsync(cancellationToken);
+        var source = await SeedIngredientAsync("Contended Source", cancellationToken: cancellationToken);
+        var firstTarget = await SeedIngredientAsync("Contended Target A", cancellationToken: cancellationToken);
+        var secondTarget = await SeedIngredientAsync("Contended Target B", cancellationToken: cancellationToken);
+        using var firstSession = await SignInAsync(factory, "root", AdminPassword, cancellationToken);
+        using var secondSession = await SignInAsync(factory, "root", AdminPassword, cancellationToken);
+
+        var responses = await Task.WhenAll(
+            MergeAsync(firstSession, source.Id, firstTarget.Id, cancellationToken),
+            MergeAsync(secondSession, source.Id, secondTarget.Id, cancellationToken));
+
+        responses.Count(response => response.StatusCode == HttpStatusCode.OK)
+            .Should().Be(1, "the source row lock serializes the competing merges");
+        var loser = responses.Single(response => response.StatusCode != HttpStatusCode.OK);
+        new[] { HttpStatusCode.BadRequest, HttpStatusCode.NotFound }.Should().Contain(
+            loser.StatusCode,
+            "the loser must be rejected, not merged twice");
+        if (loser.StatusCode == HttpStatusCode.BadRequest)
+        {
+            (await ReadErrorAsync(loser, cancellationToken)).GetProperty("details")
+                .GetProperty("field_errors").GetProperty("source_id").EnumerateArray()
+                .Select(node => node.GetString()).Should().Contain("already_merged");
+        }
+
+        var winner = responses.Single(response => response.StatusCode == HttpStatusCode.OK);
+        var winnerTargetId = (await ReadJsonAsync(winner, cancellationToken)).GetProperty("target_id").GetInt64();
+        new[] { firstTarget.Id, secondTarget.Id }.Should().Contain(winnerTargetId);
+        var loserTargetId = winnerTargetId == firstTarget.Id ? secondTarget.Id : firstTarget.Id;
+
+        await using (var context = fixture.CreateContext())
+        {
+            var storedSource = await context.Ingredients.AsNoTracking()
+                .SingleAsync(ingredient => ingredient.Id == source.Id, cancellationToken);
+            storedSource.IsActive.Should().BeFalse();
+            storedSource.MergedIntoIngredientId.Should().Be(winnerTargetId);
+
+            var winnerAliases = await context.IngredientAliases.AsNoTracking()
+                .Where(alias => alias.IngredientId == winnerTargetId)
+                .Select(alias => alias.Alias)
+                .ToListAsync(cancellationToken);
+            winnerAliases.Should().Equal("Contended Source");
+
+            (await context.IngredientAliases.AsNoTracking()
+                    .AnyAsync(alias => alias.IngredientId == loserTargetId, cancellationToken))
+                .Should().BeFalse("the losing merge must not copy aliases");
+            (await context.IngredientAliases.AsNoTracking()
+                    .AnyAsync(alias => alias.IngredientId == source.Id, cancellationToken))
+                .Should().BeFalse("the winning merge moved the canonical alias off the source");
+        }
+
+        var rows = await ReadAuditRowsAsync(cancellationToken);
+        rows.Should().ContainSingle().Which.EventType.Should().Be("merged");
+    }
+
+    [Fact]
+    public async Task Merge_moves_search_visibility_and_keeps_skipped_names_retired()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        await SeedUserAsync("root", AdminPassword, cancellationToken, UserRole.Admin);
+        await MarkSetupCompletedAsync(cancellationToken);
+        using var factory = await StartFactoryWithCleanIngredientsAsync(cancellationToken);
+        var source = await SeedIngredientAsync(
+            "Old Tomato",
+            aliases: ["Heirloom", "Ruby"],
+            cancellationToken: cancellationToken);
+        var target = await SeedIngredientAsync("Tomato", cancellationToken: cancellationToken);
+        await SeedIngredientAsync("Ruby", cancellationToken: cancellationToken);
+        using var session = await SignInAsync(factory, "root", AdminPassword, cancellationToken);
+
+        (await MergeAsync(session, source.Id, target.Id, cancellationToken)).StatusCode
+            .Should().Be(HttpStatusCode.OK);
+
+        var movedSearch = await ReadJsonAsync(
+            await session.Client.GetAsync($"{IngredientsPath}?search=heirloom", cancellationToken),
+            cancellationToken);
+        movedSearch.EnumerateArray().Select(element => element.GetProperty("id").GetInt64())
+            .Should().Equal(target.Id);
+
+        var defaultCanonical = await ReadJsonAsync(
+            await session.Client.GetAsync($"{IngredientsPath}?search=Old%20Tomato", cancellationToken),
+            cancellationToken);
+        defaultCanonical.EnumerateArray().Select(element => element.GetProperty("id").GetInt64())
+            .Should().Equal(
+                new[] { target.Id },
+                "the retired source is hidden while its copied alias still matches");
+
+        var withRetired = await ReadJsonAsync(
+            await session.Client.GetAsync(
+                $"{IngredientsPath}?search=Old%20Tomato&include_retired=true",
+                cancellationToken),
+            cancellationToken);
+        withRetired.EnumerateArray().Select(element => element.GetProperty("id").GetInt64())
+            .Should().Equal(source.Id, target.Id);
+        withRetired[0].GetProperty("is_active").GetBoolean().Should().BeFalse();
+        withRetired[0].GetProperty("aliases").EnumerateArray()
+            .Select(node => node.GetProperty("alias").GetString()).Should().Equal("Ruby");
+        withRetired[1].GetProperty("is_active").GetBoolean().Should().BeTrue();
+
+        await using (var context = fixture.CreateContext())
+        {
+            var storedSource = await context.Ingredients.AsNoTracking()
+                .SingleAsync(ingredient => ingredient.Id == source.Id, cancellationToken);
+            storedSource.MergedIntoIngredientId.Should().Be(
+                target.Id,
+                "IngredientResponse does not expose the merge link, so it is read from storage");
+        }
+
+        var movedWithRetired = await ReadJsonAsync(
+            await session.Client.GetAsync(
+                $"{IngredientsPath}?search=heirloom&include_retired=true",
+                cancellationToken),
+            cancellationToken);
+        movedWithRetired.EnumerateArray().Select(element => element.GetProperty("id").GetInt64())
+            .Should().Equal(
+                new[] { target.Id },
+                "the moved alias no longer matches the source");
+    }
+
+    [Fact]
+    public async Task Merge_permission_matrix_member_with_reference_data_edit_can_merge()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        var jane = await SeedUserAsync("jane", MemberPassword, cancellationToken, UserRole.Member);
+        await SeedPermissionAsync(jane.Id, PermissionKeys.ReferenceDataEdit, cancellationToken);
+        await MarkSetupCompletedAsync(cancellationToken);
+        using var factory = await StartFactoryWithCleanIngredientsAsync(cancellationToken);
+        var source = await SeedIngredientAsync("Member Merge Source", cancellationToken: cancellationToken);
+        var target = await SeedIngredientAsync("Member Merge Target", cancellationToken: cancellationToken);
+        using var session = await SignInAsync(factory, "jane", MemberPassword, cancellationToken);
+
+        var merged = await MergeAsync(session, source.Id, target.Id, cancellationToken);
+        merged.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        await using (var context = fixture.CreateContext())
+        {
+            var storedSource = await context.Ingredients.AsNoTracking()
+                .SingleAsync(ingredient => ingredient.Id == source.Id, cancellationToken);
+            storedSource.IsActive.Should().BeFalse();
+            storedSource.MergedIntoIngredientId.Should().Be(target.Id);
+        }
+
+        var rows = await ReadAuditRowsAsync(cancellationToken);
+        rows.Should().ContainSingle().Which.ActorUserId.Should().Be(jane.Id);
+    }
+
+    [Fact]
+    public async Task Merge_permission_matrix_single_user_system_actor_can_merge()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.SingleUser, cancellationToken);
+        await MarkSetupCompletedAsync(cancellationToken);
+        using var factory = await StartFactoryWithCleanIngredientsAsync(cancellationToken);
+        var source = await SeedIngredientAsync("System Merge Source", cancellationToken: cancellationToken);
+        var target = await SeedIngredientAsync("System Merge Target", cancellationToken: cancellationToken);
+
+        using var client = factory.CreateClient();
+        var merged = await SendJsonAsync(
+            client,
+            HttpMethod.Post,
+            $"{IngredientsPath}/merge",
+            JsonSerializer.Serialize(new { source_id = source.Id, target_id = target.Id }),
+            csrfToken: null,
+            cancellationToken);
+        merged.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        await using (var context = fixture.CreateContext())
+        {
+            var storedSource = await context.Ingredients.AsNoTracking()
+                .SingleAsync(ingredient => ingredient.Id == source.Id, cancellationToken);
+            storedSource.IsActive.Should().BeFalse();
+            storedSource.MergedIntoIngredientId.Should().Be(target.Id);
+        }
+
+        var rows = await ReadAuditRowsAsync(cancellationToken);
+        rows.Should().ContainSingle().Which.ActorUserId.Should().BeNull(
+            "single-user mode has no acting user");
+    }
+
+    [Fact]
+    public async Task Merge_retired_source_still_owns_its_canonical_namespace()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        await SeedUserAsync("root", AdminPassword, cancellationToken, UserRole.Admin);
+        await MarkSetupCompletedAsync(cancellationToken);
+        using var factory = await StartFactoryWithCleanIngredientsAsync(cancellationToken);
+        var source = await SeedIngredientAsync("Legacy Spice", cancellationToken: cancellationToken);
+        var target = await SeedIngredientAsync("Spice", cancellationToken: cancellationToken);
+        using var session = await SignInAsync(factory, "root", AdminPassword, cancellationToken);
+
+        (await MergeAsync(session, source.Id, target.Id, cancellationToken)).StatusCode
+            .Should().Be(HttpStatusCode.OK);
+
+        var conflict = await CreateAsync(session, """{"canonical_name":"LEGACY SPICE"}""", cancellationToken);
+        conflict.StatusCode.Should().Be(
+            HttpStatusCode.Conflict,
+            "the retired source still owns its canonical name");
+        var error = await ReadErrorAsync(conflict, cancellationToken);
+        error.GetProperty("code").GetString().Should().Be(ErrorCodes.IngredientExists);
+        error.GetProperty("details").GetProperty("existing_id").GetInt64().Should().Be(source.Id);
+    }
+
     private sealed record SignedInClient(HttpClient Client, string CsrfToken) : IDisposable
     {
         public void Dispose() => Client.Dispose();
@@ -1191,6 +1655,14 @@ public sealed class IngredientEndpointsIntegrationTests(M1SetupFixture fixture) 
         public int ProteinCount { get; set; }
 
         public int TagCount { get; set; }
+
+        public int ReassignedCount { get; set; }
+
+        public long? LastReassignSourceId { get; private set; }
+
+        public long? LastReassignTargetId { get; private set; }
+
+        public Exception? ReassignException { get; set; }
 
         public Task<int> CountUnitReferencesAsync(
             long unitId,
@@ -1211,6 +1683,18 @@ public sealed class IngredientEndpointsIntegrationTests(M1SetupFixture fixture) 
             long tagId,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(TagCount);
+
+        public Task<int> ReassignIngredientReferencesAsync(
+            long sourceId,
+            long targetId,
+            CancellationToken cancellationToken = default)
+        {
+            LastReassignSourceId = sourceId;
+            LastReassignTargetId = targetId;
+            return ReassignException is null
+                ? Task.FromResult(ReassignedCount)
+                : Task.FromException<int>(ReassignException);
+        }
     }
 
     private static async Task<SignedInClient> SignInAsync(
@@ -1301,6 +1785,19 @@ public sealed class IngredientEndpointsIntegrationTests(M1SetupFixture fixture) 
             HttpMethod.Post,
             $"{IngredientsPath}/{id}/retire",
             json: null,
+            session.CsrfToken,
+            cancellationToken);
+
+    private static Task<HttpResponseMessage> MergeAsync(
+        SignedInClient session,
+        long sourceId,
+        long targetId,
+        CancellationToken cancellationToken) =>
+        SendJsonAsync(
+            session.Client,
+            HttpMethod.Post,
+            $"{IngredientsPath}/merge",
+            JsonSerializer.Serialize(new { source_id = sourceId, target_id = targetId }),
             session.CsrfToken,
             cancellationToken);
 

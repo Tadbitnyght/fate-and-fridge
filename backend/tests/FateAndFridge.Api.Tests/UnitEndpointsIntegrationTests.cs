@@ -1169,6 +1169,8 @@ public sealed class UnitEndpointsIntegrationTests(M1SetupFixture fixture) : IAsy
 
         public int TagCount { get; set; }
 
+        public int ReassignedCount { get; set; }
+
         public Task<int> CountUnitReferencesAsync(
             long unitId,
             CancellationToken cancellationToken = default) =>
@@ -1188,6 +1190,12 @@ public sealed class UnitEndpointsIntegrationTests(M1SetupFixture fixture) : IAsy
             long tagId,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(TagCount);
+
+        public Task<int> ReassignIngredientReferencesAsync(
+            long sourceId,
+            long targetId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(ReassignedCount);
     }
 
     private static async Task<SignedInClient> SignInAsync(
