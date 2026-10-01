@@ -749,7 +749,28 @@ public sealed class IngredientService(
                 }),
             cancellationToken);
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception) when (PostgresErrors.IsUniqueViolation(exception))
+        {
+            // PlanMergeAliasesAsync checked the shared namespace above, but a
+            // concurrent writer can claim one of the moved/copied alias texts
+            // between that check and this insert. The alias table's global
+            // normalized-alias unique index is the last line of defense; the
+            // enclosing transaction rolls back, so report a clean conflict
+            // instead of surfacing a 500.
+            return new IngredientMergeResult.ValidationFailed(
+                new Dictionary<string, string[]>(StringComparer.Ordinal)
+                {
+                    ["target_id"] =
+                    [
+                        "target_id cannot claim the merged aliases because a concurrent change claimed one of them.",
+                    ],
+                });
+        }
+
         await transaction.CommitAsync(cancellationToken);
 
         logger.LogInformation("Merged ingredient {SourceId} into {TargetId}", sourceId, targetId);

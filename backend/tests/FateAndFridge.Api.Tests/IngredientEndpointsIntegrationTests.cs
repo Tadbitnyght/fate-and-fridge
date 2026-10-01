@@ -1,3 +1,4 @@
+using System.Data.Common;
 using System.Globalization;
 using System.Net;
 using System.Text;
@@ -5,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using FateAndFridge.Api.Auth;
 using FateAndFridge.Api.Auth.Permissions;
+using FateAndFridge.Api.Data;
 using FateAndFridge.Api.Domain;
 using FateAndFridge.Api.Errors;
 using FateAndFridge.Api.Middleware;
@@ -13,6 +15,7 @@ using FateAndFridge.Api.Tests.Support;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -1337,6 +1340,159 @@ public sealed class IngredientEndpointsIntegrationTests(M1SetupFixture fixture) 
     }
 
     [Fact]
+    public async Task Merge_rolls_back_after_the_alias_delete_flush_when_the_insert_is_poisoned()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        await SeedUserAsync("root", AdminPassword, cancellationToken, UserRole.Admin);
+        await MarkSetupCompletedAsync(cancellationToken);
+        using var factory = await StartFactoryWithCleanIngredientsAsync(
+            cancellationToken,
+            commandInterceptor: new PoisonIngredientAliasInsertInterceptor());
+        var source = await SeedIngredientAsync(
+            "Poison Source",
+            aliases: ["Poison Alias"],
+            cancellationToken: cancellationToken);
+        var target = await SeedIngredientAsync(
+            "Poison Target",
+            aliases: ["Target Keep"],
+            cancellationToken: cancellationToken);
+        using var session = await SignInAsync(factory, "root", AdminPassword, cancellationToken);
+
+        var failed = await MergeAsync(session, source.Id, target.Id, cancellationToken);
+        failed.StatusCode.Should().Be(HttpStatusCode.InternalServerError);
+        (await ReadErrorAsync(failed, cancellationToken)).GetProperty("code").GetString()
+            .Should().Be(ErrorCodes.InternalError);
+
+        await using (var context = fixture.CreateContext())
+        {
+            var storedSource = await context.Ingredients.AsNoTracking()
+                .SingleAsync(ingredient => ingredient.Id == source.Id, cancellationToken);
+            storedSource.IsActive.Should().BeTrue("the poisoned insert rolls the retirement back");
+            storedSource.MergedIntoIngredientId.Should().BeNull();
+
+            var sourceAliases = await context.IngredientAliases.AsNoTracking()
+                .Where(alias => alias.IngredientId == source.Id)
+                .Select(alias => alias.Alias)
+                .ToListAsync(cancellationToken);
+            sourceAliases.Should().Equal(
+                new[] { "Poison Alias" },
+                "the alias delete flushed before the failed insert must roll back");
+
+            var targetAliases = await context.IngredientAliases.AsNoTracking()
+                .Where(alias => alias.IngredientId == target.Id)
+                .Select(alias => alias.Alias)
+                .ToListAsync(cancellationToken);
+            targetAliases.Should().Equal(new[] { "Target Keep" });
+        }
+
+        (await ReadAuditRowsAsync(cancellationToken)).Should().BeEmpty(
+            "the staged audit row rolls back with the failed insert");
+    }
+
+    [Fact]
+    public async Task Merge_skips_the_canonical_name_when_the_target_owns_it_as_an_alias()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        await SeedUserAsync("root", AdminPassword, cancellationToken, UserRole.Admin);
+        await MarkSetupCompletedAsync(cancellationToken);
+        using var factory = await StartFactoryWithCleanIngredientsAsync(cancellationToken);
+        var source = await SeedIngredientAsync(
+            "Old Tomato",
+            aliases: ["Heirloom"],
+            cancellationToken: cancellationToken);
+        // Seeding bypasses the service-level namespace check: the target's alias
+        // and the source's canonical name live in different tables, so the
+        // database accepts the collision the merge must resolve.
+        var target = await SeedIngredientAsync(
+            "Tomato",
+            aliases: ["Old Tomato"],
+            cancellationToken: cancellationToken);
+        using var session = await SignInAsync(factory, "root", AdminPassword, cancellationToken);
+
+        var merged = await MergeAsync(session, source.Id, target.Id, cancellationToken);
+        merged.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await ReadJsonAsync(merged, cancellationToken)).GetProperty("skipped_aliases").EnumerateArray()
+            .Select(node => node.GetString()).Should().Equal("Old Tomato");
+
+        await using (var context = fixture.CreateContext())
+        {
+            var targetAliases = await context.IngredientAliases.AsNoTracking()
+                .Where(alias => alias.IngredientId == target.Id)
+                .OrderBy(alias => alias.Id)
+                .Select(alias => alias.Alias)
+                .ToListAsync(cancellationToken);
+            targetAliases.Should().Equal(
+                new[] { "Old Tomato", "Heirloom" },
+                "the canonical copy is skipped while the free alias still moves");
+
+            var sourceAliases = await context.IngredientAliases.AsNoTracking()
+                .Where(alias => alias.IngredientId == source.Id)
+                .Select(alias => alias.Alias)
+                .ToListAsync(cancellationToken);
+            sourceAliases.Should().BeEmpty("the source keeps only its canonical name");
+
+            var storedSource = await context.Ingredients.AsNoTracking()
+                .SingleAsync(ingredient => ingredient.Id == source.Id, cancellationToken);
+            storedSource.CanonicalName.Should().Be("Old Tomato");
+            storedSource.MergedIntoIngredientId.Should().Be(target.Id);
+        }
+    }
+
+    /// <summary>
+    /// The shared namespace cannot contain two canonical names with the same
+    /// normalized text (ix_ingredients_normalized_name is unique), so a
+    /// third-party canonical collision is unrepresentable; this covers the same
+    /// skip-and-report path through a third-party alias instead.
+    /// </summary>
+    [Fact]
+    public async Task Merge_skips_the_canonical_name_when_a_third_party_alias_owns_the_text()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        await SeedUserAsync("root", AdminPassword, cancellationToken, UserRole.Admin);
+        await MarkSetupCompletedAsync(cancellationToken);
+        using var factory = await StartFactoryWithCleanIngredientsAsync(cancellationToken);
+        var source = await SeedIngredientAsync(
+            "Old Tomato",
+            aliases: ["Heirloom"],
+            cancellationToken: cancellationToken);
+        var target = await SeedIngredientAsync("Tomato", cancellationToken: cancellationToken);
+        var third = await SeedIngredientAsync(
+            "Third Spice",
+            aliases: ["Old Tomato"],
+            cancellationToken: cancellationToken);
+        using var session = await SignInAsync(factory, "root", AdminPassword, cancellationToken);
+
+        var merged = await MergeAsync(session, source.Id, target.Id, cancellationToken);
+        merged.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await ReadJsonAsync(merged, cancellationToken)).GetProperty("skipped_aliases").EnumerateArray()
+            .Select(node => node.GetString()).Should().Equal("Old Tomato");
+
+        await using (var context = fixture.CreateContext())
+        {
+            var targetAliases = await context.IngredientAliases.AsNoTracking()
+                .Where(alias => alias.IngredientId == target.Id)
+                .Select(alias => alias.Alias)
+                .ToListAsync(cancellationToken);
+            targetAliases.Should().Equal(new[] { "Heirloom" });
+
+            var sourceAliases = await context.IngredientAliases.AsNoTracking()
+                .Where(alias => alias.IngredientId == source.Id)
+                .Select(alias => alias.Alias)
+                .ToListAsync(cancellationToken);
+            sourceAliases.Should().BeEmpty("the source keeps only its canonical name");
+
+            var thirdAliases = await context.IngredientAliases.AsNoTracking()
+                .Where(alias => alias.IngredientId == third.Id)
+                .Select(alias => alias.Alias)
+                .ToListAsync(cancellationToken);
+            thirdAliases.Should().Equal(new[] { "Old Tomato" });
+        }
+    }
+
+    [Fact]
     public async Task Merge_guards_cover_same_missing_inactive_and_already_merged_endpoints()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -1641,6 +1797,61 @@ public sealed class IngredientEndpointsIntegrationTests(M1SetupFixture fixture) 
         error.GetProperty("details").GetProperty("existing_id").GetInt64().Should().Be(source.Id);
     }
 
+    /// <summary>
+    /// Fails every insert into <c>ingredient_aliases</c> after earlier
+    /// statements of the same SaveChanges/merge were already flushed, so tests
+    /// can prove the enclosing transaction rolls back post-flush writes.
+    /// </summary>
+    private sealed class PoisonIngredientAliasInsertInterceptor : DbCommandInterceptor
+    {
+        public override InterceptionResult<DbDataReader> ReaderExecuting(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result)
+        {
+            ThrowIfInsertingIngredientAliases(command);
+            return base.ReaderExecuting(command, eventData, result);
+        }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            ThrowIfInsertingIngredientAliases(command);
+            return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
+        }
+
+        public override InterceptionResult<int> NonQueryExecuting(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<int> result)
+        {
+            ThrowIfInsertingIngredientAliases(command);
+            return base.NonQueryExecuting(command, eventData, result);
+        }
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            ThrowIfInsertingIngredientAliases(command);
+            return base.NonQueryExecutingAsync(command, eventData, result, cancellationToken);
+        }
+
+        private static void ThrowIfInsertingIngredientAliases(DbCommand command)
+        {
+            if (command.CommandText.Contains("INSERT INTO ingredient_aliases", StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "Simulated failure while inserting merged ingredient aliases.");
+            }
+        }
+    }
+
     private sealed record SignedInClient(HttpClient Client, string CsrfToken) : IDisposable
     {
         public void Dispose() => Client.Dispose();
@@ -1806,15 +2017,18 @@ public sealed class IngredientEndpointsIntegrationTests(M1SetupFixture fixture) 
     /// ingredients, their aliases, and departments so each test controls its
     /// own reference data. Pass a counting <see cref="IReferenceUsageChecker"/>
     /// fake to exercise the delete-usage seam; the default registration returns
-    /// zero for every resource.
+    /// zero for every resource. Pass a <see cref="DbCommandInterceptor"/> to
+    /// exercise post-flush rollback; it replaces the app's context options so
+    /// request-scoped contexts carry the interceptor.
     /// </summary>
     private async Task<ApiFactory> StartFactoryWithCleanIngredientsAsync(
         CancellationToken cancellationToken,
         IReferenceUsageChecker? usageChecker = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        DbCommandInterceptor? commandInterceptor = null)
     {
         ApiFactory factory;
-        if (usageChecker is null && timeProvider is null)
+        if (usageChecker is null && timeProvider is null && commandInterceptor is null)
         {
             factory = fixture.CreateFactory();
         }
@@ -1822,6 +2036,7 @@ public sealed class IngredientEndpointsIntegrationTests(M1SetupFixture fixture) 
         {
             var checker = usageChecker;
             var clock = timeProvider;
+            var interceptor = commandInterceptor;
             factory = fixture.CreateFactory(configureServices: services =>
             {
                 if (checker is not null)
@@ -1834,6 +2049,19 @@ public sealed class IngredientEndpointsIntegrationTests(M1SetupFixture fixture) 
                 {
                     services.RemoveAll<TimeProvider>();
                     services.AddSingleton(clock);
+                }
+
+                if (interceptor is not null)
+                {
+                    // Program registers AppDbContext against the fixture's
+                    // connection string; rebuild it with the same options plus
+                    // the interceptor so request-scoped contexts are poisoned.
+                    services.RemoveAll<AppDbContext>();
+                    services.RemoveAll<DbContextOptions<AppDbContext>>();
+                    services.AddDbContext<AppDbContext>(options => options
+                        .UseNpgsql(fixture.ConnectionString)
+                        .UseSnakeCaseNamingConvention()
+                        .AddInterceptors(interceptor));
                 }
             });
         }
