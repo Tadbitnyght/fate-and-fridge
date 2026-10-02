@@ -69,20 +69,31 @@ describe('milestone manifest', () => {
     }
   })
 
-  it('marks M2 in progress with its sub-issue links', () => {
+  it('marks M2 complete with its verification evidence and issue links', () => {
     const m2 = MILESTONES.find((milestone) => milestone.id === 'M2')
-    expect(m2?.status).toBe('in_progress')
+    expect(m2?.status).toBe('complete')
+    expect(m2?.completedOn).toBe('2026-10-01')
+    expect(m2?.tag).toBe('m2-complete')
     expect(m2?.issues).toContain(23)
     expect(m2?.issues).toContain(32)
-    expect(m2?.issuesNote).toMatch(/M2_PLAN/)
+    expect(m2?.issuesNote).toContain('M2-12')
+    expect(m2?.evidence).toEqual(
+      expect.arrayContaining([
+        { label: 'Backend tests', value: '976' },
+        { label: 'Vitest', value: '165' },
+        { label: 'Playwright (hermetic)', value: '20 passed / 2 pre-existing skips' },
+        { label: 'M2 verification', value: 'independent review + full battery' },
+        { label: 'Backend gates', value: 'format/build/EF clean' },
+      ]),
+    )
   })
 
   it('computes the progress summary from the manifest', () => {
     expect(progressSummary()).toEqual({
       total: 15,
-      completed: 2,
-      inProgress: 1,
-      percent: Math.round((2 / 15) * 100),
+      completed: 3,
+      inProgress: 0,
+      percent: Math.round((3 / 15) * 100),
     })
     expect(
       progressSummary([

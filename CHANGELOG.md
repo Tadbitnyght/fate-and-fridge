@@ -59,6 +59,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 - Frontend: `/progress` milestone roadmap page (M0–M14) rendering a checked-in
   manifest with status chips, completion dates, feature lists, test evidence,
   and GitHub issue links; linked from the Dashboard card and the app footer
+- Milestone 2 — reference data (2026-10-01): reference-data APIs and startup
+  seeder, configurable conversion factors and aliases, ingredient merge with
+  audit safety, and the admin management UI
 
 ### Changed
 
