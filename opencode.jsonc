@@ -56,7 +56,11 @@
           "DOTNET_ROOT": "/home/tadbit/.dotnet",
           "ROSLYNMCP_MSBUILD_PATH": "/home/tadbit/.dotnet/sdk/10.0.401",
           "FATE_ARTIFACTS_PATH": "/tmp/fate-and-fridge-artifacts"
-        }
+        },
+        // The tool recursively scans its working directory before the MCP host
+        // starts; over the 9p/SMB workspace that is ~30s, so the 30s default MCP
+        // startup timeout is too tight (issue #49, upstream MadQ/RoslynMcp#309).
+        "timeout": { "startup": 120000, "catalog": 60000 }
       },
       // Docker MCP Toolkit gateway (Docker CLI with the docker-mcp plugin).
       // DOCKER_CONTEXT points it at the TrueNAS daemon over SSH (see
