@@ -39,6 +39,22 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
 
+    public DbSet<Recipe> Recipes => Set<Recipe>();
+
+    public DbSet<RecipeImage> RecipeImages => Set<RecipeImage>();
+
+    public DbSet<RecipeIngredientGroup> RecipeIngredientGroups => Set<RecipeIngredientGroup>();
+
+    public DbSet<RecipeIngredient> RecipeIngredients => Set<RecipeIngredient>();
+
+    public DbSet<RecipeInstructionSection> RecipeInstructionSections => Set<RecipeInstructionSection>();
+
+    public DbSet<RecipeInstructionStep> RecipeInstructionSteps => Set<RecipeInstructionStep>();
+
+    public DbSet<RecipeProtein> RecipeProteins => Set<RecipeProtein>();
+
+    public DbSet<RecipeTag> RecipeTags => Set<RecipeTag>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -59,5 +75,15 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         modelBuilder.ApplyConfiguration(new ProteinConfiguration());
         modelBuilder.ApplyConfiguration(new TagConfiguration());
         modelBuilder.ApplyConfiguration(new AuditEventConfiguration());
+
+        // M3-01 recipe schema baseline (docs/M3_PLAN.md §2/§3).
+        modelBuilder.ApplyConfiguration(new RecipeConfiguration());
+        modelBuilder.ApplyConfiguration(new RecipeImageConfiguration());
+        modelBuilder.ApplyConfiguration(new RecipeIngredientGroupConfiguration());
+        modelBuilder.ApplyConfiguration(new RecipeIngredientConfiguration());
+        modelBuilder.ApplyConfiguration(new RecipeInstructionSectionConfiguration());
+        modelBuilder.ApplyConfiguration(new RecipeInstructionStepConfiguration());
+        modelBuilder.ApplyConfiguration(new RecipeProteinConfiguration());
+        modelBuilder.ApplyConfiguration(new RecipeTagConfiguration());
     }
 }

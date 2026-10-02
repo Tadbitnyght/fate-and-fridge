@@ -32,6 +32,11 @@ internal static class EnumTextConverters
             dimension => UnitDimensionToText(dimension),
             text => UnitDimensionFromText(text));
 
+    public static ValueConverter<RecipeStatus, string> RecipeStatusConverter { get; } =
+        new ValueConverter<RecipeStatus, string>(
+            status => RecipeStatusToText(status),
+            text => RecipeStatusFromText(text));
+
     internal static string UserRoleToText(UserRole role) => role switch
     {
         UserRole.Admin => "admin",
@@ -151,4 +156,36 @@ internal static class EnumTextConverters
         TryUnitDimensionFromText(text, out var dimension)
             ? dimension
             : throw new ArgumentOutOfRangeException(nameof(text), text, "Unknown unit dimension text.");
+
+    internal static string RecipeStatusToText(RecipeStatus status) => status switch
+    {
+        RecipeStatus.Normal => "normal",
+        RecipeStatus.ManualOnly => "manual_only",
+        RecipeStatus.Retired => "retired",
+        _ => throw new ArgumentOutOfRangeException(nameof(status), status, "Unknown recipe status."),
+    };
+
+    internal static bool TryRecipeStatusFromText(string? text, out RecipeStatus status)
+    {
+        switch (text)
+        {
+            case "normal":
+                status = RecipeStatus.Normal;
+                return true;
+            case "manual_only":
+                status = RecipeStatus.ManualOnly;
+                return true;
+            case "retired":
+                status = RecipeStatus.Retired;
+                return true;
+            default:
+                status = default;
+                return false;
+        }
+    }
+
+    private static RecipeStatus RecipeStatusFromText(string text) =>
+        TryRecipeStatusFromText(text, out var status)
+            ? status
+            : throw new ArgumentOutOfRangeException(nameof(text), text, "Unknown recipe status text.");
 }

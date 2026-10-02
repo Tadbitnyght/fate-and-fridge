@@ -390,6 +390,334 @@ namespace FateAndFridge.Api.Migrations
                     b.ToTable("proteins", (string)null);
                 });
 
+            modelBuilder.Entity("FateAndFridge.Api.Domain.Recipe", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Author")
+                        .HasColumnType("text")
+                        .HasColumnName("author");
+
+                    b.Property<int?>("CookMinutes")
+                        .HasColumnType("integer")
+                        .HasColumnName("cook_minutes");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsFavorite")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_favorite");
+
+                    b.Property<bool>("IsVegan")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_vegan");
+
+                    b.Property<bool>("IsVegetarian")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_vegetarian");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("normalized_name");
+
+                    b.Property<string>("NormalizedSourceUrl")
+                        .HasColumnType("text")
+                        .HasColumnName("normalized_source_url");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text")
+                        .HasColumnName("notes");
+
+                    b.Property<int?>("PrepMinutes")
+                        .HasColumnType("integer")
+                        .HasColumnName("prep_minutes");
+
+                    b.Property<string>("SourceSite")
+                        .HasColumnType("text")
+                        .HasColumnName("source_site");
+
+                    b.Property<string>("SourceUrl")
+                        .HasColumnType("text")
+                        .HasColumnName("source_url");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("normal")
+                        .HasColumnName("status");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_recipes");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique()
+                        .HasDatabaseName("ix_recipes_normalized_name");
+
+                    b.HasIndex("NormalizedSourceUrl")
+                        .HasDatabaseName("ix_recipes_normalized_source_url");
+
+                    b.ToTable("recipes", (string)null);
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.RecipeImage", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("AltText")
+                        .HasColumnType("text")
+                        .HasColumnName("alt_text");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<long>("RecipeId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("recipe_id");
+
+                    b.Property<string>("SourceUrl")
+                        .HasColumnType("text")
+                        .HasColumnName("source_url");
+
+                    b.Property<string>("StoragePath")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("storage_path");
+
+                    b.HasKey("Id")
+                        .HasName("pk_recipe_images");
+
+                    b.HasIndex("RecipeId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_recipe_images_recipe_id");
+
+                    b.ToTable("recipe_images", (string)null);
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.RecipeIngredient", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long?>("GroupId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("group_id");
+
+                    b.Property<long>("IngredientId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("ingredient_id");
+
+                    b.Property<bool>("IsOptional")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_optional");
+
+                    b.Property<string>("PreparationNote")
+                        .HasColumnType("text")
+                        .HasColumnName("preparation_note");
+
+                    b.Property<decimal?>("QuantityNumeric")
+                        .HasPrecision(28, 14)
+                        .HasColumnType("numeric(28,14)")
+                        .HasColumnName("quantity_numeric");
+
+                    b.Property<long>("RecipeId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("recipe_id");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<long?>("UnitId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("unit_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_recipe_ingredients");
+
+                    b.HasIndex("GroupId")
+                        .HasDatabaseName("ix_recipe_ingredients_group_id");
+
+                    b.HasIndex("IngredientId")
+                        .HasDatabaseName("ix_recipe_ingredients_ingredient_id");
+
+                    b.HasIndex("RecipeId")
+                        .HasDatabaseName("ix_recipe_ingredients_recipe_id");
+
+                    b.HasIndex("UnitId")
+                        .HasDatabaseName("ix_recipe_ingredients_unit_id");
+
+                    b.ToTable("recipe_ingredients", (string)null);
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.RecipeIngredientGroup", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("RecipeId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("recipe_id");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<string>("Title")
+                        .HasColumnType("text")
+                        .HasColumnName("title");
+
+                    b.HasKey("Id")
+                        .HasName("pk_recipe_ingredient_groups");
+
+                    b.HasIndex("RecipeId")
+                        .HasDatabaseName("ix_recipe_ingredient_groups_recipe_id");
+
+                    b.ToTable("recipe_ingredient_groups", (string)null);
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.RecipeInstructionSection", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("RecipeId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("recipe_id");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<string>("Title")
+                        .HasColumnType("text")
+                        .HasColumnName("title");
+
+                    b.HasKey("Id")
+                        .HasName("pk_recipe_instruction_sections");
+
+                    b.HasIndex("RecipeId")
+                        .HasDatabaseName("ix_recipe_instruction_sections_recipe_id");
+
+                    b.ToTable("recipe_instruction_sections", (string)null);
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.RecipeInstructionStep", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("SectionId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("section_id");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("text");
+
+                    b.HasKey("Id")
+                        .HasName("pk_recipe_instruction_steps");
+
+                    b.HasIndex("SectionId")
+                        .HasDatabaseName("ix_recipe_instruction_steps_section_id");
+
+                    b.ToTable("recipe_instruction_steps", (string)null);
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.RecipeProtein", b =>
+                {
+                    b.Property<long>("RecipeId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("recipe_id");
+
+                    b.Property<long>("ProteinId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("protein_id");
+
+                    b.HasKey("RecipeId", "ProteinId")
+                        .HasName("pk_recipe_proteins");
+
+                    b.HasIndex("ProteinId")
+                        .HasDatabaseName("ix_recipe_proteins_protein_id");
+
+                    b.ToTable("recipe_proteins", (string)null);
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.RecipeTag", b =>
+                {
+                    b.Property<long>("RecipeId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("recipe_id");
+
+                    b.Property<long>("TagId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("tag_id");
+
+                    b.HasKey("RecipeId", "TagId")
+                        .HasName("pk_recipe_tags");
+
+                    b.HasIndex("TagId")
+                        .HasDatabaseName("ix_recipe_tags_tag_id");
+
+                    b.ToTable("recipe_tags", (string)null);
+                });
+
             modelBuilder.Entity("FateAndFridge.Api.Domain.Tag", b =>
                 {
                     b.Property<long>("Id")
@@ -726,6 +1054,109 @@ namespace FateAndFridge.Api.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_ingredient_aliases_ingredients_ingredient_id");
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.RecipeImage", b =>
+                {
+                    b.HasOne("FateAndFridge.Api.Domain.Recipe", null)
+                        .WithMany()
+                        .HasForeignKey("RecipeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_recipe_images_recipes_recipe_id");
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.RecipeIngredient", b =>
+                {
+                    b.HasOne("FateAndFridge.Api.Domain.RecipeIngredientGroup", null)
+                        .WithMany()
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_recipe_ingredients_recipe_ingredient_groups_group_id");
+
+                    b.HasOne("FateAndFridge.Api.Domain.Ingredient", null)
+                        .WithMany()
+                        .HasForeignKey("IngredientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_recipe_ingredients_ingredients_ingredient_id");
+
+                    b.HasOne("FateAndFridge.Api.Domain.Recipe", null)
+                        .WithMany()
+                        .HasForeignKey("RecipeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_recipe_ingredients_recipes_recipe_id");
+
+                    b.HasOne("FateAndFridge.Api.Domain.Unit", null)
+                        .WithMany()
+                        .HasForeignKey("UnitId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_recipe_ingredients_units_unit_id");
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.RecipeIngredientGroup", b =>
+                {
+                    b.HasOne("FateAndFridge.Api.Domain.Recipe", null)
+                        .WithMany()
+                        .HasForeignKey("RecipeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_recipe_ingredient_groups_recipes_recipe_id");
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.RecipeInstructionSection", b =>
+                {
+                    b.HasOne("FateAndFridge.Api.Domain.Recipe", null)
+                        .WithMany()
+                        .HasForeignKey("RecipeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_recipe_instruction_sections_recipes_recipe_id");
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.RecipeInstructionStep", b =>
+                {
+                    b.HasOne("FateAndFridge.Api.Domain.RecipeInstructionSection", null)
+                        .WithMany()
+                        .HasForeignKey("SectionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_recipe_instruction_steps_recipe_instruction_sections_sectio");
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.RecipeProtein", b =>
+                {
+                    b.HasOne("FateAndFridge.Api.Domain.Protein", null)
+                        .WithMany()
+                        .HasForeignKey("ProteinId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_recipe_proteins_proteins_protein_id");
+
+                    b.HasOne("FateAndFridge.Api.Domain.Recipe", null)
+                        .WithMany()
+                        .HasForeignKey("RecipeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_recipe_proteins_recipes_recipe_id");
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.RecipeTag", b =>
+                {
+                    b.HasOne("FateAndFridge.Api.Domain.Recipe", null)
+                        .WithMany()
+                        .HasForeignKey("RecipeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_recipe_tags_recipes_recipe_id");
+
+                    b.HasOne("FateAndFridge.Api.Domain.Tag", null)
+                        .WithMany()
+                        .HasForeignKey("TagId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_recipe_tags_tags_tag_id");
                 });
 
             modelBuilder.Entity("FateAndFridge.Api.Domain.UnitAlias", b =>

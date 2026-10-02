@@ -38,6 +38,14 @@ public sealed class M2SchemaBaselineModelTests
                 typeof(Protein),
                 typeof(Tag),
                 typeof(AuditEvent),
+                typeof(Recipe),
+                typeof(RecipeImage),
+                typeof(RecipeIngredientGroup),
+                typeof(RecipeIngredient),
+                typeof(RecipeInstructionSection),
+                typeof(RecipeInstructionStep),
+                typeof(RecipeProtein),
+                typeof(RecipeTag),
             ]);
     }
 
