@@ -121,7 +121,7 @@ export const MILESTONES: Milestone[] = [
     id: 'M3',
     number: 3,
     name: 'Recipes',
-    status: 'planned',
+    status: 'in_progress',
     summary:
       'Recipe model, editing, and browsing: status, favorites, diet metadata, images, ingredient groups, and ordered instruction steps.',
     features: [
@@ -132,9 +132,9 @@ export const MILESTONES: Milestone[] = [
       'Instruction sections and ordered steps',
       'Recipe create/edit UI, card browser, compact list, filters and sorts',
     ],
-    issues: [],
+    issues: [36, 40, 41, 42, 43, 44, 45, 46, 47, 48, 37, 38, 39],
     issuesNote:
-      'Planned in docs/MILESTONES.md; GitHub issues are created when the milestone starts.',
+      'Tracking #36; M3-01…M3-12: #40, #41, #42, #43, #44, #45, #46, #47, #48, #37, #38, #39.',
   },
   {
     id: 'M4',

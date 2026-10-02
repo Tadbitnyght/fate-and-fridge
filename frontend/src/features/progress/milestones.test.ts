@@ -69,6 +69,15 @@ describe('milestone manifest', () => {
     }
   })
 
+  it('marks M3 in progress with its sub-issue links', () => {
+    const m3 = MILESTONES.find((milestone) => milestone.id === 'M3')
+    expect(m3?.status).toBe('in_progress')
+    expect(m3?.issues).toContain(36)
+    expect(m3?.issues).toContain(40)
+    expect(m3?.issues).toContain(39)
+    expect(m3?.issuesNote).toMatch(/M3-01/)
+  })
+
   it('marks M2 complete with its verification evidence and issue links', () => {
     const m2 = MILESTONES.find((milestone) => milestone.id === 'M2')
     expect(m2?.status).toBe('complete')
@@ -92,7 +101,7 @@ describe('milestone manifest', () => {
     expect(progressSummary()).toEqual({
       total: 15,
       completed: 3,
-      inProgress: 0,
+      inProgress: 1,
       percent: Math.round((3 / 15) * 100),
     })
     expect(
