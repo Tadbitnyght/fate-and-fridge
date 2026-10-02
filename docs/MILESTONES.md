@@ -105,6 +105,10 @@ is tagged `m2-complete`.
 ---
 
 ## Milestone 3 — Recipes
+Approved decisions (2026-10-01): see `docs/M3_PLAN.md` for the authoritative
+recipe model, API/UI scope, image policy, pagination, permissions, validation
+limits, issue order, and execution protocol.
+
 Issues:
 1. Recipe model.
 2. Recipe status.
