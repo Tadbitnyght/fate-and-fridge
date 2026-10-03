@@ -176,12 +176,47 @@ public static class RecipeEndpoints
             return ApiResults.ValidationError(errors);
         }
 
-        var (items, total) = await recipes.ListAsync(limit, offset, cancellationToken);
+        var favorite = ReadOptionalBool(context, "favorite", errors);
+        var vegan = ReadOptionalBool(context, "vegan", errors);
+        var vegetarian = ReadOptionalBool(context, "vegetarian", errors);
+
+        if (errors.Count > 0)
+        {
+            return ApiResults.ValidationError(errors);
+        }
+
+        var (items, total) = await recipes.ListAsync(
+            limit,
+            offset,
+            favorite,
+            vegan,
+            vegetarian,
+            cancellationToken);
         return Results.Ok(new RecipeListResponse(
             items.Select(RecipeListItemResponse.From).ToArray(),
             total,
             limit,
             offset));
+    }
+
+    private static bool? ReadOptionalBool(
+        HttpContext context,
+        string name,
+        Dictionary<string, string[]> errors)
+    {
+        if (!context.Request.Query.TryGetValue(name, out var values))
+        {
+            return null;
+        }
+
+        var raw = values.Count > 0 ? values[^1] : null;
+        if (bool.TryParse(raw, out var parsed))
+        {
+            return parsed;
+        }
+
+        errors[name] = [$"{name} must be true or false."];
+        return null;
     }
 
     private static async Task<IResult> CreateRecipeAsync(

@@ -818,6 +818,71 @@ public sealed class RecipeEndpointsIntegrationTests(M1SetupFixture fixture) : IA
     }
 
     [Fact]
+    public async Task List_filters_by_favorite_vegan_and_vegetarian()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        await SeedUserAsync("root", AdminPassword, cancellationToken, UserRole.Admin);
+        await MarkSetupCompletedAsync(cancellationToken);
+        using var factory = fixture.CreateFactory();
+        using var session = await SignInAsync(factory, "root", AdminPassword, cancellationToken);
+
+        await CreateRecipeAsync(
+            session,
+            """{"name":"Everything","is_favorite":true,"is_vegan":true,"is_vegetarian":true}""",
+            cancellationToken);
+        await CreateRecipeAsync(
+            session,
+            """{"name":"Vegetarian Only","is_favorite":true,"is_vegetarian":true}""",
+            cancellationToken);
+        await CreateRecipeAsync(session, """{"name":"Plain"}""", cancellationToken);
+
+        var favorite = await ReadJsonAsync(
+            await session.Client.GetAsync($"{RecipesPath}?favorite=true", cancellationToken),
+            cancellationToken);
+        favorite.GetProperty("total").GetInt32().Should().Be(2);
+        favorite.GetProperty("items").EnumerateArray()
+            .Select(item => item.GetProperty("name").GetString())
+            .Should().BeEquivalentTo(new[] { "Everything", "Vegetarian Only" });
+
+        var vegan = await ReadJsonAsync(
+            await session.Client.GetAsync($"{RecipesPath}?vegan=true", cancellationToken),
+            cancellationToken);
+        vegan.GetProperty("total").GetInt32().Should().Be(1);
+        vegan.GetProperty("items")[0].GetProperty("name").GetString().Should().Be("Everything");
+
+        var vegetarian = await ReadJsonAsync(
+            await session.Client.GetAsync($"{RecipesPath}?vegetarian=true", cancellationToken),
+            cancellationToken);
+        vegetarian.GetProperty("total").GetInt32().Should().Be(2);
+
+        var combined = await ReadJsonAsync(
+            await session.Client.GetAsync($"{RecipesPath}?favorite=true&vegan=true", cancellationToken),
+            cancellationToken);
+        combined.GetProperty("total").GetInt32().Should().Be(1);
+        combined.GetProperty("items")[0].GetProperty("name").GetString().Should().Be("Everything");
+
+        var notFavorite = await ReadJsonAsync(
+            await session.Client.GetAsync($"{RecipesPath}?favorite=false", cancellationToken),
+            cancellationToken);
+        notFavorite.GetProperty("total").GetInt32().Should().Be(1);
+        notFavorite.GetProperty("items")[0].GetProperty("name").GetString().Should().Be("Plain");
+
+        foreach (var (query, field) in new[]
+                 {
+                     ("?favorite=yes", "favorite"),
+                     ("?vegan=1", "vegan"),
+                     ("?vegetarian=maybe", "vegetarian"),
+                 })
+        {
+            var invalid = await session.Client.GetAsync($"{RecipesPath}{query}", cancellationToken);
+            invalid.StatusCode.Should().Be(HttpStatusCode.BadRequest, "{0} must be rejected", query);
+            (await ReadErrorAsync(invalid, cancellationToken)).GetProperty("details")
+                .GetProperty("field_errors").TryGetProperty(field, out _).Should().BeTrue();
+        }
+    }
+
+    [Fact]
     public async Task Admin_can_use_every_recipe_route()
     {
         var cancellationToken = TestContext.Current.CancellationToken;

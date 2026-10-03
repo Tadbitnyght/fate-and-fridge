@@ -116,9 +116,28 @@ public sealed class RecipeService(
     public async Task<(IReadOnlyList<RecipeRecord> Items, int Total)> ListAsync(
         int limit,
         int offset,
+        bool? isFavorite = null,
+        bool? isVegan = null,
+        bool? isVegetarian = null,
         CancellationToken cancellationToken = default)
     {
         var query = dbContext.Recipes.AsNoTracking();
+
+        if (isFavorite is not null)
+        {
+            query = query.Where(recipe => recipe.IsFavorite == isFavorite.Value);
+        }
+
+        if (isVegan is not null)
+        {
+            query = query.Where(recipe => recipe.IsVegan == isVegan.Value);
+        }
+
+        if (isVegetarian is not null)
+        {
+            query = query.Where(recipe => recipe.IsVegetarian == isVegetarian.Value);
+        }
+
         var total = await query.CountAsync(cancellationToken);
         var recipes = await query
             .OrderByDescending(recipe => recipe.CreatedAt)
