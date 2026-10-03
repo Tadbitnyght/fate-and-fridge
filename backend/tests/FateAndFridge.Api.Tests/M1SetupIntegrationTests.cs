@@ -148,7 +148,7 @@ public sealed class M1SetupIntegrationTests(M1SetupFixture fixture) : IAsyncLife
         using var factory = fixture.CreateFactory();
         var client = factory.CreateClient();
 
-        var before = await client.GetAsync("/api/v1/recipes", cancellationToken);
+        var before = await client.GetAsync("/api/v1/no-such-route", cancellationToken);
         before.StatusCode.Should().Be(HttpStatusCode.Conflict);
 
         using (var scope = factory.Services.CreateScope())
@@ -157,7 +157,7 @@ public sealed class M1SetupIntegrationTests(M1SetupFixture fixture) : IAsyncLife
             await setupState.SetSetupCompletedAsync(cancellationToken: cancellationToken);
         }
 
-        var after = await client.GetAsync("/api/v1/recipes", cancellationToken);
+        var after = await client.GetAsync("/api/v1/no-such-route", cancellationToken);
         after.StatusCode.Should().NotBe(HttpStatusCode.Conflict);
         after.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }

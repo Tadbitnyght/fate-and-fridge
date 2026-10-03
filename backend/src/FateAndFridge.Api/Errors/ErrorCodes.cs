@@ -62,4 +62,7 @@ public static class ErrorCodes
     public const string TagExists = "TAG_EXISTS";
 
     public const string TagInUse = "TAG_IN_USE";
+
+    // M3 recipe codes (docs/M3_PLAN.md §1.2).
+    public const string RecipeExists = "RECIPE_EXISTS";
 }

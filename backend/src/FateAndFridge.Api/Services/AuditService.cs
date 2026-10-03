@@ -52,6 +52,8 @@ public static class AuditEntityTypes
     public const string Protein = "protein";
 
     public const string Tag = "tag";
+
+    public const string Recipe = "recipe";
 }
 
 /// <summary>

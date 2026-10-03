@@ -106,6 +106,9 @@ builder.Services.AddScoped<TagService>();
 
 builder.Services.AddScoped<IReferenceUsageChecker, DefaultReferenceUsageChecker>();
 
+// M3-02: recipe base metadata and status lifecycle.
+builder.Services.AddScoped<RecipeService>();
+
 // M2-07: pure, dependency-free conversion between compatible units; stateless,
 // so a singleton. M8 grocery aggregation consumes it via DI.
 builder.Services.AddSingleton<UnitConversionService>();
@@ -189,6 +192,7 @@ app.MapUnitEndpoints();
 app.MapIngredientEndpoints();
 app.MapProteinEndpoints();
 app.MapTagEndpoints();
+app.MapRecipeEndpoints();
 
 // Test-only permission probes (M1-09): mapped solely in the Testing
 // environment so the permission matrix can exercise server-side enforcement.
