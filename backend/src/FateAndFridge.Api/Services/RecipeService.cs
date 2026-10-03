@@ -465,6 +465,12 @@ public sealed class RecipeService(
             return null;
         }
 
+        if (ContainsDisallowedControlCharacter(trimmed, allowLineWhitespace: false))
+        {
+            errors["source_url"] = ["source_url must not contain control characters."];
+            return null;
+        }
+
         normalizedSourceUrl = BuildNormalizedSourceUrl(uri, trimmed);
         return trimmed;
     }

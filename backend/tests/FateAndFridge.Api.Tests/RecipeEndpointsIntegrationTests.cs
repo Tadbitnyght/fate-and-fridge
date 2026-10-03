@@ -403,6 +403,7 @@ public sealed class RecipeEndpointsIntegrationTests(M1SetupFixture fixture) : IA
             """{"name":"Relative Url","source_url":"recipes/1"}""",
             """{"name":"Words Url","source_url":"not a url"}""",
             """{"name":"Empty Host","source_url":"https://"}""",
+            """{"name":"Control Url","source_url":"https://example.com/a\nb"}""",
             JsonSerializer.Serialize(new
             {
                 name = "Overlong Url",
