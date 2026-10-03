@@ -151,6 +151,34 @@ public sealed class RecipeImageEndpointsIntegrationTests(M1SetupFixture fixture)
     }
 
     [Fact]
+    public async Task Upload_ignores_client_file_names_and_keeps_files_inside_the_images_root()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        await SeedUserAsync("root", AdminPassword, cancellationToken, UserRole.Admin);
+        await MarkSetupCompletedAsync(cancellationToken);
+        using var factory = CreateFactory();
+        var recipe = await SeedRecipeAsync("Traversal Target", SeedTimestamp, cancellationToken);
+        using var session = await SignInAsync(factory, "root", AdminPassword, cancellationToken);
+
+        var upload = await UploadImageAsync(
+            session,
+            recipe.Id,
+            Png(64, 64),
+            "image/png",
+            altText: null,
+            cancellationToken,
+            fileName: "../../evil.png");
+        upload.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var files = ReadImageFiles();
+        files.Should().ContainSingle();
+        Path.GetFileName(files[0]).Should().MatchRegex("^[0-9a-f]{32}\\.png$");
+        files[0].Should().StartWith(ImagesRoot + Path.DirectorySeparatorChar);
+        Directory.GetFiles(_dataDir, "evil*", SearchOption.AllDirectories).Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task Serve_returns_canonical_bytes_content_type_etag_and_supports_not_modified()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -929,7 +957,8 @@ public sealed class RecipeImageEndpointsIntegrationTests(M1SetupFixture fixture)
         byte[] bytes,
         string? declaredContentType,
         string? altText,
-        CancellationToken cancellationToken) =>
+        CancellationToken cancellationToken,
+        string fileName = "upload.bin") =>
         SendImageAsync(
             session.Client,
             recipeId,
@@ -937,7 +966,8 @@ public sealed class RecipeImageEndpointsIntegrationTests(M1SetupFixture fixture)
             declaredContentType,
             altText,
             session.CsrfToken,
-            cancellationToken);
+            cancellationToken,
+            fileName);
 
     private static async Task<HttpResponseMessage> SendImageAsync(
         HttpClient client,
@@ -946,7 +976,8 @@ public sealed class RecipeImageEndpointsIntegrationTests(M1SetupFixture fixture)
         string? declaredContentType,
         string? altText,
         string? csrfToken,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string fileName = "upload.bin")
     {
         using var content = new MultipartFormDataContent();
         var file = new ByteArrayContent(bytes);
@@ -955,7 +986,7 @@ public sealed class RecipeImageEndpointsIntegrationTests(M1SetupFixture fixture)
             file.Headers.ContentType = MediaTypeHeaderValue.Parse(declaredContentType);
         }
 
-        content.Add(file, "file", "upload.bin");
+        content.Add(file, "file", fileName);
         if (altText is not null)
         {
             content.Add(new StringContent(altText, Encoding.UTF8), "alt_text");

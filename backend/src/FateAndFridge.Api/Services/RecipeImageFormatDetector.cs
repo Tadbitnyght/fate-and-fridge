@@ -325,7 +325,7 @@ public static class RecipeImageFormatDetector
 
         var chunkSize = ReadUInt32LittleEndian(bytes[(firstChunkPosition + 4)..]);
         var chunkType = bytes.Slice(firstChunkPosition, 4);
-        var chunkTotal = 8L + chunkSize;
+        var chunkTotal = 8L + chunkSize + (chunkSize % 2);
         if (firstChunkPosition + chunkTotal > bytes.Length)
         {
             return RecipeImageProbe.Malformed();

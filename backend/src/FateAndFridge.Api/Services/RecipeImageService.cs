@@ -117,14 +117,6 @@ public sealed class RecipeImageService(
         return trimmed;
     }
 
-    /// <summary>Reads the active image row of a recipe, or null when absent.</summary>
-    public async Task<RecipeImageRecord?> GetAsync(long recipeId, CancellationToken cancellationToken = default)
-    {
-        var image = await dbContext.RecipeImages.AsNoTracking()
-            .SingleOrDefaultAsync(candidate => candidate.RecipeId == recipeId, cancellationToken);
-        return image is null ? null : ToRecord(image);
-    }
-
     /// <summary>
     /// Reads the served bytes and detected content type of a recipe's active
     /// image, or null when the recipe has no image or its file is unreadable.
