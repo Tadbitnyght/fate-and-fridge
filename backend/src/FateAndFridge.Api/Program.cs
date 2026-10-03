@@ -9,6 +9,7 @@ using FateAndFridge.Api.Services;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -109,6 +110,17 @@ builder.Services.AddScoped<IReferenceUsageChecker, DefaultReferenceUsageChecker>
 // M3-02: recipe base metadata and status lifecycle.
 builder.Services.AddScoped<RecipeService>();
 
+// M3-04: local recipe image storage, content policy, and serving.
+builder.Services.AddScoped<RecipeImageService>();
+
+// M3-04: bound multipart parsing for image uploads before anything is
+// buffered; the endpoint enforces the exact 5 MiB file cap and the format
+// policy on top of this.
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = RecipeImageService.MaxMultipartBodyBytes;
+});
+
 // M2-07: pure, dependency-free conversion between compatible units; stateless,
 // so a singleton. M8 grocery aggregation consumes it via DI.
 builder.Services.AddSingleton<UnitConversionService>();
@@ -193,6 +205,7 @@ app.MapIngredientEndpoints();
 app.MapProteinEndpoints();
 app.MapTagEndpoints();
 app.MapRecipeEndpoints();
+app.MapRecipeImageEndpoints();
 
 // Test-only permission probes (M1-09): mapped solely in the Testing
 // environment so the permission matrix can exercise server-side enforcement.

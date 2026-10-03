@@ -7,7 +7,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FateAndFridge.Api.Services;
 
-/// <summary>One recipe as exposed by the API and by audit snapshots (docs/DATABASE.md §3).</summary>
+/// <summary>
+/// One recipe as exposed by the API and by audit snapshots (docs/DATABASE.md
+/// §3), including its active image (M3-04) when one exists.
+/// </summary>
 public sealed record RecipeRecord(
     long Id,
     string Name,
@@ -23,7 +26,8 @@ public sealed record RecipeRecord(
     bool IsVegan,
     bool IsVegetarian,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    RecipeImageRecord? Image);
 
 /// <summary>
 /// A PATCH-style field: <see cref="IsSet"/> distinguishes an omitted property
@@ -146,7 +150,15 @@ public sealed class RecipeService(
             .Take(limit)
             .ToListAsync(cancellationToken);
 
-        return (recipes.Select(ToRecord).ToArray(), total);
+        var images = await LoadImagesAsync(
+            recipes.Select(recipe => recipe.Id).ToArray(),
+            cancellationToken);
+
+        return (
+            recipes
+                .Select(recipe => ToRecord(recipe, images.GetValueOrDefault(recipe.Id)))
+                .ToArray(),
+            total);
     }
 
     /// <summary>Reads one recipe's base metadata, or null when it does not exist.</summary>
@@ -154,7 +166,12 @@ public sealed class RecipeService(
     {
         var recipe = await dbContext.Recipes.AsNoTracking()
             .SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
-        return recipe is null ? null : ToRecord(recipe);
+        if (recipe is null)
+        {
+            return null;
+        }
+
+        return ToRecord(recipe, await LoadImageAsync(id, cancellationToken));
     }
 
     /// <summary>Creates a recipe and stages its <c>created</c> audit row atomically.</summary>
@@ -237,7 +254,7 @@ public sealed class RecipeService(
         await transaction.CommitAsync(cancellationToken);
 
         logger.LogInformation("Created recipe {RecipeId}", recipe.Id);
-        return new RecipeMutationResult.Success(ToRecord(recipe));
+        return new RecipeMutationResult.Success(ToRecord(recipe, image: null));
     }
 
     /// <summary>
@@ -370,7 +387,8 @@ public sealed class RecipeService(
         }
 
         logger.LogInformation("Updated recipe {RecipeId}", id);
-        return new RecipeMutationResult.Success(ToRecord(recipe));
+        return new RecipeMutationResult.Success(
+            ToRecord(recipe, await LoadImageAsync(recipe.Id, cancellationToken)));
     }
 
     private static Dictionary<string, string[]> NewErrors() => new(StringComparer.Ordinal);
@@ -650,7 +668,35 @@ public sealed class RecipeService(
             is_vegetarian = recipe.IsVegetarian,
         });
 
-    private static RecipeRecord ToRecord(Recipe recipe) =>
+    private async Task<RecipeImageRecord?> LoadImageAsync(
+        long recipeId,
+        CancellationToken cancellationToken)
+    {
+        var image = await dbContext.RecipeImages.AsNoTracking()
+            .SingleOrDefaultAsync(candidate => candidate.RecipeId == recipeId, cancellationToken);
+        return image is null ? null : ToImageRecord(image);
+    }
+
+    private async Task<Dictionary<long, RecipeImageRecord>> LoadImagesAsync(
+        long[] recipeIds,
+        CancellationToken cancellationToken)
+    {
+        if (recipeIds.Length == 0)
+        {
+            return [];
+        }
+
+        var images = await dbContext.RecipeImages.AsNoTracking()
+            .Where(image => recipeIds.Contains(image.RecipeId))
+            .ToListAsync(cancellationToken);
+
+        return images.ToDictionary(image => image.RecipeId, ToImageRecord);
+    }
+
+    private static RecipeImageRecord ToImageRecord(RecipeImage image) =>
+        new(image.Id, image.AltText, image.SourceUrl, image.CreatedAt, image.StoragePath);
+
+    private static RecipeRecord ToRecord(Recipe recipe, RecipeImageRecord? image) =>
         new(
             recipe.Id,
             recipe.Name,
@@ -666,5 +712,6 @@ public sealed class RecipeService(
             recipe.IsVegan,
             recipe.IsVegetarian,
             recipe.CreatedAt,
-            recipe.UpdatedAt);
+            recipe.UpdatedAt,
+            image);
 }

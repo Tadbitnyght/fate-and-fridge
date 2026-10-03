@@ -10,7 +10,7 @@ namespace FateAndFridge.Api.Endpoints;
 
 /// <summary>
 /// Recipe list item as returned by <c>GET /api/v1/recipes</c> (M3-02). The
-/// image, last-eaten, and times-eaten placeholders stay null until M3-04 and
+/// image is embedded since M3-04; last-eaten and times-eaten stay null until
 /// the history milestones land.
 /// </summary>
 public sealed record RecipeListItemResponse(
@@ -34,7 +34,7 @@ public sealed record RecipeListItemResponse(
             record.IsFavorite,
             record.IsVegan,
             record.IsVegetarian,
-            null,
+            record.Image is null ? null : RecipeImageResponse.From(record.Id, record.Image),
             null,
             null,
             record.CreatedAt,
@@ -42,8 +42,9 @@ public sealed record RecipeListItemResponse(
 }
 
 /// <summary>
-/// Complete recipe detail document (M3-02). Every field is always present;
-/// the nested collections stay empty until M3-05 … M3-08 fill them.
+/// Complete recipe detail document (M3-02). Every field is always present; the
+/// active image is embedded since M3-04 and the nested collections stay empty
+/// until M3-05 … M3-08 fill them.
 /// </summary>
 public sealed record RecipeDetailResponse(
     long Id,
@@ -85,7 +86,7 @@ public sealed record RecipeDetailResponse(
             record.IsVegetarian,
             record.CreatedAt,
             record.UpdatedAt,
-            null,
+            record.Image is null ? null : RecipeImageResponse.From(record.Id, record.Image),
             Array.Empty<object>(),
             Array.Empty<object>(),
             Array.Empty<object>(),

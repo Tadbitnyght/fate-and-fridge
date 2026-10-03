@@ -30,6 +30,13 @@ public static class AuditEventTypes
     public const string FactorChanged = "factor_changed";
 
     public const string Reordered = "reordered";
+
+    // M3-04: the active recipe image was uploaded/replaced or its alt text
+    // changed.
+    public const string ImageUpdated = "image_updated";
+
+    // M3-04: the active recipe image was removed.
+    public const string ImageRemoved = "image_removed";
 }
 
 /// <summary>

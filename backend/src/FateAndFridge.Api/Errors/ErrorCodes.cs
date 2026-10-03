@@ -65,4 +65,13 @@ public static class ErrorCodes
 
     // M3 recipe codes (docs/M3_PLAN.md §1.2).
     public const string RecipeExists = "RECIPE_EXISTS";
+
+    // M3-04 image content policy codes (docs/M3_PLAN.md §1.7).
+    public const string ImageTypeNotAllowed = "IMAGE_TYPE_NOT_ALLOWED";
+
+    public const string ImageInvalid = "IMAGE_INVALID";
+
+    public const string ImageTooLarge = "IMAGE_TOO_LARGE";
+
+    public const string ImageDimensionsExceeded = "IMAGE_DIMENSIONS_EXCEEDED";
 }
