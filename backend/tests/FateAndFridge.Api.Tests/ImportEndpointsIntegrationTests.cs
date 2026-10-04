@@ -66,6 +66,15 @@ public sealed class ImportEndpointsIntegrationTests(M1SetupFixture fixture) : IA
         </body></html>
         """;
 
+    private const string MatchedIngredientsHtml =
+        """
+        <html><head><title>Matched</title>
+        <script type="application/ld+json">
+        {"@context":"https://schema.org","@type":"Recipe","name":"Matched","recipeIngredient":["1 cup all-purpose flour","2 Green Onion","3 oz Unobtainium"],"recipeInstructions":[{"@type":"HowToStep","text":"Cook."}]}
+        </script>
+        </head><body></body></html>
+        """;
+
     private const string NoRecipeHtml =
         "<html><head><title>Just an article</title></head><body><p>Nothing to see here.</p></body></html>";
 
@@ -124,6 +133,72 @@ public sealed class ImportEndpointsIntegrationTests(M1SetupFixture fixture) : IA
         recipe.GetProperty("instruction_sections")[0].GetProperty("steps")[0].GetString()
             .Should().Be("Boil the noodles.");
         fetcher.PageCallCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Import_recipe_url_populates_ingredient_match_fields()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        await SeedUserAsync("root", AdminPassword, cancellationToken, UserRole.Admin);
+        await MarkSetupCompletedAsync(cancellationToken);
+        await SeedUnitsAsync(cancellationToken);
+        var (flourId, scallionId, retiredId) = await SeedIngredientsAsync(cancellationToken);
+        var fetcher = new FakeImportFetcher().OnPageHtml(MatchedIngredientsHtml, new Uri(BaseUrl));
+        using var factory = CreateFactory(fetcher);
+        using var session = await SignInAsync(factory, "root", AdminPassword, cancellationToken);
+
+        var response = await SendJsonAsync(
+            session.Client, HttpMethod.Post, ImportPath, """{"url":"https://example.com/recipes/lasagna"}""",
+            session.CsrfToken, cancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var recipe = (await ReadJsonAsync(response, cancellationToken)).GetProperty("recipes")[0];
+
+        var canonical = recipe.GetProperty("ingredients")[0];
+        canonical.GetProperty("matched_ingredient_id").GetInt64().Should().Be(flourId);
+        canonical.GetProperty("match_kind").GetString().Should().Be(IngredientMatcher.ExactKind);
+        canonical.GetProperty("is_unknown").GetBoolean().Should().BeFalse();
+        canonical.GetProperty("suggestions")[0].GetProperty("id").GetInt64().Should().Be(flourId);
+
+        var alias = recipe.GetProperty("ingredients")[1];
+        alias.GetProperty("matched_ingredient_id").GetInt64().Should().Be(scallionId);
+        alias.GetProperty("match_kind").GetString().Should().Be(IngredientMatcher.AliasKind);
+        alias.GetProperty("is_unknown").GetBoolean().Should().BeFalse();
+
+        var unknown = recipe.GetProperty("ingredients")[2];
+        unknown.GetProperty("matched_ingredient_id").ValueKind.Should().Be(JsonValueKind.Null);
+        unknown.GetProperty("match_kind").ValueKind.Should().Be(JsonValueKind.Null);
+        unknown.GetProperty("is_unknown").GetBoolean().Should().BeTrue();
+        unknown.GetProperty("suggestions").EnumerateArray()
+            .Select(suggestion => suggestion.GetProperty("id").GetInt64())
+            .Should().NotContain(retiredId);
+
+        recipe.GetProperty("warnings").EnumerateArray().Select(value => value.GetString())
+            .Should().Contain(ImportWarningCodes.IngredientUnknown);
+    }
+
+    [Fact]
+    public async Task Import_recipe_url_omits_unknown_warning_when_all_ingredients_match()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        await SeedUserAsync("root", AdminPassword, cancellationToken, UserRole.Admin);
+        await MarkSetupCompletedAsync(cancellationToken);
+        await SeedUnitsAsync(cancellationToken);
+        await SeedIngredientsAsync(cancellationToken);
+        var fetcher = new FakeImportFetcher().OnPageHtml(JsonLdHtml, new Uri(BaseUrl));
+        using var factory = CreateFactory(fetcher);
+        using var session = await SignInAsync(factory, "root", AdminPassword, cancellationToken);
+
+        var response = await SendJsonAsync(
+            session.Client, HttpMethod.Post, ImportPath, """{"url":"https://example.com/recipes/lasagna"}""",
+            session.CsrfToken, cancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var recipe = (await ReadJsonAsync(response, cancellationToken)).GetProperty("recipes")[0];
+        recipe.GetProperty("warnings").EnumerateArray().Select(value => value.GetString())
+            .Should().NotContain(ImportWarningCodes.IngredientUnknown);
     }
 
     [Fact]
@@ -713,7 +788,9 @@ public sealed class ImportEndpointsIntegrationTests(M1SetupFixture fixture) : IA
     /// Ensures the canonical units exist for unit resolution. The shared
     /// container may have had its units cleared by a sibling integration test
     /// while the seeded flag remained, so the flag is cleared and the
-    /// production seeder re-run deterministically.
+    /// production seeder re-run deterministically. Ingredient rows are cleared
+    /// too so every test starts from a known, order-independent catalog; tests
+    /// that need ingredients seed them afterwards.
     /// </summary>
     private async Task SeedUnitsAsync(CancellationToken cancellationToken)
     {
@@ -723,9 +800,68 @@ public sealed class ImportEndpointsIntegrationTests(M1SetupFixture fixture) : IA
             DELETE FROM unit_aliases;
             DELETE FROM units;
             DELETE FROM application_settings WHERE key = 'reference_data_seeded';
+            DELETE FROM recipe_ingredients WHERE ingredient_id IS NOT NULL;
+            DELETE FROM ingredient_aliases;
+            DELETE FROM ingredients;
             """,
             cancellationToken);
         await new ReferenceDataSeeder(context).SeedAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Seeds the ingredient-match fixture directly (the production seeder only
+    /// creates units). Clears any leftover ingredient rows first because the M1
+    /// reset does not touch the M2 ingredient tables. Returns the active flour,
+    /// the active scallion (aliased "Green Onion"), and the retired ingredient id.
+    /// </summary>
+    private async Task<(long FlourId, long ScallionId, long RetiredId)> SeedIngredientsAsync(
+        CancellationToken cancellationToken)
+    {
+        await using var context = fixture.CreateContext();
+        await context.Database.ExecuteSqlRawAsync(
+            """
+            DELETE FROM recipe_ingredients WHERE ingredient_id IS NOT NULL;
+            DELETE FROM ingredient_aliases;
+            DELETE FROM ingredients;
+            """,
+            cancellationToken);
+
+        var flour = AddIngredient(context, "All-Purpose Flour", active: true);
+        var scallion = AddIngredient(context, "Scallion", active: true);
+        var retired = AddIngredient(context, "Obsolete Herb", active: false);
+        await context.SaveChangesAsync(cancellationToken);
+
+        AddAlias(context, flour.Id, "plain flour");
+        AddAlias(context, scallion.Id, "Green Onion");
+        await context.SaveChangesAsync(cancellationToken);
+
+        return (flour.Id, scallion.Id, retired.Id);
+
+        static Ingredient AddIngredient(AppDbContext context, string canonicalName, bool active)
+        {
+            var normalized = (ReferenceDataNormalizationResult.Success)ReferenceDataNormalizer.Normalize(canonicalName)!;
+            var ingredient = new Ingredient
+            {
+                CanonicalName = normalized.Display,
+                NormalizedName = normalized.Normalized,
+                IsActive = active,
+                CreatedAt = SeedTimestamp,
+                UpdatedAt = SeedTimestamp,
+            };
+            context.Ingredients.Add(ingredient);
+            return ingredient;
+        }
+
+        static void AddAlias(AppDbContext context, long ingredientId, string alias)
+        {
+            var normalized = (ReferenceDataNormalizationResult.Success)ReferenceDataNormalizer.Normalize(alias)!;
+            context.IngredientAliases.Add(new IngredientAlias
+            {
+                IngredientId = ingredientId,
+                Alias = normalized.Display,
+                NormalizedAlias = normalized.Normalized,
+            });
+        }
     }
 
     private static async Task<JsonElement> ReadJsonAsync(

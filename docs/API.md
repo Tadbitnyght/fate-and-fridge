@@ -453,17 +453,28 @@ element):
 - `image_source_url` is a resolved preview URL only; the image is downloaded
   after review via `POST /recipes/{id}/image/from-url` (M4-07).
 - Ingredient lines are split into `quantity`, `name`, and `preparation_note`
-  (M4-05), and `unit` is resolved against active unit symbols and aliases
-  (folded). A parsed quantity is clamped to the M3 bounds (`0`–`1,000,000`,
-  ≤14 decimal places). Ranges, multipliers, and word quantities stay raw with
-  `quantity = null`; an unresolvable unit stays `is_unknown = true` with an
-  optional `suggested_dimension` (`mass`/`volume`/`count`) and up to five
-  suggestions. Package sizes are preserved in the name and never converted.
+  (M4-05), the `unit` is resolved against active unit symbols and aliases
+  (folded), and the `name` is matched (M4-06) against active canonical
+  ingredients. `match_kind` is `exact` for a folded canonical-name match,
+  `alias` for a folded alias match, and `null` when unknown; `is_unknown` is
+  true when no confident match exists. `suggestions` is a bounded (max 5),
+  deterministic list (exact-prefix before substring, then shorter phrase, then
+  id) over active canonical names and aliases. Retired/merged ingredients are
+  never matched or suggested; a folded key shared by more than one active
+  ingredient stays unknown rather than guessed. A parsed quantity is clamped to
+  the M3 bounds (`0`–`1,000,000`, ≤14 decimal places). Ranges, multipliers, and
+  word quantities stay raw with `quantity = null`; an unresolvable unit stays
+  `is_unknown = true` with an optional `suggested_dimension`
+  (`mass`/`volume`/`count`) and up to five suggestions. Package sizes are
+  preserved in the name and never converted.
+- `warnings` contains `ingredient_unknown` only when at least one ingredient
+  line is `is_unknown`; a draft whose lines all match carries no such warning.
+  The review screen maps an unknown line to an existing ingredient or creates
+  one when permitted; no free-text ingredient id is ever sent to `POST /recipes`.
 
-**M4-05 limitations (filled in by later M4 issues):** `source.page_title` is
-`null`; canonical ingredient matching, `match_kind`, and ingredient
-`suggestions` are empty and every ingredient stays `is_unknown = true` (M4-06).
-Advanced duplicate scoring and rename rechecks arrive in M4-11/M4-12.
+**M4-06 limitations (filled in by later M4 issues):** `source.page_title` is
+`null`; advanced duplicate scoring (beyond exact normalized URL and bounded name
+containment) and rename rechecks arrive in M4-11/M4-12.
 
 ### `POST /api/v1/import/check`
 

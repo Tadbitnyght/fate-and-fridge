@@ -45,10 +45,12 @@ public abstract record ImportRecipeUrlResult
 /// </para>
 /// <para>
 /// Ingredient lines are split into quantity/unit/name/preparation note and the
-/// unit text is resolved against active reference data (M4-05). Canonical
-/// ingredient matching (M4-06) still fills the remaining fields later, so
-/// <c>matched_ingredient_id</c> stays null, ingredient <c>is_unknown</c> stays
-/// true, and ingredient suggestions stay empty.
+/// unit text is resolved against active reference data (M4-05). The canonical
+/// ingredient name is then matched (M4-06) against active
+/// <see cref="IngredientCandidate"/>s: folded canonical-name exact, then folded
+/// alias exact, and otherwise a bounded suggestion list with
+/// <c>is_unknown = true</c>. Retired/merged ingredients are never matched or
+/// suggested.
 /// </para>
 /// </remarks>
 public sealed class RecipeImportService(
@@ -86,6 +88,8 @@ public sealed class RecipeImportService(
             .ConfigureAwait(false);
         var normalizer = new ImportNormalizer(
             await LoadUnitCatalogAsync(cancellationToken).ConfigureAwait(false));
+        var matcher = new IngredientMatcher(
+            await LoadIngredientCatalogAsync(cancellationToken).ConfigureAwait(false));
 
         var recipes = new List<ImportDraftRecipe>(candidates.Count);
         for (var index = 0; index < candidates.Count; index++)
@@ -96,6 +100,7 @@ public sealed class RecipeImportService(
                     sourceSite,
                     finalUrl,
                     normalizer,
+                    matcher,
                     cancellationToken)
                 .ConfigureAwait(false));
         }
@@ -166,29 +171,34 @@ public sealed class RecipeImportService(
         string sourceSite,
         Uri baseUri,
         ImportNormalizer normalizer,
+        IngredientMatcher matcher,
         CancellationToken cancellationToken)
     {
         var name = Sanitize(candidate.Name, RecipeService.MaxNameLength) ?? string.Empty;
         var nameMatches = await FindNameMatchesAsync(name, cancellationToken).ConfigureAwait(false);
 
         var ingredients = new List<ImportDraftIngredient>(candidate.IngredientLines.Count);
+        var anyUnknown = false;
         foreach (var line in candidate.IngredientLines)
         {
             var raw = Sanitize(line, RecipeService.MaxLongTextLength) ?? string.Empty;
             var parsed = normalizer.Parse(raw);
+            var ingredientName = Sanitize(parsed.Name, RecipeService.MaxLongTextLength);
+            var match = matcher.Match(ingredientName);
+            anyUnknown |= match.IsUnknown;
             ingredients.Add(new ImportDraftIngredient(
                 Raw: raw,
                 Quantity: ImportNormalizer.ClampQuantity(parsed.Quantity),
-                Name: Sanitize(parsed.Name, RecipeService.MaxLongTextLength),
+                Name: ingredientName,
                 PreparationNote: Sanitize(parsed.PreparationNote, RecipeService.MaxLongTextLength),
-                MatchedIngredientId: null,
-                MatchKind: null,
-                IsUnknown: true,
-                Suggestions: [],
+                MatchedIngredientId: match.MatchedIngredientId,
+                MatchKind: match.MatchKind,
+                IsUnknown: match.IsUnknown,
+                Suggestions: match.Suggestions,
                 Unit: normalizer.ResolveUnit(parsed.UnitText)));
         }
 
-        var warnings = ingredients.Count > 0
+        var warnings = anyUnknown
             ? new[] { ImportWarningCodes.IngredientUnknown }
             : [];
 
@@ -255,6 +265,50 @@ public sealed class RecipeImportService(
                 unit.DisplayName,
                 unit.Dimension,
                 aliasesByUnit.TryGetValue(unit.Id, out var list) ? list : []))
+            .ToArray();
+    }
+
+    /// <summary>
+    /// Loads active ingredients (and their aliases) for folded import matching
+    /// (M4-06). Retired and merged ingredients are excluded at the source, and
+    /// the ordering is deterministic so suggestions are stable.
+    /// </summary>
+    private async Task<IReadOnlyList<IngredientCandidate>> LoadIngredientCatalogAsync(
+        CancellationToken cancellationToken)
+    {
+        var ingredients = await dbContext.Ingredients
+            .AsNoTracking()
+            .Where(ingredient => ingredient.IsActive)
+            .OrderBy(ingredient => ingredient.Id)
+            .Select(ingredient => new { ingredient.Id, ingredient.CanonicalName })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+        if (ingredients.Count == 0)
+        {
+            return [];
+        }
+
+        var aliases = await dbContext.IngredientAliases
+            .AsNoTracking()
+            .Where(alias => dbContext.Ingredients.Any(
+                ingredient => ingredient.Id == alias.IngredientId && ingredient.IsActive))
+            .OrderBy(alias => alias.IngredientId)
+            .ThenBy(alias => alias.Alias)
+            .Select(alias => new { alias.IngredientId, alias.Alias })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+        var aliasesByIngredient = aliases
+            .GroupBy(alias => alias.IngredientId)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<string>)group.Select(alias => alias.Alias).ToArray());
+
+        return ingredients
+            .Select(ingredient => new IngredientCandidate(
+                ingredient.Id,
+                ingredient.CanonicalName,
+                IsActive: true,
+                aliasesByIngredient.TryGetValue(ingredient.Id, out var list) ? list : []))
             .ToArray();
     }
 

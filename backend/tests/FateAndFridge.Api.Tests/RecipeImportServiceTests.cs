@@ -54,6 +54,15 @@ public sealed class RecipeImportServiceTests(M1SetupFixture fixture) : IAsyncLif
         </head><body></body></html>
         """;
 
+    private const string MatchedIngredientsHtml =
+        """
+        <html><head><title>Matched</title>
+        <script type="application/ld+json">
+        {"@context":"https://schema.org","@type":"Recipe","name":"Matched","recipeIngredient":["1 cup all-purpose flour","2 Green Onion","3 oz Unobtainium"],"recipeInstructions":[{"@type":"HowToStep","text":"Cook."}]}
+        </script>
+        </head><body></body></html>
+        """;
+
     public async ValueTask InitializeAsync() =>
         await fixture.ResetAsync(TestContext.Current.CancellationToken);
 
@@ -64,6 +73,7 @@ public sealed class RecipeImportServiceTests(M1SetupFixture fixture) : IAsyncLif
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await SeedReferenceDataAsync(cancellationToken);
+        await ClearIngredientsAsync(cancellationToken);
         var fetcher = new FakeImportFetcher().OnPageHtml(JsonLdHtml, new Uri(BaseUrl));
         await using var context = fixture.CreateContext();
         var service = CreateService(context, fetcher);
@@ -97,9 +107,9 @@ public sealed class RecipeImportServiceTests(M1SetupFixture fixture) : IAsyncLif
         ingredient.Quantity.Should().Be(1.5m);
         ingredient.Name.Should().Be("all-purpose flour");
         ingredient.PreparationNote.Should().Be("sifted");
-        ingredient.MatchedIngredientId.Should().BeNull("canonical matching is M4-06");
+        ingredient.MatchedIngredientId.Should().BeNull("no active ingredient catalog is seeded");
         ingredient.MatchKind.Should().BeNull();
-        ingredient.IsUnknown.Should().BeTrue("canonical matching is M4-06");
+        ingredient.IsUnknown.Should().BeTrue("no active ingredient catalog is seeded");
         ingredient.Suggestions.Should().BeEmpty();
         ingredient.Unit.Raw.Should().Be("cups");
         ingredient.Unit.MatchedUnitId.Should().NotBeNull();
@@ -329,13 +339,89 @@ public sealed class RecipeImportServiceTests(M1SetupFixture fixture) : IAsyncLif
         result.NameMatches.Should().ContainSingle().Which.Id.Should().Be(seeded.Id);
     }
 
+    [Fact]
+    public async Task Import_matches_canonical_and_alias_ingredient_names()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedReferenceDataAsync(cancellationToken);
+        var (flourId, scallionId, retiredId) = await SeedIngredientsAsync(cancellationToken);
+        var fetcher = new FakeImportFetcher().OnPageHtml(MatchedIngredientsHtml, new Uri(BaseUrl));
+        await using var context = fixture.CreateContext();
+        var service = CreateService(context, fetcher);
+
+        var result = await service.ImportAsync(BaseUrl, canCreateReferenceData: false, cancellationToken);
+
+        var recipe = result.Should().BeOfType<ImportRecipeUrlResult.Success>()
+            .Subject.Draft.Recipes.Should().ContainSingle().Subject;
+
+        var canonical = recipe.Ingredients[0];
+        canonical.Name.Should().Be("all-purpose flour");
+        canonical.MatchedIngredientId.Should().Be(flourId);
+        canonical.MatchKind.Should().Be(IngredientMatcher.ExactKind);
+        canonical.IsUnknown.Should().BeFalse();
+        canonical.Suggestions.Should().ContainSingle().Which.Id.Should().Be(flourId);
+
+        var alias = recipe.Ingredients[1];
+        alias.Name.Should().Be("Green Onion");
+        alias.MatchedIngredientId.Should().Be(scallionId);
+        alias.MatchKind.Should().Be(IngredientMatcher.AliasKind);
+        alias.IsUnknown.Should().BeFalse();
+
+        var unknown = recipe.Ingredients[2];
+        unknown.Name.Should().Be("Unobtainium");
+        unknown.IsUnknown.Should().BeTrue();
+        unknown.MatchedIngredientId.Should().BeNull();
+        unknown.Suggestions.Should().NotContain(suggestion => suggestion.Id == retiredId);
+
+        recipe.Warnings.Should().Contain(ImportWarningCodes.IngredientUnknown);
+    }
+
+    [Fact]
+    public async Task Import_omits_the_unknown_warning_when_every_ingredient_matches()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedReferenceDataAsync(cancellationToken);
+        await SeedIngredientAsync("All-Purpose Flour", ["plain flour"], cancellationToken);
+        var fetcher = new FakeImportFetcher().OnPageHtml(JsonLdHtml, new Uri(BaseUrl));
+        await using var context = fixture.CreateContext();
+        var service = CreateService(context, fetcher);
+
+        var result = await service.ImportAsync(BaseUrl, canCreateReferenceData: false, cancellationToken);
+
+        var recipe = result.Should().BeOfType<ImportRecipeUrlResult.Success>()
+            .Subject.Draft.Recipes.Should().ContainSingle().Subject;
+        recipe.Ingredients.Should().ContainSingle().Which.IsUnknown.Should().BeFalse();
+        recipe.Warnings.Should().NotContain(ImportWarningCodes.IngredientUnknown);
+    }
+
+    [Fact]
+    public async Task Import_leaves_ingredients_unknown_when_no_catalog_exists()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedReferenceDataAsync(cancellationToken);
+        await ClearIngredientsAsync(cancellationToken);
+        var fetcher = new FakeImportFetcher().OnPageHtml(JsonLdHtml, new Uri(BaseUrl));
+        await using var context = fixture.CreateContext();
+        var service = CreateService(context, fetcher);
+
+        var result = await service.ImportAsync(BaseUrl, canCreateReferenceData: false, cancellationToken);
+
+        var ingredient = result.Should().BeOfType<ImportRecipeUrlResult.Success>()
+            .Subject.Draft.Recipes.Should().ContainSingle().Subject.Ingredients.Should().ContainSingle().Subject;
+        ingredient.IsUnknown.Should().BeTrue();
+        ingredient.Suggestions.Should().BeEmpty();
+    }
+
     private static RecipeImportService CreateService(AppDbContext context, IImportFetcher fetcher) =>
         new(context, fetcher, new TestTimeProvider(DateTimeOffset.UtcNow), NullLogger<RecipeImportService>.Instance);
 
     /// <summary>
     /// Installs the canonical reference data for unit resolution. Units are not
     /// part of the M1 reset, and another class may have cleared them, so this
-    /// clears and re-seeds deterministically through the production seeder.
+    /// clears and re-seeds deterministically through the production seeder. It
+    /// also clears ingredient rows so every test in this class starts from a
+    /// known, order-independent catalog; tests that need ingredients seed them
+    /// afterwards.
     /// </summary>
     private async Task SeedReferenceDataAsync(CancellationToken cancellationToken)
     {
@@ -347,8 +433,114 @@ public sealed class RecipeImportServiceTests(M1SetupFixture fixture) : IAsyncLif
             DELETE FROM application_settings WHERE key = 'reference_data_seeded';
             """,
             cancellationToken);
+        await ClearIngredientsAsync(context, cancellationToken);
         await new ReferenceDataSeeder(context).SeedAsync(cancellationToken);
     }
+
+    /// <summary>
+    /// Inserts one canonical ingredient directly (the production seeder does not
+    /// create ingredients). <see cref="M1SetupFixture.ResetAsync"/> does not
+    /// touch the M2 ingredient tables, so each caller starts by clearing them.
+    /// </summary>
+    private async Task<long> SeedIngredientAsync(
+        string canonicalName,
+        IReadOnlyList<string> aliases,
+        CancellationToken cancellationToken,
+        bool active = true)
+    {
+        await using var context = fixture.CreateContext();
+        await ClearIngredientsAsync(context, cancellationToken);
+
+        var normalized = (ReferenceDataNormalizationResult.Success)ReferenceDataNormalizer.Normalize(canonicalName)!;
+        var ingredient = new Ingredient
+        {
+            CanonicalName = normalized.Display,
+            NormalizedName = normalized.Normalized,
+            IsActive = active,
+            CreatedAt = SeedTimestamp,
+            UpdatedAt = SeedTimestamp,
+        };
+        context.Ingredients.Add(ingredient);
+        await context.SaveChangesAsync(cancellationToken);
+
+        foreach (var alias in aliases)
+        {
+            var aliasNormalized = (ReferenceDataNormalizationResult.Success)ReferenceDataNormalizer.Normalize(alias)!;
+            context.IngredientAliases.Add(new IngredientAlias
+            {
+                IngredientId = ingredient.Id,
+                Alias = aliasNormalized.Display,
+                NormalizedAlias = aliasNormalized.Normalized,
+            });
+        }
+
+        await context.SaveChangesAsync(cancellationToken);
+        return ingredient.Id;
+    }
+
+    /// <summary>
+    /// Seeds the match fixture in one transaction: an active canonical flour, an
+    /// active scallion with a "Green Onion" alias, and a retired ingredient that
+    /// must never surface. Clears existing ingredient rows first.
+    /// </summary>
+    private async Task<(long FlourId, long ScallionId, long RetiredId)> SeedIngredientsAsync(
+        CancellationToken cancellationToken)
+    {
+        await using var context = fixture.CreateContext();
+        await ClearIngredientsAsync(context, cancellationToken);
+
+        var flour = AddIngredient(context, "All-Purpose Flour", active: true);
+        var scallion = AddIngredient(context, "Scallion", active: true);
+        var retired = AddIngredient(context, "Obsolete Herb", active: false);
+        await context.SaveChangesAsync(cancellationToken);
+
+        AddAlias(context, flour.Id, "plain flour");
+        AddAlias(context, scallion.Id, "Green Onion");
+        await context.SaveChangesAsync(cancellationToken);
+
+        return (flour.Id, scallion.Id, retired.Id);
+
+        static Ingredient AddIngredient(AppDbContext context, string canonicalName, bool active)
+        {
+            var normalized = (ReferenceDataNormalizationResult.Success)ReferenceDataNormalizer.Normalize(canonicalName)!;
+            var ingredient = new Ingredient
+            {
+                CanonicalName = normalized.Display,
+                NormalizedName = normalized.Normalized,
+                IsActive = active,
+                CreatedAt = SeedTimestamp,
+                UpdatedAt = SeedTimestamp,
+            };
+            context.Ingredients.Add(ingredient);
+            return ingredient;
+        }
+
+        static void AddAlias(AppDbContext context, long ingredientId, string alias)
+        {
+            var normalized = (ReferenceDataNormalizationResult.Success)ReferenceDataNormalizer.Normalize(alias)!;
+            context.IngredientAliases.Add(new IngredientAlias
+            {
+                IngredientId = ingredientId,
+                Alias = normalized.Display,
+                NormalizedAlias = normalized.Normalized,
+            });
+        }
+    }
+
+    private async Task ClearIngredientsAsync(CancellationToken cancellationToken)
+    {
+        await using var context = fixture.CreateContext();
+        await ClearIngredientsAsync(context, cancellationToken);
+    }
+
+    private static Task ClearIngredientsAsync(AppDbContext context, CancellationToken cancellationToken) =>
+        context.Database.ExecuteSqlRawAsync(
+            """
+            DELETE FROM recipe_ingredients WHERE ingredient_id IS NOT NULL;
+            DELETE FROM ingredient_aliases;
+            DELETE FROM ingredients;
+            """,
+            cancellationToken);
 
     private async Task<Recipe> SeedRecipeAsync(
         string name,
