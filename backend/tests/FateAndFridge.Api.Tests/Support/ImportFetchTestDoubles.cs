@@ -144,6 +144,35 @@ internal sealed class FailingDnsResolver : IDnsResolver
 }
 
 /// <summary>
+/// DNS seam that returns successive address sets and repeats the last one.
+/// Drives the DNS-rebinding test through the production pinned transport.
+/// </summary>
+internal sealed class StatefulDnsResolver : IDnsResolver
+{
+    private readonly Queue<IPAddress[]> _answers;
+    private readonly Lock _gate = new();
+    private IPAddress[] _last = [];
+
+    public StatefulDnsResolver(params IPAddress[][] answers) => _answers = new Queue<IPAddress[]>(answers);
+
+    public int Calls { get; private set; }
+
+    public Task<IPAddress[]> ResolveAsync(string host, CancellationToken cancellationToken)
+    {
+        lock (_gate)
+        {
+            Calls++;
+            if (_answers.Count > 0)
+            {
+                _last = _answers.Dequeue();
+            }
+
+            return Task.FromResult(_last);
+        }
+    }
+}
+
+/// <summary>
 /// Minimal loopback HTTP server used for the happy-path integration test. It
 /// binds to 127.0.0.1 only and never touches the public internet.
 /// </summary>

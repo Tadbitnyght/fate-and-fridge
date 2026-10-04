@@ -102,6 +102,33 @@ public sealed class ImportUrlPolicyTests
     }
 
     [Theory]
+    [InlineData("http://2130706433./")]
+    [InlineData("http://0x7f000001./")]
+    [InlineData("http://0177.0.0.1./")]
+    public void Evaluate_rejects_trailing_dot_obfuscated_hosts(string url)
+    {
+        ImportUrlPolicy.Evaluate(url).Reason.Should().Be(ImportUrlBlockReason.HostBlocked);
+    }
+
+    [Theory]
+    [InlineData("http://127.0.0.1./")]
+    [InlineData("http://10.0.0.1./")]
+    [InlineData("http://169.254.169.254./")]
+    [InlineData("http://[::1]/")]
+    public void Evaluate_rejects_trailing_dot_or_literal_blocked_addresses(string url)
+    {
+        ImportUrlPolicy.Evaluate(url).Reason.Should().Be(ImportUrlBlockReason.AddressBlocked);
+    }
+
+    [Theory]
+    [InlineData("https://8.8.8.8./")]
+    [InlineData("http://[2606:4700:4700::1111]/")]
+    public void Evaluate_allows_trailing_dot_public_literals(string url)
+    {
+        ImportUrlPolicy.Evaluate(url).IsAllowed.Should().BeTrue();
+    }
+
+    [Theory]
     [InlineData("127.0.0.1")]
     [InlineData("127.255.255.255")]
     [InlineData("10.0.0.1")]
@@ -136,8 +163,12 @@ public sealed class ImportUrlPolicyTests
     [InlineData("100::1")]
     [InlineData("2001::1")]
     [InlineData("2001:2::1")]
+    [InlineData("2001:10::1")]
+    [InlineData("2001:20::1")]
     [InlineData("2001:db8::1")]
     [InlineData("2002::1")]
+    [InlineData("3fff::1")]
+    [InlineData("5f00::1")]
     [InlineData("fc00::1")]
     [InlineData("fd00:ec2::254")]
     [InlineData("fe80::1")]

@@ -404,6 +404,130 @@ public sealed class SafeUrlFetcherTests
     }
 
     [Fact]
+    public async Task FetchPageAsync_maps_timeout_across_multiple_hops()
+    {
+        var handler = new StubHttpMessageHandler(async (request, cancellationToken) =>
+        {
+            if (request.RequestUri!.AbsolutePath == "/start")
+            {
+                return ImportTestResponses.Redirect(HttpStatusCode.Found, "/slow");
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
+            return ImportTestResponses.Html("late");
+        });
+        using var fetcher = CreateFetcher(handler, options: new ImportFetchOptions
+        {
+            ReadTimeout = TimeSpan.FromMilliseconds(200),
+        });
+
+        var result = await fetcher.FetchPageAsync("https://example.com/start", Ct);
+
+        result.FailureReason.Should().Be(ImportFetchFailureReason.Timeout);
+    }
+
+    [Fact]
+    public async Task FetchPageAsync_maps_connect_timeout_to_timeout_reason()
+    {
+        var handler = new StubHttpMessageHandler(_ =>
+            throw new HttpRequestException("connect failed", new TimeoutException("connect timeout")));
+        using var fetcher = CreateFetcher(handler);
+
+        var result = await fetcher.FetchPageAsync("https://example.com/slow", Ct);
+
+        result.FailureReason.Should().Be(ImportFetchFailureReason.Timeout);
+    }
+
+    [Fact]
+    public async Task FetchPageAsync_rejects_redirect_to_hostname_resolving_to_private_address()
+    {
+        var handler = HandlerFor(new Dictionary<string, Func<HttpResponseMessage>>
+        {
+            ["/start"] = () => ImportTestResponses.Redirect(
+                HttpStatusCode.Found,
+                "http://internal.example.com/secret"),
+        });
+        var resolver = new FakeDnsResolver(host => host == "internal.example.com"
+            ? [IPAddress.Parse("10.0.0.7")]
+            : [PublicAddress]);
+        using var fetcher = CreateFetcher(handler, resolver);
+
+        var result = await fetcher.FetchPageAsync("https://example.com/start", Ct);
+
+        result.FailureReason.Should().Be(ImportFetchFailureReason.BlockedTarget);
+        handler.Requests.Should().HaveCount(1);
+    }
+
+    [Theory]
+    [InlineData("TEXT/HTML; charset=UTF-8")]
+    [InlineData("Application/XHTML+XML; charset=utf-8")]
+    public async Task FetchPageAsync_accepts_content_type_with_parameters_and_case(string contentType)
+    {
+        var handler = new StubHttpMessageHandler(_ =>
+            ImportTestResponses.Content(
+                HttpStatusCode.OK,
+                contentType,
+                Encoding.UTF8.GetBytes("<html></html>")));
+        using var fetcher = CreateFetcher(handler);
+
+        var result = await fetcher.FetchPageAsync("https://example.com/", Ct);
+
+        result.IsSuccess.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task FetchImageAsync_accepts_uppercase_image_content_type()
+    {
+        var handler = new StubHttpMessageHandler(_ =>
+            ImportTestResponses.Content(HttpStatusCode.OK, "IMAGE/PNG", new byte[] { 1, 2, 3 }));
+        using var fetcher = CreateFetcher(handler);
+
+        var result = await fetcher.FetchImageAsync("https://example.com/x.png", Ct);
+
+        result.IsSuccess.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task FetchPageAsync_fails_closed_when_dns_rebinds_to_private_at_connect_time()
+    {
+        // Public at the fail-fast pre-check, private when the production pinned
+        // transport re-resolves at connect time. No injected handler is used,
+        // so this exercises CreatePinnedHandler/ConnectAsync directly.
+        var resolver = new StatefulDnsResolver(
+            [IPAddress.Parse("93.184.216.34")],
+            [IPAddress.Parse("127.0.0.1")]);
+        using var fetcher = new SafeUrlFetcher(
+            NullLogger<SafeUrlFetcher>.Instance,
+            DefaultOptions(),
+            resolver,
+            handlerFactory: null);
+
+        var result = await fetcher.FetchPageAsync("https://evil.example.com/recipe", Ct);
+
+        result.FailureReason.Should().Be(ImportFetchFailureReason.BlockedTarget);
+        resolver.Calls.Should().BeGreaterThanOrEqualTo(2);
+    }
+
+    [Fact]
+    public void Pinned_handler_disables_proxy_redirects_and_cookies()
+    {
+        using var fetcher = new SafeUrlFetcher(
+            NullLogger<SafeUrlFetcher>.Instance,
+            DefaultOptions(),
+            new FakeDnsResolver(PublicAddress),
+            handlerFactory: null);
+
+        using var handler = fetcher.CreatePinnedHandler();
+
+        handler.UseProxy.Should().BeFalse();
+        handler.AllowAutoRedirect.Should().BeFalse();
+        handler.UseCookies.Should().BeFalse();
+        handler.AutomaticDecompression.Should().Be(DecompressionMethods.None);
+        handler.ConnectTimeout.Should().Be(DefaultOptions().ConnectTimeout);
+        handler.ConnectCallback.Should().NotBeNull();
+    }
+
+    [Fact]
     public void Dispose_is_idempotent()
     {
         var handler = new StubHttpMessageHandler(_ => ImportTestResponses.Html("ok"));

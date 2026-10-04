@@ -84,8 +84,8 @@ public static class ImportUrlPolicy
     ];
 
     // IPv6 ranges: unspecified/loopback/IPv4-compatible, NAT64, discard-only,
-    // Teredo/6to4 tunneling, benchmarking, documentation, ULA, link-local,
-    // multicast. IPv4-mapped addresses are normalized to IPv4 first.
+    // Teredo/6to4 tunneling, benchmarking, documentation, ORCHID, ULA,
+    // link-local, multicast. IPv4-mapped addresses are normalized to IPv4 first.
     private static readonly IPNetwork[] BlockedV6 =
     [
         IPNetwork.Parse("::/96"),
@@ -94,8 +94,12 @@ public static class ImportUrlPolicy
         IPNetwork.Parse("100::/64"),
         IPNetwork.Parse("2001::/32"),
         IPNetwork.Parse("2001:2::/48"),
+        IPNetwork.Parse("2001:10::/28"),
+        IPNetwork.Parse("2001:20::/28"),
         IPNetwork.Parse("2001:db8::/32"),
         IPNetwork.Parse("2002::/16"),
+        IPNetwork.Parse("3fff::/20"),
+        IPNetwork.Parse("5f00::/16"),
         IPNetwork.Parse("fc00::/7"),
         IPNetwork.Parse("fe80::/10"),
         IPNetwork.Parse("ff00::/8"),
@@ -135,11 +139,22 @@ public static class ImportUrlPolicy
             return ImportUrlPolicyResult.Block(ImportUrlBlockReason.SchemeNotAllowed);
         }
 
-        // Reject obfuscated IPv4 forms from the raw authority before Uri can
-        // canonicalize them into a different-looking address.
-        if (TryExtractRawHost(trimmed, out var rawHost) && IsObfuscatedIpv4Literal(rawHost))
+        // Classify the raw authority before Uri canonicalization. Non-canonical
+        // IPv4 obfuscation and trailing-dot numeric hosts must not slip through
+        // as DNS names, and blocked numeric literals are rejected here even
+        // when Uri reports them as host names.
+        if (TryExtractRawHost(trimmed, out var rawHost))
         {
-            return ImportUrlPolicyResult.Block(ImportUrlBlockReason.HostBlocked);
+            var numericHost = rawHost.TrimEnd('.');
+            if (IsObfuscatedIpv4Literal(numericHost))
+            {
+                return ImportUrlPolicyResult.Block(ImportUrlBlockReason.HostBlocked);
+            }
+
+            if (IPAddress.TryParse(numericHost, out var rawLiteral) && IsBlockedAddress(rawLiteral))
+            {
+                return ImportUrlPolicyResult.Block(ImportUrlBlockReason.AddressBlocked);
+            }
         }
 
         if (uri.UserInfo.Length > 0)

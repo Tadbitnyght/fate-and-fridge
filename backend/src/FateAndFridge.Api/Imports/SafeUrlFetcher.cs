@@ -20,6 +20,14 @@ namespace FateAndFridge.Api.Imports;
 /// cannot redirect the socket (DNS rebinding).
 /// </para>
 /// <para>
+/// The pre-connect resolution in <see cref="ValidateResolutionAsync"/> is a
+/// fail-fast check only. <b>Connect-time revalidation is authoritative:</b>
+/// <see cref="ConnectAsync"/> re-resolves and may only connect to an address
+/// that passes <see cref="ImportUrlPolicy.IsBlockedAddress"/> at connect time,
+/// so a resolver that turns hostile between the pre-check and the socket open
+/// (DNS rebinding) fails closed.
+/// </para>
+/// <para>
 /// Redirects are followed manually (<c>AllowAutoRedirect = false</c>) and each
 /// hop is re-resolved and re-validated. No cookies or credentials are ever
 /// sent; the User-Agent identifies the application and version.
@@ -256,42 +264,55 @@ public sealed class SafeUrlFetcher : IImportFetcher, IDisposable
         return await _dnsResolver.ResolveAsync(host, cancellationToken).ConfigureAwait(false);
     }
 
-    private SocketsHttpHandler CreatePinnedHandler() => new()
+    internal SocketsHttpHandler CreatePinnedHandler() => new()
     {
         AllowAutoRedirect = false,
         ConnectTimeout = _options.ConnectTimeout,
         AutomaticDecompression = DecompressionMethods.None,
         UseCookies = false,
+        // Never tunnel through an environment-configured proxy: the pinned
+        // connect guarantee only covers sockets this process opens itself.
+        UseProxy = false,
         PooledConnectionLifetime = TimeSpan.FromMinutes(2),
-        ConnectCallback = async (context, cancellationToken) =>
-        {
-            var addresses = await ResolveHostAsync(context.DnsEndPoint.Host, cancellationToken)
-                .ConfigureAwait(false);
-            var target = Array.Find(addresses, address => !ImportUrlPolicy.IsBlockedAddress(address));
-            if (target is null)
-            {
-                throw new BlockedTargetException(context.DnsEndPoint.Host);
-            }
-
-            var socket = new Socket(target.AddressFamily, SocketType.Stream, ProtocolType.Tcp)
-            {
-                NoDelay = true,
-            };
-
-            try
-            {
-                await socket
-                    .ConnectAsync(new IPEndPoint(target, context.DnsEndPoint.Port), cancellationToken)
-                    .ConfigureAwait(false);
-                return new NetworkStream(socket, ownsSocket: true);
-            }
-            catch
-            {
-                socket.Dispose();
-                throw;
-            }
-        },
+        ConnectCallback = ConnectAsync,
     };
+
+    /// <summary>
+    /// Authoritative connect-time validation for the pinned transport. The
+    /// pre-check in <see cref="ValidateResolutionAsync"/> is fail-fast only;
+    /// this re-resolves and connects only to an address that passes
+    /// <see cref="ImportUrlPolicy.IsBlockedAddress"/> at connect time.
+    /// </summary>
+    internal async ValueTask<Stream> ConnectAsync(
+        SocketsHttpConnectionContext context,
+        CancellationToken cancellationToken)
+    {
+        var addresses = await ResolveHostAsync(context.DnsEndPoint.Host, cancellationToken)
+            .ConfigureAwait(false);
+        var target = Array.Find(addresses, address => !ImportUrlPolicy.IsBlockedAddress(address));
+        if (target is null)
+        {
+            throw new BlockedTargetException(context.DnsEndPoint.Host);
+        }
+
+        var socket = new Socket(target.AddressFamily, SocketType.Stream, ProtocolType.Tcp)
+        {
+            NoDelay = true,
+        };
+
+        try
+        {
+            await socket
+                .ConnectAsync(new IPEndPoint(target, context.DnsEndPoint.Port), cancellationToken)
+                .ConfigureAwait(false);
+            return new NetworkStream(socket, ownsSocket: true);
+        }
+        catch
+        {
+            socket.Dispose();
+            throw;
+        }
+    }
 
     private static async Task<byte[]?> ReadWithLimitAsync(
         HttpContent content,

@@ -128,9 +128,9 @@ builder.Services
             && options.ReadTimeout > TimeSpan.Zero
             && options.MaxHtmlBytes > 0
             && options.MaxImageBytes > 0
-            && options.AllowedPageContentTypes.Count > 0
-            && options.AllowedImageContentTypes.Count > 0,
-        "Imports:Fetch limits and content-type allowlists must be configured.")
+            && ImportFetchOptions.HasValidContentTypes(options.AllowedPageContentTypes)
+            && ImportFetchOptions.HasValidContentTypes(options.AllowedImageContentTypes),
+        "Imports:Fetch limits must be positive and both content-type allowlists must contain only valid media types.")
     .ValidateOnStart();
 builder.Services.AddSingleton<IDnsResolver, SystemDnsResolver>();
 builder.Services.AddSingleton<IImportFetcher>(serviceProvider => new SafeUrlFetcher(

@@ -1,3 +1,5 @@
+using System.Net.Http.Headers;
+
 namespace FateAndFridge.Api.Imports;
 
 /// <summary>
@@ -38,4 +40,28 @@ public sealed class ImportFetchOptions
         "image/png",
         "image/webp",
     ];
+
+    /// <summary>
+    /// True when every entry is a non-empty, parseable media type. Used by
+    /// startup options validation so a malformed configured value fails fast
+    /// with a clear message instead of throwing when a request is served.
+    /// </summary>
+    public static bool HasValidContentTypes(IReadOnlyList<string>? contentTypes)
+    {
+        if (contentTypes is null || contentTypes.Count == 0)
+        {
+            return false;
+        }
+
+        foreach (var contentType in contentTypes)
+        {
+            if (string.IsNullOrWhiteSpace(contentType)
+                || !MediaTypeHeaderValue.TryParse(contentType.Trim(), out _))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
 }
