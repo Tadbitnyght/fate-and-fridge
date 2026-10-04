@@ -19,6 +19,7 @@ import { ChangePasswordPage } from './pages/ChangePasswordPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { GroceriesPage } from './pages/GroceriesPage'
 import { LoginPage } from './pages/LoginPage'
+import { ImportPage } from './features/import/ImportPage'
 import { RecipeFormPage } from './features/recipes/RecipeFormPage'
 import { RecipesBrowser } from './features/recipes/RecipesBrowser'
 import { SettingsPage } from './pages/SettingsPage'
@@ -44,6 +45,7 @@ export function App() {
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="recipes" element={<RecipesBrowser />} />
             <Route path="recipes/new" element={<RecipeFormPage />} />
+            <Route path="recipes/import" element={<ImportPage />} />
             <Route path="recipes/:id/edit" element={<RecipeFormPage />} />
             <Route path="groceries" element={<GroceriesPage />} />
             <Route path="statistics" element={<StatisticsPage />} />

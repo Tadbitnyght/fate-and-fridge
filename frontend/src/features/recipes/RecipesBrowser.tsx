@@ -172,9 +172,14 @@ export function RecipesBrowser() {
           Recipes
         </h2>
         {canEdit && (
-          <Link className="recipes__new button--primary" to="/recipes/new">
-            New recipe
-          </Link>
+          <div className="recipes__header-actions">
+            <Link className="recipes__import" to="/recipes/import">
+              Import from URL
+            </Link>
+            <Link className="recipes__new button--primary" to="/recipes/new">
+              New recipe
+            </Link>
+          </div>
         )}
       </div>
 
