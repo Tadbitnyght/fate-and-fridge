@@ -60,9 +60,11 @@ public sealed record ImportDraftRecipe(
 
 /// <summary>
 /// One raw ingredient line in a draft. The quantity, name, preparation note,
-/// and unit slice are populated by M4-05; canonical ingredient matching
-/// (<see cref="MatchedIngredientId"/>, <see cref="MatchKind"/>, and ingredient
-/// suggestions) arrives in M4-06, so those fields keep their safe defaults here.
+/// and unit slice are populated by <c>IngredientLineParser</c>/<c>ImportNormalizer</c>;
+/// canonical ingredient matching (<see cref="MatchedIngredientId"/>,
+/// <see cref="MatchKind"/>, and ingredient suggestions) is populated by
+/// <c>IngredientMatcher</c>. Unknown lines keep safe defaults (null match,
+/// <c>IsUnknown = true</c>) until the review screen resolves them.
 /// </summary>
 public sealed record ImportDraftIngredient(
     string Raw,
