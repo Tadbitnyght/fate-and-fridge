@@ -152,6 +152,11 @@ builder.Services
 builder.Services.AddSingleton<IImportThrottle, ImportThrottle>();
 builder.Services.AddScoped<RecipeImportService>();
 
+// M4-07: image-from-URL download orchestration. It shares the SSRF-hardened
+// fetcher and the M3 image storage/content policy instead of reimplementing
+// either.
+builder.Services.AddScoped<RecipeImageImportService>();
+
 // M3-04: bound multipart parsing for image uploads before anything is
 // buffered; the endpoint enforces the exact 5 MiB file cap and the format
 // policy on top of this.

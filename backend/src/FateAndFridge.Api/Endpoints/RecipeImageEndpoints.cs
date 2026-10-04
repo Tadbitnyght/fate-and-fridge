@@ -3,6 +3,7 @@ using System.Text.Json;
 using FateAndFridge.Api.Auth;
 using FateAndFridge.Api.Auth.Permissions;
 using FateAndFridge.Api.Errors;
+using FateAndFridge.Api.Imports;
 using FateAndFridge.Api.Services;
 using Microsoft.Extensions.Primitives;
 using Microsoft.Net.Http.Headers;
@@ -46,6 +47,7 @@ public static class RecipeImageEndpoints
         var group = app.MapGroup("/api/v1/recipes/{id:long}/image").WithTags("Recipes");
 
         group.MapPut("", ReplaceImageAsync).RequirePermission(PermissionKeys.RecipesEdit);
+        group.MapPost("/from-url", DownloadImageFromUrlAsync).RequirePermission(PermissionKeys.RecipesEdit);
         group.MapPatch("", UpdateAltTextAsync).RequirePermission(PermissionKeys.RecipesEdit);
         group.MapDelete("", RemoveImageAsync).RequirePermission(PermissionKeys.RecipesEdit);
         group.MapGet("", GetImageAsync).RequirePermission(PermissionKeys.RecipesView);
@@ -151,6 +153,7 @@ public static class RecipeImageEndpoints
             content,
             file.ContentType,
             altText,
+            sourceUrl: null,
             ipAddress,
             actorUserId,
             cancellationToken);
@@ -172,6 +175,108 @@ public static class RecipeImageEndpoints
             _ => ImageInvalid(),
         };
     }
+
+    /// <summary>
+    /// Downloads an image from a user-supplied URL and replaces the active
+    /// image (M4-07, docs/M4_PLAN.md §1.8/§2.2): SSRF-hardened fetch, M3 content
+    /// policy on the actual bytes, per-actor image-fetch budget, and a single
+    /// atomic replacement. A failed download never modifies the existing image.
+    /// </summary>
+    private static async Task<IResult> DownloadImageFromUrlAsync(
+        long id,
+        HttpContext context,
+        ICurrentActorProvider actorProvider,
+        RecipeImageImportService imageImport,
+        IImportThrottle throttle,
+        CancellationToken cancellationToken)
+    {
+        var body = await JsonBodyReader.ReadAsync(context, cancellationToken: cancellationToken);
+        if (!body.IsSuccess)
+        {
+            return body.Error!;
+        }
+
+        using var document = body.Document!;
+        var root = document.RootElement;
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            return BodyError();
+        }
+
+        if (!root.TryGetProperty("source_url", out var urlElement)
+            || urlElement.ValueKind != JsonValueKind.String
+            || string.IsNullOrWhiteSpace(urlElement.GetString()))
+        {
+            return ValidationError(
+                "source_url",
+                "source_url is required and must be a non-blank string.");
+        }
+
+        var sourceUrl = urlElement.GetString()!.Trim();
+
+        var actor = await actorProvider.GetCurrentActorAsync(cancellationToken);
+        if (actor is null)
+        {
+            return ApiResults.Error(
+                StatusCodes.Status401Unauthorized,
+                ErrorCodes.AuthRequired,
+                AuthRequiredMessage);
+        }
+
+        var actorKey = actor.IsSystem
+            ? "system"
+            : actor.UserId?.ToString(CultureInfo.InvariantCulture) ?? "system";
+
+        var decision = throttle.Reserve(actorKey, ImportFetchBudget.Image);
+        if (!decision.Allowed)
+        {
+            context.Response.Headers.RetryAfter = Math
+                .Max(1, (int)Math.Ceiling(decision.RetryAfter.TotalSeconds))
+                .ToString(CultureInfo.InvariantCulture);
+            return ApiResults.Error(
+                StatusCodes.Status429TooManyRequests,
+                ErrorCodes.ImportRateLimited,
+                "Too many import fetches; try again later.");
+        }
+
+        var ipAddress = context.Connection.RemoteIpAddress?.ToString();
+        var actorUserId = actor.IsSystem ? null : actor.UserId;
+
+        var result = await imageImport.DownloadAsync(
+            id,
+            sourceUrl,
+            ipAddress,
+            actorUserId,
+            cancellationToken);
+
+        return result switch
+        {
+            ImportImageResult.Success success =>
+                Results.Ok(RecipeImageResponse.From(id, success.Image)),
+            ImportImageResult.NotFound => NotFound(),
+            ImportImageResult.InvalidUrl => ApiResults.Error(
+                StatusCodes.Status400BadRequest,
+                ErrorCodes.ImportUrlInvalid,
+                "The URL is not a valid http or https URL."),
+            ImportImageResult.BlockedTarget => ApiResults.Error(
+                StatusCodes.Status422UnprocessableEntity,
+                ErrorCodes.ImportUrlBlocked,
+                "The URL targets a blocked address."),
+            ImportImageResult.TooLarge => ApiResults.Error(
+                StatusCodes.Status413PayloadTooLarge,
+                ErrorCodes.ImportTooLarge,
+                "The image exceeds the import size limit."),
+            ImportImageResult.UnsupportedContent => ApiResults.Error(
+                StatusCodes.Status415UnsupportedMediaType,
+                ErrorCodes.ImportUnsupportedContent,
+                "The URL did not return a JPEG, PNG, or WebP image within the size and dimension limits."),
+            _ => ApiResults.Error(
+                StatusCodes.Status502BadGateway,
+                ErrorCodes.ImportFetchFailed,
+                "The image could not be fetched."),
+        };
+    }
+
 
     /// <summary>Updates the alt text; null or empty clears it.</summary>
     private static async Task<IResult> UpdateAltTextAsync(

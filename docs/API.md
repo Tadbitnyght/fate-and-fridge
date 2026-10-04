@@ -365,6 +365,7 @@ Saving reuses `POST /recipes` (§23).
 |-------|------------|---------|
 | `POST /api/v1/import/recipe-url` | `recipes.edit` | Fetch a URL and return every parsed candidate as a draft |
 | `POST /api/v1/import/check` | `recipes.view` (or `recipes.edit`) | Re-check duplicate source URL / similar names after a rename |
+| `POST /api/v1/recipes/{id}/image/from-url` | `recipes.edit` | Download an image from a URL and replace the recipe's active image |
 
 ### `POST /api/v1/import/recipe-url`
 
@@ -491,6 +492,59 @@ Response `200`:
 }
 ```
 
+### `POST /api/v1/recipes/{id}/image/from-url`
+
+Downloads an image from a user-supplied URL and replaces the recipe's active
+image (M4-07, docs/M4_PLAN.md §1.8/§2.2). Requires `recipes.edit`; a missing
+recipe returns `404 NOT_FOUND` **before** any outbound request.
+
+Request:
+```json
+{ "source_url": "https://example.com/lasagna.jpg" }
+```
+
+`source_url` is required, non-blank, and must be an absolute HTTP/HTTPS URL. The
+server re-validates it through the same SSRF-hardened fetcher used by
+`POST /import/recipe-url` (docs/API.md §15, docs/SECURITY.md §6–§7): HTTP/HTTPS
+only, DNS revalidated per hop, max 5 redirects, connection timeout 5 s, total
+read timeout 15 s, and a 5 MiB image ceiling. The response body is treated as
+untrusted: the declared `Content-Type` and the actual bytes must both pass the
+M3 image policy (`RecipeImageFormatDetector`), which accepts only JPEG, PNG, and
+WebP still images with each dimension ≤ 2048 px and rejects SVG, HTML, GIF,
+truncated signatures, animated formats, and content-type/signature mismatches.
+
+On success the active image is replaced atomically: the new file is written to a
+randomly named file under `/data/images/recipes` and the database swap (new
+`recipe_images` row, one `audit_events` row of type `image_updated`, removal of
+the previous row) is committed in a single transaction; the previous file is
+deleted afterwards best-effort. `source_url` on the image records the **final**
+URL after redirects. A failed download never modifies the existing image row,
+file, or audit history, and leaves no partial file on disk.
+
+Response `200` — the M3 image document (docs/API.md §23):
+```json
+{
+  "id": 12,
+  "alt_text": null,
+  "source_url": "https://example.com/lasagna.jpg",
+  "created_at": "2026-10-04T00:00:00+00:00",
+  "url": "/api/v1/recipes/5/image"
+}
+```
+
+Errors (shared envelope):
+
+| Code | HTTP | Meaning |
+|------|------|---------|
+| `IMPORT_URL_INVALID` | 400 | URL is malformed, not HTTP/HTTPS, or carries credentials |
+| `IMPORT_URL_BLOCKED` | 422 | URL host/address is a blocked SSRF target |
+| `IMPORT_FETCH_FAILED` | 502 | DNS, timeout, transport, redirect, or non-success status |
+| `IMPORT_TOO_LARGE` | 413 | Response body exceeds the 5 MiB image ceiling |
+| `IMPORT_UNSUPPORTED_CONTENT` | 415 | Declared type or actual bytes fail the M3 image policy |
+| `IMPORT_RATE_LIMITED` | 429 | Per-user image fetch budget exhausted; `Retry-After` present |
+| `NOT_FOUND` | 404 | The recipe does not exist |
+| `VALIDATION_FAILED` | 400 | `source_url` is missing, blank, or not a string |
+
 ### Import error codes
 
 | Code | HTTP | Meaning |
@@ -506,11 +560,12 @@ Response `200`:
 ### Throttling
 
 Page fetches are limited per user to **30 per hour** by default
-(`Imports:Throttle:PageFetchesPerHour`; image downloads are 60 per hour,
-M4-07). The limiter is a fixed window keyed by the authenticated user (the
-single-user system actor included), so loopback and single-user callers are
-throttled too. Over-limit requests return `429 IMPORT_RATE_LIMITED` with a
-`Retry-After` header before any outbound fetch.
+(`Imports:Throttle:PageFetchesPerHour`); image downloads
+(`POST /recipes/{id}/image/from-url`) are limited to **60 per hour**
+(`Imports:Throttle:ImageFetchesPerHour`). The limiter is a fixed window keyed by
+the authenticated user (the single-user system actor included), so loopback and
+single-user callers are throttled too. Over-limit requests return
+`429 IMPORT_RATE_LIMITED` with a `Retry-After` header before any outbound fetch.
 
 ### Review/Save
 

@@ -164,6 +164,7 @@ public sealed class RecipeImageService(
         byte[] content,
         string? declaredContentType,
         string? altText,
+        string? sourceUrl,
         string? ipAddress,
         long? actorUserId,
         CancellationToken cancellationToken = default)
@@ -211,6 +212,7 @@ public sealed class RecipeImageService(
             RecipeId = recipeId,
             StoragePath = storagePath,
             AltText = altText,
+            SourceUrl = sourceUrl,
             CreatedAt = timeProvider.GetUtcNow(),
         };
 
