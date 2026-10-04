@@ -74,4 +74,19 @@ public static class ErrorCodes
     public const string ImageTooLarge = "IMAGE_TOO_LARGE";
 
     public const string ImageDimensionsExceeded = "IMAGE_DIMENSIONS_EXCEEDED";
+
+    // M4 import codes (docs/M4_PLAN.md §2.2, docs/API.md §15).
+    public const string ImportUrlInvalid = "IMPORT_URL_INVALID";
+
+    public const string ImportUrlBlocked = "IMPORT_URL_BLOCKED";
+
+    public const string ImportFetchFailed = "IMPORT_FETCH_FAILED";
+
+    public const string ImportUnsupportedContent = "IMPORT_UNSUPPORTED_CONTENT";
+
+    public const string ImportTooLarge = "IMPORT_TOO_LARGE";
+
+    public const string ImportNoRecipe = "IMPORT_NO_RECIPE";
+
+    public const string ImportRateLimited = "IMPORT_RATE_LIMITED";
 }

@@ -354,17 +354,151 @@ Keep API flexible enough for additional metrics later.
 
 ## 15. Import
 
-### Start
-- `POST /import/recipe-url`
+Import is **stateless and draft-only** (M4). `POST /import/recipe-url` fetches
+and parses a page and returns a draft; no recipe, ingredient, unit, tag,
+protein, image, or audit row is written before the user reviews and saves.
+Saving reuses `POST /recipes` (§23).
 
-Returns parsed draft only.
+### Routes
 
-No permanent recipe created.
+| Route | Permission | Purpose |
+|-------|------------|---------|
+| `POST /api/v1/import/recipe-url` | `recipes.edit` | Fetch a URL and return every parsed candidate as a draft |
+| `POST /api/v1/import/check` | `recipes.view` (or `recipes.edit`) | Re-check duplicate source URL / similar names after a rename |
+
+### `POST /api/v1/import/recipe-url`
+
+Request:
+```json
+{ "url": "https://example.com/recipe" }
+```
+
+`url` is required, non-blank, and must be an absolute HTTP/HTTPS URL. The
+server performs the fetch through the SSRF-hardened fetcher (HTTP/HTTPS only,
+DNS revalidated per hop, max 5 redirects, 15 s total read timeout, 2 MiB HTML,
+allowed content types, identifying user agent) and never executes third-party
+JavaScript (docs/SECURITY.md §6–§7). Parsing tries schema.org Recipe JSON-LD
+first; when no JSON-LD `Recipe` exists it falls back to a static HTML parse. A
+page with zero parseable recipes fails with `422 IMPORT_NO_RECIPE`.
+
+Response `200` (shape fixed by docs/M4_PLAN.md §2.2; `recipes` always has ≥ 1
+element):
+
+```json
+{
+  "source": {
+    "url": "https://example.com/recipe",
+    "site": "example.com",
+    "page_title": null,
+    "author": "Jane Cook",
+    "fetched_at": "2026-10-03T00:00:00+00:00",
+    "parse_method": "json_ld"
+  },
+  "source_url_match": { "id": 5, "name": "Lasagna" },
+  "capabilities": { "can_create_reference_data": false },
+  "recipes": [
+    {
+      "index": 0,
+      "name": "Lasagna",
+      "description": null,
+      "author": "Jane Cook",
+      "source_url": "https://example.com/recipe",
+      "source_site": "example.com",
+      "prep_minutes": 20,
+      "cook_minutes": 45,
+      "notes": null,
+      "image_source_url": "https://example.com/lasagna.jpg",
+      "name_matches": [{ "id": 6, "name": "Lasagna Bolognese" }],
+      "ingredients": [
+        {
+          "raw": "1 1/2 cups all-purpose flour, sifted",
+          "quantity": null,
+          "name": null,
+          "preparation_note": null,
+          "matched_ingredient_id": null,
+          "match_kind": null,
+          "is_unknown": true,
+          "suggestions": [],
+          "unit": {
+            "raw": null,
+            "matched_unit_id": null,
+            "matched_symbol": null,
+            "is_unknown": true,
+            "suggested_dimension": null,
+            "suggestions": []
+          }
+        }
+      ],
+      "instruction_sections": [
+        { "title": null, "steps": ["Boil the noodles."] }
+      ],
+      "proteins": [],
+      "tags": [],
+      "warnings": ["ingredient_unknown"]
+    }
+  ]
+}
+```
+
+- `parse_method` is `json_ld` or `html`.
+- `source.url` / `source.site` reflect the **final** URL after redirects;
+  `recipe.source_url` and `recipe.image_source_url` are resolved absolute
+  URLs (same-site relative references resolve against the final URL).
+- `source_url_match` is the existing recipe whose normalized source URL equals
+  the page URL, or `null`. `name_matches` is a bounded (max 5) normalized-name
+  containment list.
+- `capabilities.can_create_reference_data` reflects whether the actor holds
+  `reference_data.edit`, so the review UI can hide inline create affordances.
+  (Canonical creation during review is still enforced by the M2 endpoints.)
+- `image_source_url` is a resolved preview URL only; the image is downloaded
+  after review via `POST /recipes/{id}/image/from-url` (M4-07).
+
+**M4-04 limitations (filled in by later M4 issues):** `source.page_title` is
+`null`; ingredient `quantity`/`name`/`preparation_note` and the unit slice are
+not split yet (M4-05); canonical/alias matching, `match_kind`, and suggestion
+lists are empty and every ingredient is `is_unknown = true` (M4-06). Advanced
+duplicate scoring and rename rechecks arrive in M4-11/M4-12.
+
+### `POST /api/v1/import/check`
+
+Request (either field may be omitted):
+```json
+{ "source_url": "https://example.com/recipe", "name": "Lasagna" }
+```
+
+Response `200`:
+```json
+{
+  "source_url_match": { "id": 5, "name": "Lasagna" },
+  "name_matches": [{ "id": 6, "name": "Lasagna Bolognese" }]
+}
+```
+
+### Import error codes
+
+| Code | HTTP | Meaning |
+|------|------|---------|
+| `IMPORT_URL_INVALID` | 400 | URL is malformed, not HTTP/HTTPS, or carries credentials |
+| `IMPORT_URL_BLOCKED` | 422 | URL host/address is a blocked SSRF target |
+| `IMPORT_FETCH_FAILED` | 502 | DNS, timeout, transport, or redirect failure |
+| `IMPORT_UNSUPPORTED_CONTENT` | 415 | Response content type is not allowed |
+| `IMPORT_TOO_LARGE` | 413 | Response body exceeds the per-kind size limit |
+| `IMPORT_NO_RECIPE` | 422 | Fetched successfully but zero recipes parsed |
+| `IMPORT_RATE_LIMITED` | 429 | Per-user import fetch budget exhausted; `Retry-After` present |
+
+### Throttling
+
+Page fetches are limited per user to **30 per hour** by default
+(`Imports:Throttle:PageFetchesPerHour`; image downloads are 60 per hour,
+M4-07). The limiter is a fixed window keyed by the authenticated user (the
+single-user system actor included), so loopback and single-user callers are
+throttled too. Over-limit requests return `429 IMPORT_RATE_LIMITED` with a
+`Retry-After` header before any outbound fetch.
 
 ### Review/Save
-Client edits draft and submits through normal recipe creation endpoint.
 
-The import route must not bypass ingredient-matching review.
+The client edits the draft and submits through the normal recipe creation
+endpoint (§23). The import route never bypasses ingredient-matching review.
 
 ---
 

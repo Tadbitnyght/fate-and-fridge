@@ -740,7 +740,7 @@ public sealed class RecipeService(
     /// scheme and host, drop a default port, and drop the fragment. Nothing else
     /// is rewritten, and M3 never fetches the URL.
     /// </summary>
-    private static string BuildNormalizedSourceUrl(Uri uri, string raw)
+    public static string BuildNormalizedSourceUrl(Uri uri, string raw)
     {
         var normalized = raw;
 

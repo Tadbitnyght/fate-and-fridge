@@ -33,6 +33,14 @@ export const ErrorCodes = {
   TagInUse: 'TAG_IN_USE',
   // M3 recipe codes (docs/API.md §23).
   RecipeExists: 'RECIPE_EXISTS',
+  // M4 import codes (docs/API.md §15). Consumption lands with the M4-08 review screen.
+  ImportUrlInvalid: 'IMPORT_URL_INVALID',
+  ImportUrlBlocked: 'IMPORT_URL_BLOCKED',
+  ImportFetchFailed: 'IMPORT_FETCH_FAILED',
+  ImportUnsupportedContent: 'IMPORT_UNSUPPORTED_CONTENT',
+  ImportTooLarge: 'IMPORT_TOO_LARGE',
+  ImportNoRecipe: 'IMPORT_NO_RECIPE',
+  ImportRateLimited: 'IMPORT_RATE_LIMITED',
 } as const
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes]

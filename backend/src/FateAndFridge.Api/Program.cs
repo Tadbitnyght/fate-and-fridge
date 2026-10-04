@@ -137,6 +137,20 @@ builder.Services.AddSingleton<IImportFetcher>(serviceProvider => new SafeUrlFetc
     serviceProvider.GetRequiredService<ILogger<SafeUrlFetcher>>(),
     serviceProvider.GetRequiredService<IOptions<ImportFetchOptions>>(),
     serviceProvider.GetRequiredService<IDnsResolver>()));
+// M4-04: per-user import fetch throttling (30 page / 60 image fetches per
+// hour by default) and the draft-only import orchestration service.
+builder.Services
+    .AddOptions<ImportThrottleOptions>()
+    .Bind(builder.Configuration.GetSection(ImportThrottleOptions.SectionName))
+    .Validate(
+        options => options.PageFetchesPerHour >= 1
+            && options.ImageFetchesPerHour >= 1
+            && options.WindowSeconds >= 1
+            && options.MaxTrackedActors >= 1,
+        "Imports:Throttle limits must be positive.")
+    .ValidateOnStart();
+builder.Services.AddSingleton<IImportThrottle, ImportThrottle>();
+builder.Services.AddScoped<RecipeImportService>();
 
 // M3-04: bound multipart parsing for image uploads before anything is
 // buffered; the endpoint enforces the exact 5 MiB file cap and the format
@@ -231,6 +245,7 @@ app.MapProteinEndpoints();
 app.MapTagEndpoints();
 app.MapRecipeEndpoints();
 app.MapRecipeImageEndpoints();
+app.MapImportEndpoints();
 
 // Test-only permission probes (M1-09): mapped solely in the Testing
 // environment so the permission matrix can exercise server-side enforcement.
