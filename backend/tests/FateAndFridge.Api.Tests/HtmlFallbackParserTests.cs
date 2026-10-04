@@ -392,6 +392,150 @@ public sealed class HtmlFallbackParserTests
     }
 
     [Fact]
+    public void Parse_microdata_excludes_script_and_style_text_from_fields()
+    {
+        var html = """
+            <html><body>
+            <article itemscope itemtype="https://schema.org/Recipe">
+              <h1 itemprop="name">Clean Name<script>var x = 'Leaked name';</script></h1>
+              <p itemprop="description">Clean description<style>.x{content:'Leaked description'}</style></p>
+              <ul>
+                <li itemprop="recipeIngredient">1 cup flour<script>var y = 'Leaked ingredient';</script></li>
+              </ul>
+              <div itemprop="recipeInstructions">
+                <ol>
+                  <li itemprop="itemListElement" itemscope itemtype="https://schema.org/HowToStep">
+                    <span itemprop="text">Mix well.<style>.y{content:'Leaked step'}</style></span>
+                  </li>
+                </ol>
+              </div>
+            </article>
+            </body></html>
+            """;
+
+        var recipe = HtmlFallbackParser.Parse(html, PageUrl).Single();
+
+        recipe.Name.Should().Be("Clean Name");
+        recipe.Description.Should().Be("Clean description");
+        recipe.IngredientLines.Should().Equal("1 cup flour");
+        recipe.InstructionSections.Single().Steps.Should().Equal("Mix well.");
+    }
+
+    [Fact]
+    public void Parse_microdata_keeps_plain_steps_beside_typed_steps_in_order()
+    {
+        var html = """
+            <html><body>
+            <article itemscope itemtype="https://schema.org/Recipe">
+              <h1 itemprop="name">Mixed</h1>
+              <div itemprop="recipeInstructions">
+                <p>Preheat the oven.</p>
+                <ol>
+                  <li itemprop="itemListElement" itemscope itemtype="https://schema.org/HowToStep">
+                    <span itemprop="text">Mix the batter.</span>
+                  </li>
+                </ol>
+                <p>Let it rest.</p>
+              </div>
+            </article>
+            </body></html>
+            """;
+
+        var section = HtmlFallbackParser.Parse(html, PageUrl).Single().InstructionSections.Single();
+
+        section.Steps.Should().Equal("Preheat the oven.", "Mix the batter.", "Let it rest.");
+    }
+
+    [Fact]
+    public void Parse_microdata_does_not_leak_nested_itemscope_properties()
+    {
+        var html = """
+            <html><body>
+            <article itemscope itemtype="https://schema.org/Recipe">
+              <h1 itemprop="name">Root Name</h1>
+              <div itemprop="author" itemscope itemtype="https://schema.org/Person">
+                <span itemprop="name">Author Name</span>
+              </div>
+              <div itemprop="image" itemscope itemtype="https://schema.org/ImageObject">
+                <link itemprop="url" href="https://example.com/pic.jpg">
+              </div>
+              <div itemprop="recipeInstructions">
+                <ol>
+                  <li itemprop="itemListElement" itemscope itemtype="https://schema.org/HowToStep">
+                    <span itemprop="name">Step Name</span>
+                    <span itemprop="text">Do the thing.</span>
+                  </li>
+                </ol>
+              </div>
+            </article>
+            </body></html>
+            """;
+
+        var recipe = HtmlFallbackParser.Parse(html, PageUrl).Single();
+
+        recipe.Name.Should().Be("Root Name");
+        recipe.Author.Should().Be("Author Name");
+        recipe.ImageUrl.Should().Be("https://example.com/pic.jpg");
+        recipe.InstructionSections.Single().Steps.Should().Equal("Do the thing.");
+    }
+
+    [Fact]
+    public void Parse_microdata_uses_first_duplicate_property()
+    {
+        var html = """
+            <html><body>
+            <div itemscope itemtype="https://schema.org/Recipe">
+              <span itemprop="name">First</span>
+              <span itemprop="name">Second</span>
+              <span itemprop="recipeIngredient">1 egg</span>
+            </div>
+            </body></html>
+            """;
+
+        HtmlFallbackParser.Parse(html, PageUrl).Single().Name.Should().Be("First");
+    }
+
+    [Theory]
+    [InlineData("https://schema.org/Recipe")]
+    [InlineData("http://schema.org/Recipe")]
+    [InlineData("https://schema.org/Recipe/")]
+    [InlineData("schema:Recipe")]
+    [InlineData("Recipe")]
+    public void Parse_recognizes_supported_recipe_itemtype_forms(string itemtype)
+    {
+        var html = $$"""
+            <html><body>
+            <div itemscope itemtype="{{itemtype}}">
+              <span itemprop="name">Typed</span>
+              <span itemprop="recipeIngredient">1 thing</span>
+            </div>
+            </body></html>
+            """;
+
+        HtmlFallbackParser.Parse(html, PageUrl).Single().Name.Should().Be("Typed");
+    }
+
+    [Fact]
+    public void Parse_handles_deeply_nested_markup_without_throwing()
+    {
+        var open = string.Concat(Enumerable.Repeat("<div>", 400));
+        var close = string.Concat(Enumerable.Repeat("</div>", 400));
+        var html = $$"""
+            <html><body>
+            <div itemscope itemtype="https://schema.org/Recipe">
+              <h1 itemprop="name">Deep</h1>
+              {{open}}<span itemprop="recipeIngredient">1 deep thing</span>{{close}}
+            </div>
+            </body></html>
+            """;
+
+        FluentActions.Invoking(() => HtmlFallbackParser.Parse(html, PageUrl))
+            .Should().NotThrow();
+        HtmlFallbackParser.Parse(html, PageUrl).Single().IngredientLines
+            .Should().Equal("1 deep thing");
+    }
+
+    [Fact]
     public void Parse_returns_empty_for_null_or_blank_html()
     {
         HtmlFallbackParser.Parse(null).Should().BeEmpty();

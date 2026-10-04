@@ -1,3 +1,5 @@
+using System.Text;
+
 using AngleSharp.Dom;
 using AngleSharp.Html.Parser;
 
@@ -28,6 +30,13 @@ namespace FateAndFridge.Api.Imports;
 /// <see cref="ImportTextSanitizer"/>. ISO-8601 durations reuse
 /// <see cref="StructuredRecipeParser.TryParseIso8601Minutes"/>.
 /// </para>
+/// <para>
+/// Known limitations, deliberately not over-engineered: microdata
+/// <c>itemref</c> (properties referenced from outside the declaring item scope)
+/// is not followed; the heuristics match class/id substrings (so
+/// <c>class="ingredients-note"</c> can match) and take the first list after the
+/// matching section heading. Both are best-effort and never invent data.
+/// </para>
 /// </remarks>
 public static class HtmlFallbackParser
 {
@@ -43,6 +52,13 @@ public static class HtmlFallbackParser
 
     /// <summary>Recursion guard for pathologically nested instruction markup.</summary>
     private const int MaxInstructionDepth = 32;
+
+    /// <summary>
+    /// Elements whose text is never recipe content and must be skipped when
+    /// reading visible text (docs/SECURITY.md §8).
+    /// </summary>
+    private static readonly HashSet<string> NonTextElementNames =
+        new(StringComparer.OrdinalIgnoreCase) { "script", "style", "template", "noscript", "head" };
 
     private static readonly string[] IngredientKeywords = ["ingredient"];
 
@@ -276,28 +292,12 @@ public static class HtmlFallbackParser
             return;
         }
 
-        var nodes = FindOutermostInstructionNodes(element);
-        if (nodes.Count > 0)
+        var units = FindInstructionUnits(element);
+        if (units.Count > 0)
         {
-            foreach (var node in nodes)
+            foreach (var unit in units)
             {
-                CollectInstructionNode(node, accumulator, depth + 1);
-            }
-
-            return;
-        }
-
-        // A plain list attached to the property: each item is one step.
-        var listItems = element.QuerySelectorAll("li");
-        if (listItems.Length > 0)
-        {
-            foreach (var item in listItems)
-            {
-                var step = ImportTextSanitizer.Sanitize(item.TextContent);
-                if (step is not null)
-                {
-                    accumulator.AddStep(step);
-                }
+                CollectInstructionNode(unit, accumulator, depth + 1);
             }
 
             return;
@@ -383,6 +383,48 @@ public static class HtmlFallbackParser
         return result;
     }
 
+    /// <summary>
+    /// Instruction units of a <c>recipeInstructions</c> holder in document
+    /// order: the outermost typed <c>HowToStep</c>/<c>HowToSection</c> nodes plus
+    /// any plain <c>&lt;li&gt;</c>/<c>&lt;p&gt;</c> steps that sit outside those
+    /// typed nodes. Mixing the two shapes on one page must not drop the plain
+    /// steps.
+    /// </summary>
+    private static IReadOnlyList<IElement> FindInstructionUnits(IElement scope)
+    {
+        var typed = FindOutermostInstructionNodes(scope);
+        var typedSet = new HashSet<IElement>(typed, ReferenceEqualityComparer.Instance);
+        var units = new List<IElement>();
+
+        foreach (var candidate in scope.QuerySelectorAll("*"))
+        {
+            if (typedSet.Contains(candidate))
+            {
+                units.Add(candidate);
+                continue;
+            }
+
+            // Inside or wrapping a typed node: container wrappers are not steps.
+            if (typed.Any(node => IsDescendantOf(candidate, node))
+                || typed.Any(node => IsDescendantOf(node, candidate)))
+            {
+                continue;
+            }
+
+            if (candidate.LocalName is "li" or "p")
+            {
+                if (units.Any(unit => IsDescendantOf(candidate, unit)))
+                {
+                    continue;
+                }
+
+                units.Add(candidate);
+            }
+        }
+
+        return units;
+    }
+
     private static ParsedRecipe? ParseHeuristics(IDocument document, string? sourceUrl)
     {
         var name = SanitizeElementText(document.QuerySelector("h1"))
@@ -451,7 +493,7 @@ public static class HtmlFallbackParser
     {
         foreach (var heading in document.QuerySelectorAll("h1, h2, h3, h4, h5, h6, dt"))
         {
-            var text = ImportTextSanitizer.Sanitize(heading.TextContent);
+            var text = ImportTextSanitizer.Sanitize(GetVisibleText(heading));
             if (text is null || text.Length > 80)
             {
                 continue;
@@ -516,7 +558,7 @@ public static class HtmlFallbackParser
 
             if (element.LocalName == "p")
             {
-                var text = ImportTextSanitizer.Sanitize(element.TextContent);
+                var text = ImportTextSanitizer.Sanitize(GetVisibleText(element));
                 if (text is not null)
                 {
                     result.Add(text);
@@ -570,7 +612,7 @@ public static class HtmlFallbackParser
         var result = new List<string>();
         foreach (var element in container.QuerySelectorAll(tagName))
         {
-            var text = ImportTextSanitizer.Sanitize(element.TextContent);
+            var text = ImportTextSanitizer.Sanitize(GetVisibleText(element));
             if (text is not null)
             {
                 result.Add(text);
@@ -605,7 +647,7 @@ public static class HtmlFallbackParser
     }
 
     private static string? SanitizeElementText(IElement? element) =>
-        element is null ? null : ImportTextSanitizer.Sanitize(element.TextContent);
+        element is null ? null : ImportTextSanitizer.Sanitize(GetVisibleText(element));
 
     private static int? ParseDuration(string? value) =>
         StructuredRecipeParser.TryParseIso8601Minutes(value, out var minutes) ? minutes : null;
@@ -666,7 +708,7 @@ public static class HtmlFallbackParser
     /// </summary>
     private static bool MatchesSchemaType(string token, string typeName)
     {
-        var trimmed = token.Trim();
+        var trimmed = token.Trim().TrimEnd('/', '#');
         if (trimmed.Length == 0)
         {
             return false;
@@ -798,6 +840,36 @@ public static class HtmlFallbackParser
     }
 
     /// <summary>
+    /// Text rendered to a user, excluding descendants that must never contribute
+    /// recipe content (<c>script</c>, <c>style</c>, <c>template</c>,
+    /// <c>noscript</c>, and <c>head</c>; docs/SECURITY.md §8). Unlike
+    /// <c>TextContent</c> this cannot leak script/style source into a field.
+    /// </summary>
+    private static string GetVisibleText(IElement element)
+    {
+        var builder = new StringBuilder();
+        AppendVisibleText(element, builder);
+        return builder.ToString();
+    }
+
+    private static void AppendVisibleText(INode node, StringBuilder builder)
+    {
+        foreach (var child in node.ChildNodes)
+        {
+            if (child.NodeType == NodeType.Text)
+            {
+                builder.Append(child.NodeValue);
+                continue;
+            }
+
+            if (child is IElement element && !NonTextElementNames.Contains(element.LocalName))
+            {
+                AppendVisibleText(element, builder);
+            }
+        }
+    }
+
+    /// <summary>
     /// Reads a microdata value from the first applicable attribute, then text:
     /// <c>content</c>, <c>datetime</c>, visible text, then <c>src</c>/<c>href</c>.
     /// This yields an image <c>src</c> for an <c>&lt;img&gt;</c> while preferring
@@ -812,7 +884,7 @@ public static class HtmlFallbackParser
             return direct;
         }
 
-        var text = ImportTextSanitizer.Sanitize(element.TextContent);
+        var text = ImportTextSanitizer.Sanitize(GetVisibleText(element));
         if (text is not null)
         {
             return text;
