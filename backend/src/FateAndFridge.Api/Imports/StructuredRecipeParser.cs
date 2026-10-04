@@ -81,9 +81,10 @@ public static class StructuredRecipeParser
 
     /// <summary>
     /// Attempts to parse an ISO 8601 duration (for example <c>PT1H30M</c>) into
-    /// whole minutes. Returns <c>false</c> for null/blank/malformed input and for
-    /// date components with ambiguous lengths (years, months). The result is
-    /// non-negative and capped at 1440 minutes.
+    /// whole minutes. Returns <c>false</c> for null/blank/malformed input, for
+    /// date components with ambiguous lengths (years, months), and for
+    /// duplicated designators. The result is non-negative and capped at 1440
+    /// minutes.
     /// </summary>
     public static bool TryParseIso8601Minutes(string? value, out int minutes)
     {
@@ -103,6 +104,11 @@ public static class StructuredRecipeParser
         var inTime = false;
         var sawComponent = false;
         var sawTimeComponent = false;
+        var sawWeek = false;
+        var sawDay = false;
+        var sawHour = false;
+        var sawMinute = false;
+        var sawSecond = false;
         long totalMinutes = 0;
 
         while (index < text.Length)
@@ -148,45 +154,50 @@ public static class StructuredRecipeParser
                     // A month is not a fixed number of minutes.
                     return false;
                 case 'W' or 'w':
-                    if (inTime)
+                    if (inTime || sawWeek)
                     {
                         return false;
                     }
 
+                    sawWeek = true;
                     totalMinutes = AddMinutes(totalMinutes, Capped(number) * 7 * 24 * 60);
                     break;
                 case 'D' or 'd':
-                    if (inTime)
+                    if (inTime || sawDay)
                     {
                         return false;
                     }
 
+                    sawDay = true;
                     totalMinutes = AddMinutes(totalMinutes, Capped(number) * 24 * 60);
                     break;
                 case 'H' or 'h':
-                    if (!inTime)
+                    if (!inTime || sawHour)
                     {
                         return false;
                     }
 
+                    sawHour = true;
                     sawTimeComponent = true;
                     totalMinutes = AddMinutes(totalMinutes, Capped(number) * 60);
                     break;
                 case 'M' or 'm':
-                    if (!inTime)
+                    if (!inTime || sawMinute)
                     {
                         return false;
                     }
 
+                    sawMinute = true;
                     sawTimeComponent = true;
                     totalMinutes = AddMinutes(totalMinutes, Capped(number));
                     break;
                 case 'S' or 's':
-                    if (!inTime)
+                    if (!inTime || sawSecond)
                     {
                         return false;
                     }
 
+                    sawSecond = true;
                     sawTimeComponent = true;
                     totalMinutes = AddMinutes(totalMinutes, Capped(number) / 60);
                     break;
@@ -215,6 +226,14 @@ public static class StructuredRecipeParser
                 yield break;
             }
 
+            // A <script> inside an HTML comment is not an element; skip the
+            // marker and keep looking outside the comment.
+            if (IsInsideHtmlComment(html, open))
+            {
+                searchIndex = open + "<script".Length;
+                continue;
+            }
+
             var tagEnd = FindTagEnd(html, open + "<script".Length);
             if (tagEnd < 0)
             {
@@ -223,23 +242,73 @@ public static class StructuredRecipeParser
 
             var openTag = html[open..(tagEnd + 1)];
             var contentStart = tagEnd + 1;
-
-            if (!IsJsonLdScript(openTag))
-            {
-                searchIndex = contentStart;
-                continue;
-            }
-
-            var close = html.IndexOf("</script", contentStart, StringComparison.OrdinalIgnoreCase);
+            var close = IndexOfScriptClose(html, contentStart);
             if (close < 0)
             {
                 // Truncated page: there is no well-formed block to read.
                 yield break;
             }
 
-            yield return html[contentStart..close];
-            searchIndex = close + "</script".Length;
+            if (IsJsonLdScript(openTag))
+            {
+                yield return html[contentStart..close];
+            }
+
+            // Resume after this element's closing tag so text inside a
+            // non-JSON-LD script that only looks like a script pair (for
+            // example a fake application/ld+json string in text/javascript) is
+            // never scanned again.
+            var closeTagEnd = FindTagEnd(html, close);
+            searchIndex = closeTagEnd >= 0 ? closeTagEnd + 1 : close + "</script".Length;
         }
+    }
+
+    /// <summary>
+    /// Finds the matching <c>&lt;/script</c> end tag. Per HTML the name must be
+    /// followed by whitespace, <c>/</c>, or <c>&gt;</c>, so a JSON string such
+    /// as <c>"&lt;/scriptx&gt;"</c> or <c>"&lt;/script"</c> immediately followed
+    /// by a letter does not terminate the element.
+    /// </summary>
+    private static int IndexOfScriptClose(string html, int start)
+    {
+        var index = start;
+        while (index < html.Length)
+        {
+            index = html.IndexOf("</script", index, StringComparison.OrdinalIgnoreCase);
+            if (index < 0)
+            {
+                return -1;
+            }
+
+            var after = index + "</script".Length;
+            if (after >= html.Length
+                || html[after] == '>'
+                || html[after] == '/'
+                || char.IsWhiteSpace(html[after]))
+            {
+                return index;
+            }
+
+            index = after;
+        }
+
+        return -1;
+    }
+
+    /// <summary>
+    /// True when <paramref name="index"/> lies after an unterminated
+    /// <c>&lt;!--</c> comment opener.
+    /// </summary>
+    private static bool IsInsideHtmlComment(string html, int index)
+    {
+        var lastOpen = html.LastIndexOf("<!--", index, StringComparison.Ordinal);
+        if (lastOpen < 0)
+        {
+            return false;
+        }
+
+        var lastClose = html.LastIndexOf("-->", index, StringComparison.Ordinal);
+        return lastClose < lastOpen;
     }
 
     private static void ParseBlock(string block, string? sourceUrl, List<ParsedRecipe> recipes)
@@ -256,6 +325,12 @@ public static class StructuredRecipeParser
         }
         catch (JsonException)
         {
+            return;
+        }
+        catch (InvalidOperationException)
+        {
+            // Some runtimes surface undecodable UTF-16 during parse rather than
+            // on GetString; treat it exactly like malformed JSON.
             return;
         }
 
@@ -367,7 +442,7 @@ public static class StructuredRecipeParser
         switch (element.ValueKind)
         {
             case JsonValueKind.String:
-                var value = ImportTextSanitizer.Sanitize(element.GetString());
+                var value = ImportTextSanitizer.Sanitize(ReadJsonString(element));
                 if (!string.IsNullOrEmpty(value))
                 {
                     names.Add(value);
@@ -415,7 +490,7 @@ public static class StructuredRecipeParser
 
                 break;
             case JsonValueKind.String:
-                var single = ImportTextSanitizer.Sanitize(list.GetString());
+                var single = ImportTextSanitizer.Sanitize(ReadJsonString(list));
                 if (!string.IsNullOrEmpty(single))
                 {
                     lines.Add(single);
@@ -444,7 +519,7 @@ public static class StructuredRecipeParser
         switch (element.ValueKind)
         {
             case JsonValueKind.String:
-                accumulator.AddStep(ImportTextSanitizer.Sanitize(element.GetString()));
+                accumulator.AddStep(ImportTextSanitizer.Sanitize(ReadJsonString(element)));
                 break;
             case JsonValueKind.Array:
                 foreach (var item in element.EnumerateArray())
@@ -512,7 +587,11 @@ public static class StructuredRecipeParser
             }
         }
 
-        accumulator.AddSection(title, steps);
+        if (!string.IsNullOrEmpty(title) || steps.Count > 0)
+        {
+            accumulator.AddSection(title, steps);
+        }
+
         foreach (var nestedSection in nested)
         {
             CollectSection(nestedSection, accumulator);
@@ -521,7 +600,7 @@ public static class StructuredRecipeParser
 
     private static string? ReadStepText(JsonElement element) => element.ValueKind switch
     {
-        JsonValueKind.String => ImportTextSanitizer.Sanitize(element.GetString()),
+        JsonValueKind.String => ImportTextSanitizer.Sanitize(ReadJsonString(element)),
         JsonValueKind.Object => ImportTextSanitizer.Sanitize(
             ReadString(element, "text") ?? ReadString(element, "name")),
         _ => null,
@@ -529,7 +608,7 @@ public static class StructuredRecipeParser
 
     private static string? ReadTextLike(JsonElement element) => element.ValueKind switch
     {
-        JsonValueKind.String => ImportTextSanitizer.Sanitize(element.GetString()),
+        JsonValueKind.String => ImportTextSanitizer.Sanitize(ReadJsonString(element)),
         JsonValueKind.Object => ImportTextSanitizer.Sanitize(
             ReadString(element, "name") ?? ReadString(element, "text")),
         _ => null,
@@ -543,7 +622,7 @@ public static class StructuredRecipeParser
         switch (element.ValueKind)
         {
             case JsonValueKind.String:
-                return ImportTextSanitizer.Sanitize(element.GetString());
+                return ImportTextSanitizer.Sanitize(ReadJsonString(element));
             case JsonValueKind.Array:
                 foreach (var item in element.EnumerateArray())
                 {
@@ -578,9 +657,33 @@ public static class StructuredRecipeParser
     }
 
     private static string? ReadString(JsonElement element, string propertyName) =>
-        element.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.String
-            ? value.GetString()
-            : null;
+        element.TryGetProperty(propertyName, out var value) ? ReadJsonString(value) : null;
+
+    /// <summary>
+    /// Reads a JSON string value, tolerating the invalid UTF-16 that
+    /// <c>System.Text.Json</c> materializes from lone-surrogate
+    /// <c>\uXXXX</c> escapes. <see cref="JsonElement.GetString"/> throws
+    /// <see cref="InvalidOperationException"/> for such values; parsing
+    /// attacker-controlled input must never throw, so an undecodable value is
+    /// treated as absent. Any string that does decode still flows through
+    /// <see cref="ImportTextSanitizer"/>, which removes unpaired surrogates.
+    /// </summary>
+    private static string? ReadJsonString(JsonElement element)
+    {
+        if (element.ValueKind != JsonValueKind.String)
+        {
+            return null;
+        }
+
+        try
+        {
+            return element.GetString();
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
 
     private static bool HasType(JsonElement element, string typeName)
     {
@@ -592,11 +695,11 @@ public static class StructuredRecipeParser
         switch (typeProperty.ValueKind)
         {
             case JsonValueKind.String:
-                return TypeMatches(typeProperty.GetString(), typeName);
+                return TypeMatches(ReadJsonString(typeProperty), typeName);
             case JsonValueKind.Array:
                 foreach (var item in typeProperty.EnumerateArray())
                 {
-                    if (item.ValueKind == JsonValueKind.String && TypeMatches(item.GetString(), typeName))
+                    if (TypeMatches(ReadJsonString(item), typeName))
                     {
                         return true;
                     }

@@ -247,6 +247,13 @@ public sealed class StructuredRecipeParserTests
     [InlineData("P1DT2H", 1440)]
     [InlineData("P1W", 1440)]
     [InlineData("pt1h5m", 65)]
+    [InlineData("PT1H1H", null)]
+    [InlineData("PT1M1M", null)]
+    [InlineData("PT1S1S", null)]
+    [InlineData("P1W1W", null)]
+    [InlineData("P1D1D", null)]
+    [InlineData("PT9223372036854775807H", 1440)]
+    [InlineData("PT99999999999999999999999H", null)]
     [InlineData("P1Y", null)]
     [InlineData("P1M", null)]
     [InlineData("P", null)]
@@ -433,5 +440,101 @@ public sealed class StructuredRecipeParserTests
         var html = Page("""{ "@type": "Recipe", "name": "No source" }""");
 
         StructuredRecipeParser.Parse(html).Single().SourceUrl.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("\\uD800")]
+    [InlineData("\\uDC00")]
+    public void Parse_never_throws_on_lone_surrogate_escapes_in_any_field(string escape)
+    {
+        var bodies = new[]
+        {
+            $$"""{ "@type": "Recipe", "name": "x{{escape}}y" }""",
+            $$"""{ "@type": "Recipe{{escape}}", "name": "x" }""",
+            $$"""{ "@type": "Recipe", "name": "x", "description": "d{{escape}}e" }""",
+            $$"""{ "@type": "Recipe", "name": "x", "author": "a{{escape}}b" }""",
+            $$"""{ "@type": "Recipe", "name": "x", "recipeIngredient": ["i{{escape}}j"] }""",
+            $$"""{ "@type": "Recipe", "name": "x", "recipeInstructions": [ { "@type": "HowToStep", "text": "s{{escape}}t" } ] }""",
+            $$"""{ "@type": "Recipe", "name": "x", "image": "https://example.com/a{{escape}}.jpg" }""",
+        };
+
+        foreach (var body in bodies)
+        {
+            var html = Page(body);
+
+            FluentActions.Invoking(() => StructuredRecipeParser.Parse(html, PageUrl)).Should().NotThrow();
+        }
+    }
+
+    [Fact]
+    public void Parse_treats_a_lone_surrogate_value_as_absent_but_keeps_the_recipe()
+    {
+        var html = Page(
+            """{ "@type": "Recipe", "name": "x\uD800y", "recipeInstructions": [ { "@type": "HowToStep", "text": "Step." } ] }""");
+
+        var recipe = StructuredRecipeParser.Parse(html, PageUrl).Single();
+
+        recipe.Name.Should().BeNull();
+        recipe.InstructionSections.Single().Steps.Should().Equal("Step.");
+    }
+
+    [Theory]
+    [InlineData("a</scriptx>b")]
+    [InlineData("a</scriptb")]
+    public void Parse_requires_a_delimiter_after_the_script_end_tag(string description)
+    {
+        var html = Page($$"""{ "@type": "Recipe", "name": "Delimited", "description": "{{description}}" }""");
+
+        StructuredRecipeParser.Parse(html, PageUrl).Should().ContainSingle()
+            .Which.Name.Should().Be("Delimited");
+    }
+
+    [Fact]
+    public void Parse_ignores_a_fake_json_ld_tag_inside_a_non_json_ld_script()
+    {
+        var html = """
+            <script type="text/javascript">
+            var x = '<script type="application/ld+json">{"@type":"Recipe","name":"Fake"}</script>';
+            </script>
+            <script type="application/ld+json">{"@type":"Recipe","name":"Real"}</script>
+            """;
+
+        StructuredRecipeParser.Parse(html, PageUrl).Select(r => r.Name).Should().Equal("Real");
+    }
+
+    [Fact]
+    public void Parse_ignores_a_script_inside_an_html_comment()
+    {
+        var html = """
+            <!-- <script type="application/ld+json">{"@type":"Recipe","name":"Commented"}</script> -->
+            <script type="application/ld+json">{"@type":"Recipe","name":"Visible"}</script>
+            """;
+
+        StructuredRecipeParser.Parse(html, PageUrl).Select(r => r.Name).Should().Equal("Visible");
+    }
+
+    [Fact]
+    public void Parse_omits_how_to_sections_with_no_title_and_no_steps()
+    {
+        var html = Page(
+            """
+            {
+              "@type": "Recipe",
+              "name": "Sections",
+              "recipeInstructions": [
+                { "@type": "HowToSection" },
+                { "@type": "HowToSection", "name": "Titled but empty" },
+                {
+                  "@type": "HowToSection",
+                  "name": "Real",
+                  "itemListElement": [ { "@type": "HowToStep", "text": "Do it." } ]
+                }
+              ]
+            }
+            """);
+
+        var sections = StructuredRecipeParser.Parse(html, PageUrl).Single().InstructionSections;
+
+        sections.Select(section => section.Title).Should().Equal("Titled but empty", "Real");
     }
 }

@@ -87,4 +87,31 @@ public sealed class ImportTextSanitizerTests
 
         ImportTextSanitizer.Sanitize(once).Should().Be(once);
     }
+
+    [Fact]
+    public void Sanitize_removes_bidi_override_format_characters()
+    {
+        ImportTextSanitizer.Sanitize("abc\u202Edef").Should().Be("abcdef");
+    }
+
+    [Fact]
+    public void Sanitize_drops_unpaired_surrogates_and_keeps_paired_ones()
+    {
+        ImportTextSanitizer.Sanitize("a\uD800b").Should().Be("ab");
+        ImportTextSanitizer.Sanitize("a\uDC00b").Should().Be("ab");
+        ImportTextSanitizer.Sanitize("a\uD83D\uDE00b").Should().Be("a\uD83D\uDE00b");
+    }
+
+    [Fact]
+    public void ContainsDisallowedControlCharacter_reports_unpaired_surrogates()
+    {
+        ImportTextSanitizer.ContainsDisallowedControlCharacter("lone high\uD800").Should().BeTrue();
+        ImportTextSanitizer.ContainsDisallowedControlCharacter("lone low\uDC00").Should().BeTrue();
+    }
+
+    [Fact]
+    public void ContainsDisallowedControlCharacter_allows_paired_surrogates()
+    {
+        ImportTextSanitizer.ContainsDisallowedControlCharacter("emoji \uD83D\uDE00").Should().BeFalse();
+    }
 }

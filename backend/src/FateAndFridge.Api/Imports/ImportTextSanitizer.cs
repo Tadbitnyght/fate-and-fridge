@@ -71,8 +71,9 @@ public static class ImportTextSanitizer
     /// <summary>
     /// True when <paramref name="value"/> contains a Unicode control or format
     /// character other than tab, line feed, or a carriage return that precedes a
-    /// line feed. Exposed so later import stages can reject rather than silently
-    /// rewrite such input.
+    /// line feed, or an unpaired UTF-16 surrogate. Exposed so later import
+    /// stages can reject rather than silently rewrite such input. Paired
+    /// surrogates (a valid non-BMP code point) are not reported.
     /// </summary>
     public static bool ContainsDisallowedControlCharacter(string? value)
     {
@@ -92,6 +93,22 @@ public static class ImportTextSanitizer
             if (character == '\r' && index + 1 < value.Length && value[index + 1] == '\n')
             {
                 continue;
+            }
+
+            if (char.IsHighSurrogate(character))
+            {
+                if (index + 1 < value.Length && char.IsLowSurrogate(value[index + 1]))
+                {
+                    index++;
+                    continue;
+                }
+
+                return true;
+            }
+
+            if (char.IsLowSurrogate(character))
+            {
+                return true;
             }
 
             if (char.GetUnicodeCategory(character) is UnicodeCategory.Control or UnicodeCategory.Format)
@@ -200,6 +217,25 @@ public static class ImportTextSanitizer
             if (character is '\t' or '\n')
             {
                 builder.Append(character);
+                continue;
+            }
+
+            if (char.IsHighSurrogate(character))
+            {
+                if (index + 1 < value.Length && char.IsLowSurrogate(value[index + 1]))
+                {
+                    builder.Append(character);
+                    builder.Append(value[index + 1]);
+                    index++;
+                }
+
+                // An unpaired high surrogate is dropped.
+                continue;
+            }
+
+            if (char.IsLowSurrogate(character))
+            {
+                // An unpaired low surrogate is dropped.
                 continue;
             }
 
