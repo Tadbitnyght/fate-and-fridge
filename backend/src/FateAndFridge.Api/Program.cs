@@ -4,6 +4,7 @@ using FateAndFridge.Api.Auth;
 using FateAndFridge.Api.Auth.Permissions;
 using FateAndFridge.Api.Data;
 using FateAndFridge.Api.Endpoints;
+using FateAndFridge.Api.Imports;
 using FateAndFridge.Api.Middleware;
 using FateAndFridge.Api.Services;
 using Microsoft.AspNetCore.Antiforgery;
@@ -114,6 +115,28 @@ builder.Services.AddScoped<RecipeService>();
 
 // M3-04: local recipe image storage, content policy, and serving.
 builder.Services.AddScoped<RecipeImageService>();
+
+// M4-01: SSRF-hardened outbound fetcher shared by recipe import (M4-04) and
+// the image-from-URL endpoint (M4-07). Stateless; a single HttpClient with a
+// pinned connect callback is reused.
+builder.Services
+    .AddOptions<ImportFetchOptions>()
+    .Bind(builder.Configuration.GetSection(ImportFetchOptions.SectionName))
+    .Validate(
+        options => options.MaxRedirects >= 0
+            && options.ConnectTimeout > TimeSpan.Zero
+            && options.ReadTimeout > TimeSpan.Zero
+            && options.MaxHtmlBytes > 0
+            && options.MaxImageBytes > 0
+            && options.AllowedPageContentTypes.Count > 0
+            && options.AllowedImageContentTypes.Count > 0,
+        "Imports:Fetch limits and content-type allowlists must be configured.")
+    .ValidateOnStart();
+builder.Services.AddSingleton<IDnsResolver, SystemDnsResolver>();
+builder.Services.AddSingleton<IImportFetcher>(serviceProvider => new SafeUrlFetcher(
+    serviceProvider.GetRequiredService<ILogger<SafeUrlFetcher>>(),
+    serviceProvider.GetRequiredService<IOptions<ImportFetchOptions>>(),
+    serviceProvider.GetRequiredService<IDnsResolver>()));
 
 // M3-04: bound multipart parsing for image uploads before anything is
 // buffered; the endpoint enforces the exact 5 MiB file cap and the format
