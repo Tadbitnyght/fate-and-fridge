@@ -412,20 +412,20 @@ element):
       "ingredients": [
         {
           "raw": "1 1/2 cups all-purpose flour, sifted",
-          "quantity": null,
-          "name": null,
-          "preparation_note": null,
+          "quantity": 1.5,
+          "name": "all-purpose flour",
+          "preparation_note": "sifted",
           "matched_ingredient_id": null,
           "match_kind": null,
           "is_unknown": true,
           "suggestions": [],
           "unit": {
-            "raw": null,
-            "matched_unit_id": null,
-            "matched_symbol": null,
-            "is_unknown": true,
+            "raw": "cups",
+            "matched_unit_id": 3,
+            "matched_symbol": "cup",
+            "is_unknown": false,
             "suggested_dimension": null,
-            "suggestions": []
+            "suggestions": [{ "id": 3, "symbol": "cup", "display_name": "cup" }]
           }
         }
       ],
@@ -452,12 +452,18 @@ element):
   (Canonical creation during review is still enforced by the M2 endpoints.)
 - `image_source_url` is a resolved preview URL only; the image is downloaded
   after review via `POST /recipes/{id}/image/from-url` (M4-07).
+- Ingredient lines are split into `quantity`, `name`, and `preparation_note`
+  (M4-05), and `unit` is resolved against active unit symbols and aliases
+  (folded). A parsed quantity is clamped to the M3 bounds (`0`–`1,000,000`,
+  ≤14 decimal places). Ranges, multipliers, and word quantities stay raw with
+  `quantity = null`; an unresolvable unit stays `is_unknown = true` with an
+  optional `suggested_dimension` (`mass`/`volume`/`count`) and up to five
+  suggestions. Package sizes are preserved in the name and never converted.
 
-**M4-04 limitations (filled in by later M4 issues):** `source.page_title` is
-`null`; ingredient `quantity`/`name`/`preparation_note` and the unit slice are
-not split yet (M4-05); canonical/alias matching, `match_kind`, and suggestion
-lists are empty and every ingredient is `is_unknown = true` (M4-06). Advanced
-duplicate scoring and rename rechecks arrive in M4-11/M4-12.
+**M4-05 limitations (filled in by later M4 issues):** `source.page_title` is
+`null`; canonical ingredient matching, `match_kind`, and ingredient
+`suggestions` are empty and every ingredient stays `is_unknown = true` (M4-06).
+Advanced duplicate scoring and rename rechecks arrive in M4-11/M4-12.
 
 ### `POST /api/v1/import/check`
 

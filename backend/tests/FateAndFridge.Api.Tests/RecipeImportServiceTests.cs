@@ -4,6 +4,7 @@ using FateAndFridge.Api.Imports;
 using FateAndFridge.Api.Services;
 using FateAndFridge.Api.Tests.Support;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace FateAndFridge.Api.Tests;
@@ -44,6 +45,15 @@ public sealed class RecipeImportServiceTests(M1SetupFixture fixture) : IAsyncLif
     private const string NoRecipeHtml =
         "<html><head><title>Just an article</title></head><body><p>Nothing to see here.</p></body></html>";
 
+    private const string NormalizationHtml =
+        """
+        <html><head><title>Normalized</title>
+        <script type="application/ld+json">
+        {"@context":"https://schema.org","@type":"Recipe","name":"Normalized","recipeIngredient":["1 (14 oz) can diced tomatoes, drained","250 ml milk","1-2 cups flour"],"recipeInstructions":[{"@type":"HowToStep","text":"Cook."}]}
+        </script>
+        </head><body></body></html>
+        """;
+
     public async ValueTask InitializeAsync() =>
         await fixture.ResetAsync(TestContext.Current.CancellationToken);
 
@@ -53,6 +63,7 @@ public sealed class RecipeImportServiceTests(M1SetupFixture fixture) : IAsyncLif
     public async Task Import_json_ld_builds_a_complete_draft()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedReferenceDataAsync(cancellationToken);
         var fetcher = new FakeImportFetcher().OnPageHtml(JsonLdHtml, new Uri(BaseUrl));
         await using var context = fixture.CreateContext();
         var service = CreateService(context, fetcher);
@@ -83,22 +94,64 @@ public sealed class RecipeImportServiceTests(M1SetupFixture fixture) : IAsyncLif
 
         var ingredient = recipe.Ingredients.Should().ContainSingle().Subject;
         ingredient.Raw.Should().Be("1 1/2 cups all-purpose flour, sifted");
-        ingredient.Quantity.Should().BeNull();
-        ingredient.Name.Should().BeNull();
-        ingredient.PreparationNote.Should().BeNull();
-        ingredient.MatchedIngredientId.Should().BeNull();
+        ingredient.Quantity.Should().Be(1.5m);
+        ingredient.Name.Should().Be("all-purpose flour");
+        ingredient.PreparationNote.Should().Be("sifted");
+        ingredient.MatchedIngredientId.Should().BeNull("canonical matching is M4-06");
         ingredient.MatchKind.Should().BeNull();
-        ingredient.IsUnknown.Should().BeTrue();
+        ingredient.IsUnknown.Should().BeTrue("canonical matching is M4-06");
         ingredient.Suggestions.Should().BeEmpty();
-        ingredient.Unit.Raw.Should().BeNull();
-        ingredient.Unit.IsUnknown.Should().BeTrue();
-        ingredient.Unit.Suggestions.Should().BeEmpty();
+        ingredient.Unit.Raw.Should().Be("cups");
+        ingredient.Unit.MatchedUnitId.Should().NotBeNull();
+        ingredient.Unit.MatchedSymbol.Should().Be("cup");
+        ingredient.Unit.IsUnknown.Should().BeFalse();
+        ingredient.Unit.SuggestedDimension.Should().BeNull();
+        ingredient.Unit.Suggestions.Should().ContainSingle();
 
         recipe.InstructionSections.Should().ContainSingle();
         recipe.InstructionSections[0].Title.Should().BeNull();
         recipe.InstructionSections[0].Steps.Should().Equal("Boil the noodles.");
 
         fetcher.PageCallCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Import_populates_split_ingredient_and_unit_slices()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedReferenceDataAsync(cancellationToken);
+        var fetcher = new FakeImportFetcher().OnPageHtml(NormalizationHtml, new Uri(BaseUrl));
+        await using var context = fixture.CreateContext();
+        var service = CreateService(context, fetcher);
+
+        var result = await service.ImportAsync(BaseUrl, canCreateReferenceData: false, cancellationToken);
+
+        var recipe = result.Should().BeOfType<ImportRecipeUrlResult.Success>()
+            .Subject.Draft.Recipes.Should().ContainSingle().Subject;
+        recipe.Ingredients.Should().HaveCount(3);
+
+        var tomatoes = recipe.Ingredients[0];
+        tomatoes.Quantity.Should().Be(1m);
+        tomatoes.Name.Should().Be("(14 oz) diced tomatoes");
+        tomatoes.PreparationNote.Should().Be("drained");
+        tomatoes.Unit.Raw.Should().Be("can");
+        tomatoes.Unit.MatchedUnitId.Should().NotBeNull();
+        tomatoes.Unit.MatchedSymbol.Should().Be("can");
+        tomatoes.Unit.IsUnknown.Should().BeFalse();
+
+        var milk = recipe.Ingredients[1];
+        milk.Quantity.Should().Be(250m);
+        milk.Name.Should().Be("milk");
+        milk.Unit.Raw.Should().Be("ml");
+        milk.Unit.MatchedUnitId.Should().BeNull();
+        milk.Unit.IsUnknown.Should().BeTrue();
+        milk.Unit.SuggestedDimension.Should().Be("volume");
+
+        var flour = recipe.Ingredients[2];
+        flour.Quantity.Should().BeNull("ranges are preserved rather than guessed");
+        flour.Name.Should().Be("1-2 cups flour");
+        flour.Unit.Raw.Should().BeNull();
+        flour.Unit.IsUnknown.Should().BeTrue();
     }
 
     [Fact]
@@ -278,6 +331,24 @@ public sealed class RecipeImportServiceTests(M1SetupFixture fixture) : IAsyncLif
 
     private static RecipeImportService CreateService(AppDbContext context, IImportFetcher fetcher) =>
         new(context, fetcher, new TestTimeProvider(DateTimeOffset.UtcNow), NullLogger<RecipeImportService>.Instance);
+
+    /// <summary>
+    /// Installs the canonical reference data for unit resolution. Units are not
+    /// part of the M1 reset, and another class may have cleared them, so this
+    /// clears and re-seeds deterministically through the production seeder.
+    /// </summary>
+    private async Task SeedReferenceDataAsync(CancellationToken cancellationToken)
+    {
+        await using var context = fixture.CreateContext();
+        await context.Database.ExecuteSqlRawAsync(
+            """
+            DELETE FROM unit_aliases;
+            DELETE FROM units;
+            DELETE FROM application_settings WHERE key = 'reference_data_seeded';
+            """,
+            cancellationToken);
+        await new ReferenceDataSeeder(context).SeedAsync(cancellationToken);
+    }
 
     private async Task<Recipe> SeedRecipeAsync(
         string name,

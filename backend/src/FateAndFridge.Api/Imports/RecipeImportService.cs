@@ -44,10 +44,11 @@ public abstract record ImportRecipeUrlResult
 /// <c>POST /api/v1/recipes</c> contract.
 /// </para>
 /// <para>
-/// M4-04 carries raw ingredient lines only. Quantity/unit/name/note splitting
-/// (M4-05) and canonical matching (M4-06) fill the remaining draft fields later.
-/// Every enrichment field therefore keeps its honest unresolved default:
-/// <c>is_unknown = true</c>, null ids, and empty suggestion lists.
+/// Ingredient lines are split into quantity/unit/name/preparation note and the
+/// unit text is resolved against active reference data (M4-05). Canonical
+/// ingredient matching (M4-06) still fills the remaining fields later, so
+/// <c>matched_ingredient_id</c> stays null, ingredient <c>is_unknown</c> stays
+/// true, and ingredient suggestions stay empty.
 /// </para>
 /// </remarks>
 public sealed class RecipeImportService(
@@ -58,14 +59,6 @@ public sealed class RecipeImportService(
 {
     /// <summary>Maximum similar-name candidates returned per recipe or check.</summary>
     public const int MaxNameMatches = 5;
-
-    private static readonly ImportDraftUnit UnknownUnit = new(
-        Raw: null,
-        MatchedUnitId: null,
-        MatchedSymbol: null,
-        IsUnknown: true,
-        SuggestedDimension: null,
-        Suggestions: []);
 
     /// <summary>Fetches and parses a page into a draft, or returns a structured failure.</summary>
     public async Task<ImportRecipeUrlResult> ImportAsync(
@@ -91,11 +84,19 @@ public sealed class RecipeImportService(
         var sourceSite = finalUrl.Host;
         var sourceUrlMatch = await FindSourceUrlMatchAsync(finalUrl, sourceUrl, cancellationToken)
             .ConfigureAwait(false);
+        var normalizer = new ImportNormalizer(
+            await LoadUnitCatalogAsync(cancellationToken).ConfigureAwait(false));
 
         var recipes = new List<ImportDraftRecipe>(candidates.Count);
         for (var index = 0; index < candidates.Count; index++)
         {
-            recipes.Add(await BuildRecipeAsync(candidates[index], index, sourceSite, finalUrl, cancellationToken)
+            recipes.Add(await BuildRecipeAsync(
+                    candidates[index],
+                    index,
+                    sourceSite,
+                    finalUrl,
+                    normalizer,
+                    cancellationToken)
                 .ConfigureAwait(false));
         }
 
@@ -164,6 +165,7 @@ public sealed class RecipeImportService(
         int index,
         string sourceSite,
         Uri baseUri,
+        ImportNormalizer normalizer,
         CancellationToken cancellationToken)
     {
         var name = Sanitize(candidate.Name, RecipeService.MaxNameLength) ?? string.Empty;
@@ -173,16 +175,17 @@ public sealed class RecipeImportService(
         foreach (var line in candidate.IngredientLines)
         {
             var raw = Sanitize(line, RecipeService.MaxLongTextLength) ?? string.Empty;
+            var parsed = normalizer.Parse(raw);
             ingredients.Add(new ImportDraftIngredient(
                 Raw: raw,
-                Quantity: null,
-                Name: null,
-                PreparationNote: null,
+                Quantity: ImportNormalizer.ClampQuantity(parsed.Quantity),
+                Name: Sanitize(parsed.Name, RecipeService.MaxLongTextLength),
+                PreparationNote: Sanitize(parsed.PreparationNote, RecipeService.MaxLongTextLength),
                 MatchedIngredientId: null,
                 MatchKind: null,
                 IsUnknown: true,
                 Suggestions: [],
-                Unit: UnknownUnit));
+                Unit: normalizer.ResolveUnit(parsed.UnitText)));
         }
 
         var warnings = ingredients.Count > 0
@@ -214,6 +217,42 @@ public sealed class RecipeImportService(
             Proteins: [],
             Tags: [],
             warnings);
+    }
+
+    /// <summary>Loads active units (and their aliases) for folded import matching (M4-05).</summary>
+    private async Task<IReadOnlyList<ImportUnitCandidate>> LoadUnitCatalogAsync(CancellationToken cancellationToken)
+    {
+        var units = await dbContext.Units
+            .AsNoTracking()
+            .Where(unit => unit.IsActive)
+            .Select(unit => new { unit.Id, unit.Symbol, unit.DisplayName, unit.Dimension })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+        if (units.Count == 0)
+        {
+            return [];
+        }
+
+        var aliases = await dbContext.UnitAliases
+            .AsNoTracking()
+            .Where(alias => dbContext.Units.Any(unit => unit.Id == alias.UnitId && unit.IsActive))
+            .Select(alias => new { alias.UnitId, alias.Alias })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+        var aliasesByUnit = aliases
+            .GroupBy(alias => alias.UnitId)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<string>)group.Select(alias => alias.Alias).ToArray());
+
+        return units
+            .Select(unit => new ImportUnitCandidate(
+                unit.Id,
+                unit.Symbol,
+                unit.DisplayName,
+                unit.Dimension,
+                aliasesByUnit.TryGetValue(unit.Id, out var list) ? list : []))
+            .ToArray();
     }
 
     /// <summary>Exact normalized-URL match against <c>recipes.normalized_source_url</c> (M4-11 extends this).</summary>

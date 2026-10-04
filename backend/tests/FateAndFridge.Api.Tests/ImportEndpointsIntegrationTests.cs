@@ -81,6 +81,7 @@ public sealed class ImportEndpointsIntegrationTests(M1SetupFixture fixture) : IA
         await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
         await SeedUserAsync("root", AdminPassword, cancellationToken, UserRole.Admin);
         await MarkSetupCompletedAsync(cancellationToken);
+        await SeedUnitsAsync(cancellationToken);
         var fetcher = new FakeImportFetcher().OnPageHtml(JsonLdHtml, new Uri(BaseUrl));
         using var factory = CreateFactory(fetcher);
         using var session = await SignInAsync(factory, "root", AdminPassword, cancellationToken);
@@ -109,11 +110,16 @@ public sealed class ImportEndpointsIntegrationTests(M1SetupFixture fixture) : IA
 
         var ingredient = recipe.GetProperty("ingredients")[0];
         ingredient.GetProperty("raw").GetString().Should().Be("1 1/2 cups all-purpose flour, sifted");
-        ingredient.GetProperty("quantity").ValueKind.Should().Be(JsonValueKind.Null);
-        ingredient.GetProperty("name").ValueKind.Should().Be(JsonValueKind.Null);
+        ingredient.GetProperty("quantity").GetDecimal().Should().Be(1.5m);
+        ingredient.GetProperty("name").GetString().Should().Be("all-purpose flour");
+        ingredient.GetProperty("preparation_note").GetString().Should().Be("sifted");
         ingredient.GetProperty("is_unknown").GetBoolean().Should().BeTrue();
         ingredient.GetProperty("suggestions").GetArrayLength().Should().Be(0);
-        ingredient.GetProperty("unit").GetProperty("is_unknown").GetBoolean().Should().BeTrue();
+
+        var unit = ingredient.GetProperty("unit");
+        unit.GetProperty("raw").GetString().Should().Be("cups");
+        unit.GetProperty("matched_symbol").GetString().Should().Be("cup");
+        unit.GetProperty("is_unknown").GetBoolean().Should().BeFalse();
 
         recipe.GetProperty("instruction_sections")[0].GetProperty("steps")[0].GetString()
             .Should().Be("Boil the noodles.");
@@ -701,6 +707,25 @@ public sealed class ImportEndpointsIntegrationTests(M1SetupFixture fixture) : IA
             PermissionKey = permissionKey,
         });
         await context.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Ensures the canonical units exist for unit resolution. The shared
+    /// container may have had its units cleared by a sibling integration test
+    /// while the seeded flag remained, so the flag is cleared and the
+    /// production seeder re-run deterministically.
+    /// </summary>
+    private async Task SeedUnitsAsync(CancellationToken cancellationToken)
+    {
+        await using var context = fixture.CreateContext();
+        await context.Database.ExecuteSqlRawAsync(
+            """
+            DELETE FROM unit_aliases;
+            DELETE FROM units;
+            DELETE FROM application_settings WHERE key = 'reference_data_seeded';
+            """,
+            cancellationToken);
+        await new ReferenceDataSeeder(context).SeedAsync(cancellationToken);
     }
 
     private static async Task<JsonElement> ReadJsonAsync(
