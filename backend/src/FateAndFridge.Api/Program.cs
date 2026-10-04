@@ -105,9 +105,11 @@ builder.Services.AddScoped<IngredientService>();
 builder.Services.AddScoped<ProteinService>();
 builder.Services.AddScoped<TagService>();
 
-builder.Services.AddScoped<IReferenceUsageChecker, DefaultReferenceUsageChecker>();
+// M3-06/M3-08: the recipe tables now exist, so the usage seam counts and
+// reassigns real recipe references instead of the M2 zero-returning stub.
+builder.Services.AddScoped<IReferenceUsageChecker, ReferenceDataUsageChecker>();
 
-// M3-02: recipe base metadata and status lifecycle.
+// M3-02…M3-09: recipe document CRUD, status lifecycle, and nested slices.
 builder.Services.AddScoped<RecipeService>();
 
 // M3-04: local recipe image storage, content policy, and serving.

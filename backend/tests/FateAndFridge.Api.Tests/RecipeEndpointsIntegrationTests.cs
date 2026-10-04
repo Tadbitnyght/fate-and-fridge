@@ -48,9 +48,9 @@ public sealed class RecipeEndpointsIntegrationTests(M1SetupFixture fixture) : IA
         var cancellationToken = TestContext.Current.CancellationToken;
         await fixture.ResetAsync(cancellationToken);
 
-        // M1SetupFixture.ResetAsync deliberately leaves the M3 recipe tables
-        // alone (M3 owns them), so clear them here — children first — to keep
-        // this suite independent of execution order within the collection.
+        // M1SetupFixture.ResetAsync already clears the M3 recipe tables; the
+        // explicit delete here keeps this suite independent of execution order
+        // within the collection.
         await using var context = fixture.CreateContext();
         await context.Database.ExecuteSqlRawAsync(
             """

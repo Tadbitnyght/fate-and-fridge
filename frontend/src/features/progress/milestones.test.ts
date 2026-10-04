@@ -69,13 +69,24 @@ describe('milestone manifest', () => {
     }
   })
 
-  it('marks M3 in progress with its sub-issue links', () => {
+  it('marks M3 complete with its sub-issue links and verification evidence', () => {
     const m3 = MILESTONES.find((milestone) => milestone.id === 'M3')
-    expect(m3?.status).toBe('in_progress')
-    expect(m3?.issues).toContain(36)
-    expect(m3?.issues).toContain(40)
-    expect(m3?.issues).toContain(39)
+    expect(m3?.status).toBe('complete')
+    expect(m3?.completedOn).toBe('2026-10-03')
+    expect(m3?.tag).toBe('m3-complete')
+    for (const issue of [36, 40, 48, 37, 38, 39]) {
+      expect(m3?.issues).toContain(issue)
+    }
     expect(m3?.issuesNote).toMatch(/M3-01/)
+    expect(m3?.evidence).toEqual(
+      expect.arrayContaining([
+        { label: 'Backend tests', value: '1066' },
+        { label: 'Vitest', value: '180' },
+        { label: 'Playwright (hermetic)', value: '24 passed / 2 pre-existing stack skips' },
+        { label: 'M3 verification', value: 'independent review + full battery' },
+        { label: 'Backend gates', value: 'format/build/EF clean' },
+      ]),
+    )
   })
 
   it('marks M2 complete with its verification evidence and issue links', () => {
@@ -100,9 +111,9 @@ describe('milestone manifest', () => {
   it('computes the progress summary from the manifest', () => {
     expect(progressSummary()).toEqual({
       total: 15,
-      completed: 3,
-      inProgress: 1,
-      percent: Math.round((3 / 15) * 100),
+      completed: 4,
+      inProgress: 0,
+      percent: Math.round((4 / 15) * 100),
     })
     expect(
       progressSummary([

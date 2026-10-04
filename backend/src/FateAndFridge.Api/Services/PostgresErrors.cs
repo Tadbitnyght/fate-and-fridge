@@ -13,6 +13,17 @@ internal static class PostgresErrors
             SqlState: PostgresErrorCodes.UniqueViolation,
         };
 
+    /// <summary>
+    /// True when the failure is a unique-constraint violation on the named
+    /// index/constraint, so a caller can map only the constraint it expects.
+    /// </summary>
+    public static bool IsUniqueViolationOn(DbUpdateException exception, string constraintName) =>
+        exception.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation,
+        } postgres
+        && string.Equals(postgres.ConstraintName, constraintName, StringComparison.Ordinal);
+
     /// <summary>True when the failure is a foreign-key violation (SQLSTATE 23503).</summary>
     public static bool IsForeignKeyViolation(DbUpdateException exception) =>
         exception.InnerException is PostgresException

@@ -19,7 +19,8 @@ import { ChangePasswordPage } from './pages/ChangePasswordPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { GroceriesPage } from './pages/GroceriesPage'
 import { LoginPage } from './pages/LoginPage'
-import { RecipesPage } from './pages/RecipesPage'
+import { RecipeFormPage } from './features/recipes/RecipeFormPage'
+import { RecipesBrowser } from './features/recipes/RecipesBrowser'
 import { SettingsPage } from './pages/SettingsPage'
 import { MilestonesPage } from './features/progress/MilestonesPage'
 import { StartupRedirect } from './features/startup/StartupRedirect'
@@ -41,7 +42,9 @@ export function App() {
             <Route index element={<StartupRedirect />} />
             <Route path="calendar" element={<CalendarPage />} />
             <Route path="dashboard" element={<DashboardPage />} />
-            <Route path="recipes" element={<RecipesPage />} />
+            <Route path="recipes" element={<RecipesBrowser />} />
+            <Route path="recipes/new" element={<RecipeFormPage />} />
+            <Route path="recipes/:id/edit" element={<RecipeFormPage />} />
             <Route path="groceries" element={<GroceriesPage />} />
             <Route path="statistics" element={<StatisticsPage />} />
             <Route path="progress" element={<MilestonesPage />} />

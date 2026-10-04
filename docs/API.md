@@ -105,6 +105,11 @@ Use stable error codes.
 | `UNIT_IN_USE` | 409 | Unit still referenced; retire instead |
 | `PROTEIN_IN_USE` | 409 | Protein still referenced; retire instead |
 | `TAG_IN_USE` | 409 | Tag still referenced; remove it from recipes first |
+| `RECIPE_EXISTS` | 409 | A recipe with the same normalized name exists; `details.existing_id` present |
+| `IMAGE_TYPE_NOT_ALLOWED` | 415 | Recipe image is not a JPEG, PNG, or WebP |
+| `IMAGE_INVALID` | 400 | Recipe image content is malformed or does not match its declared type |
+| `IMAGE_TOO_LARGE` | 413 | Recipe image exceeds the 5 MB file cap |
+| `IMAGE_DIMENSIONS_EXCEEDED` | 400 | Recipe image exceeds 2048 pixels on a side |
 | `INVALID_UNIT_DIMENSION_CHANGE` | 400 | Unit dimensions are immutable; retire and create a new unit |
 
 Clients must branch on `code`, never on `message`.
@@ -532,9 +537,87 @@ General rules (apply to departments, units, ingredients, proteins, tags):
 - `PATCH /ingredients/{id}` — `{ canonical_name?, department_id? }`.
 - Aliases: `POST /ingredients/{id}/aliases` `{ alias }`, `DELETE /ingredients/{id}/aliases/{aliasId}`.
 - `POST /ingredients/{id}/retire`.
-- `DELETE /ingredients/{id}` — Admin only; blocked while any recipe (including retired recipes) references it; before M3 the usage check returns zero via the documented seam. In-use responses offer merge or retire (`409 INGREDIENT_IN_USE` with usage details).
-- `POST /ingredients/merge` — `{ "source_id": N, "target_id": M }`, transactional: reassigns recipe references (seam in M2), copies the source's name and aliases to the target (conflicting aliases are skipped and returned in `skipped_aliases`), retires the source with `merged_into_ingredient_id = M`, and writes an audit event with before/after.
+- `DELETE /ingredients/{id}` — Admin only; blocked while any recipe (including retired recipes) references it (M3 replaced the M2 zero-returning seam with real counts). In-use responses offer merge or retire (`409 INGREDIENT_IN_USE` with usage details).
+- `POST /ingredients/merge` — `{ "source_id": N, "target_id": M }`, transactional: reassigns recipe references, copies the source's name and aliases to the target (conflicting aliases are skipped and returned in `skipped_aliases`), retires the source with `merged_into_ingredient_id = M`, and writes an audit event with before/after.
 
 ### Proteins and Tags
 - Proteins: `GET/POST/PATCH`, `POST /{id}/retire`, `DELETE /{id}` (Admin, `409 PROTEIN_IN_USE` when referenced).
 - Tags: `GET/POST/PATCH`, `DELETE /{id}` (Admin, `409 TAG_IN_USE` when referenced); no retire flag.
+
+---
+
+## 23. M3 Contract: Recipes
+
+General rules:
+- Reads require `recipes.view`; writes require `recipes.edit`; Admin holds both and the single-user system actor is treated as Admin.
+- Recipe names normalize through `ReferenceDataNormalizer`; `normalized_name` is globally unique and responses keep the display form. Duplicate names return `409 RECIPE_EXISTS` with `details.existing_id`.
+- Every write is a single transaction and writes one `audit_events` row (`entity_type = "recipe"`) with before/after snapshots that include the nested slices. No ordinary route hard-deletes a recipe; retirement is a status change (hard deletion stays the M12 Admin workflow).
+- Errors use the shared envelope; nested validation keys are index-qualified (for example `ingredients[0].quantity`, `ingredient_groups[1].ingredients[0].unit_id`, `instruction_sections[0].steps[2]`).
+
+### Recipe document
+
+```json
+{
+  "id": 1,
+  "name": "Ratatouille",
+  "description": null,
+  "source_site": null,
+  "source_url": null,
+  "author": null,
+  "prep_minutes": 20,
+  "cook_minutes": 45,
+  "notes": null,
+  "status": "normal",
+  "is_favorite": false,
+  "is_vegan": true,
+  "is_vegetarian": true,
+  "created_at": "…",
+  "updated_at": "…",
+  "image": { "id": 1, "url": "/api/v1/recipes/1/image", "alt_text": null, "source_url": null, "created_at": "…" },
+  "ingredient_groups": [
+    { "id": 1, "title": "Sauce", "sort_order": 0, "ingredients": [ /* … */ ] }
+  ],
+  "ingredients": [
+    {
+      "id": 1,
+      "ingredient": { "id": 5, "name": "Tomato", "is_active": true },
+      "quantity": 1.5,
+      "unit": { "id": 2, "symbol": "kg", "display_name": "kilogram", "is_active": true },
+      "preparation_note": "diced",
+      "is_optional": false,
+      "sort_order": 0
+    }
+  ],
+  "instruction_sections": [
+    { "id": 1, "title": "Prep", "sort_order": 0, "steps": [ { "id": 1, "text": "Chop.", "sort_order": 0 } ] }
+  ],
+  "proteins": [ { "id": 3, "name": "Chicken", "is_active": true } ],
+  "tags": [ { "id": 4, "name": "Weeknight" } ],
+  "statistics": { "last_eaten": null, "next_planned": null, "times_eaten": null }
+}
+```
+
+- Quantities are precise decimals (`numeric(28,14)`) serialized as JSON numbers; `null` is valid ("to taste"). Bounds: `0 ≤ quantity ≤ 1,000,000`, at most 14 decimal places.
+- `unit` is nullable. `ingredients` holds ungrouped lines; each group nests its own `ingredients`. `sort_order` reflects array order.
+- `statistics` keys are always present and null until M5/M11 record history (never fake zeros). List `last_eaten`/`times_eaten` are always null.
+
+### Routes
+
+- `GET /recipes` — list envelope `{ items, total, limit, offset }`. Query: `search` (normalized name substring), `status` (`normal`, `manual_only`, `retired`), `favorite`, `vegan`, `vegetarian`, `protein_id`, `tag_id`, `sort`, `limit` (default 24, max 100), `offset`. `sort` is one of `recently_added` (default), `name`, `favorites`, `recently_eaten`, `least_recently_eaten`, `most_eaten`. History-dependent sorts are deterministic until M11 data exists and fall back to `recently_added` order. Ties break on `id`. Invalid values return `400 VALIDATION_FAILED`.
+- `POST /recipes` — full create. Body accepts the base metadata plus `ingredient_groups`, `ingredients`, `instruction_sections`, `protein_ids`, and `tag_ids`. Collections default to empty. Returns `201` with the detail document.
+- `GET /recipes/{id}` — detail document; `404 NOT_FOUND` when absent.
+- `PATCH /recipes/{id}` — partial update. Omitted base fields are unchanged; explicit `null` clears an optional field. A present collection is a **full replacement** of that slice (`[]` clears it); omitted collections are untouched. At least one supported field is required.
+
+### Nested write rules
+
+- `ingredient_groups` is an ordered array of `{ title?, ingredients }`; `title` is optional. `ingredients` is an ordered array of `{ ingredient_id, quantity?, unit_id?, preparation_note?, is_optional? }`. Duplicate lines within a recipe are allowed.
+- `instruction_sections` is an ordered array of `{ title?, steps }`; `steps` is an array of non-empty strings. Empty sections are allowed; a blank step is rejected. Section titles and step text are limited to 20,000 characters and reject control characters except tab/newline.
+- `protein_ids` / `tag_ids` are integer arrays; duplicates are silently deduplicated preserving first-occurrence order.
+- Selection rules: active ingredients/units/proteins are selectable. A retired ingredient/unit/protein that is already referenced by the recipe may be retained on update, but a retired reference cannot be newly selected (`400 VALIDATION_FAILED`). Tags have no retire flag.
+- A failure anywhere in the nested payload aborts the whole write: no partial recipe, nested rows, or audit row are persisted (create), and the recipe is left unchanged (update).
+
+### Image routes (M3-04)
+- `GET /recipes/{id}/image` (image bytes; `recipes.view`).
+- `PUT /recipes/{id}/image` (multipart `file`, optional `alt_text`; `recipes.edit`). Replaces the active image.
+- `PATCH /recipes/{id}/image` — `{ alt_text }` (≤300 characters; null/empty clears it); `recipes.edit`.
+- `DELETE /recipes/{id}/image` (`recipes.edit`). See docs/SECURITY.md for the content policy.

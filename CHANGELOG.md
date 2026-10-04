@@ -62,6 +62,16 @@ versions follow [Semantic Versioning](https://semver.org/).
 - Milestone 2 — reference data (2026-10-01): reference-data APIs and startup
   seeder, configurable conversion factors and aliases, ingredient merge with
   audit safety, and the admin management UI
+- Milestone 3 — recipes (2026-10-03): the complete recipe REST API and
+  management UI — status lifecycle (normal/manual-only/retired), favorites and
+  vegan/vegetarian metadata, secure local images with alt text, ordered
+  ingredient groups and ingredients (precise nullable decimals, optional
+  units, preparation notes, optional flags), ordered instruction sections and
+  steps, and protein/tag associations — plus the recipe browser (photo-card
+  grid and compact list, server-side search/filters/sorts and `limit`/`offset`
+  paging, explicit no-history statistics states). Real reference-data usage
+  checks replace the M2 seam: recipe references block ingredient/unit/protein/
+  tag hard deletes and ingredient merges reassign recipe ingredients.
 
 ### Changed
 

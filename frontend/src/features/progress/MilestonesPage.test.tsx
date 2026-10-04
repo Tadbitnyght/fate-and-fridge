@@ -29,13 +29,13 @@ describe('progress page', () => {
     renderWithProviders(<App />, { route: '/progress' })
 
     expect(await screen.findByRole('heading', { level: 2, name: 'Progress' })).toBeInTheDocument()
-    expect(screen.getByText('3 of 15 milestones complete (20%).')).toBeInTheDocument()
+    expect(screen.getByText('4 of 15 milestones complete (27%).')).toBeInTheDocument()
 
     const progressbar = screen.getByRole('progressbar', { name: 'Milestones complete' })
-    expect(progressbar).toHaveAttribute('aria-valuenow', '20')
-    expect(progressbar).toHaveAttribute('aria-valuetext', '20%')
+    expect(progressbar).toHaveAttribute('aria-valuenow', '27')
+    expect(progressbar).toHaveAttribute('aria-valuetext', '27%')
 
-    expect(screen.getAllByText('Complete', { exact: true })).toHaveLength(3)
+    expect(screen.getAllByText('Complete', { exact: true })).toHaveLength(4)
     expect(screen.getAllByText('Planned', { exact: true }).length).toBeGreaterThan(9)
 
     const m1Card = screen

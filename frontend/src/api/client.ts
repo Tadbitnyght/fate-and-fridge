@@ -70,6 +70,39 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
     signal: options.signal,
   })
 
+  return parseResponse<T>(response)
+}
+
+/**
+ * Multipart upload against `/api/v1` with the same credentials and CSRF echo
+ * as {@link apiRequest}. Used for recipe image uploads (docs/API.md §23):
+ * `Content-Type` is intentionally left for the browser to set with the
+ * multipart boundary.
+ */
+export async function apiUpload<T>(
+  path: string,
+  formData: FormData,
+  options: { method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE'; signal?: AbortSignal } = {},
+): Promise<T> {
+  const method = options.method ?? 'PUT'
+  const headers: Record<string, string> = { Accept: 'application/json' }
+  if (UNSAFE_METHODS.has(method) && csrfToken !== null) {
+    headers['X-CSRF-TOKEN'] = csrfToken
+  }
+
+  const response = await fetch(`${API_BASE}${path}`, {
+    method,
+    credentials: 'include',
+    headers,
+    body: formData,
+    signal: options.signal,
+  })
+
+  return parseResponse<T>(response)
+}
+
+/** Stores a rotated CSRF token and unwraps the shared response envelope. */
+async function parseResponse<T>(response: Response): Promise<T> {
   const responseToken = response.headers.get('X-CSRF-TOKEN')
   if (responseToken) {
     csrfToken = responseToken

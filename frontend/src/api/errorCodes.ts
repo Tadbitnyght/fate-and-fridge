@@ -31,6 +31,8 @@ export const ErrorCodes = {
   ProteinInUse: 'PROTEIN_IN_USE',
   TagExists: 'TAG_EXISTS',
   TagInUse: 'TAG_IN_USE',
+  // M3 recipe codes (docs/API.md §23).
+  RecipeExists: 'RECIPE_EXISTS',
 } as const
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes]

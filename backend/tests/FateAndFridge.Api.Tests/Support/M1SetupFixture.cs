@@ -46,15 +46,24 @@ public sealed class M1SetupFixture : IAsyncLifetime
         new(ConnectionString, migrateOnStartup: false, dataDir, configureServices);
 
     /// <summary>
-    /// Removes setup state, M1 authentication rows, and staged audit rows so
-    /// every test starts from a fresh install. Sessions and audit events first:
-    /// they reference users with RESTRICT.
+    /// Removes setup state, M1 authentication rows, M3 recipe rows, and staged
+    /// audit rows so every test starts from a fresh install. Sessions and audit
+    /// events first: they reference users with RESTRICT. Recipe children are
+    /// removed before recipes so the shared reset never violates a foreign key.
     /// </summary>
     public async Task ResetAsync(CancellationToken cancellationToken)
     {
         await using var context = CreateContext();
         await context.Database.ExecuteSqlRawAsync(
             """
+            DELETE FROM recipe_tags;
+            DELETE FROM recipe_proteins;
+            DELETE FROM recipe_instruction_steps;
+            DELETE FROM recipe_instruction_sections;
+            DELETE FROM recipe_ingredients;
+            DELETE FROM recipe_ingredient_groups;
+            DELETE FROM recipe_images;
+            DELETE FROM recipes;
             DELETE FROM user_sessions;
             DELETE FROM user_permissions;
             DELETE FROM auth_events;
