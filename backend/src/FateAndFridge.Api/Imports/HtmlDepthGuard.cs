@@ -11,9 +11,17 @@ namespace FateAndFridge.Api.Imports;
 /// <para>
 /// The estimator is a single forward scan with no allocations: it counts
 /// opening tags, decrements on closing tags, and ignores comments, doctypes,
-/// processing instructions, and self-closing/void elements. It is deliberately
+/// processing instructions, self-closing/void elements, and the raw-text
+/// contents of <c>script</c>/<c>style</c>/<c>title</c>/<c>textarea</c>. A
+/// <c>&lt;</c> that does not begin a real tag name (for example <c>&lt; 2</c>,
+/// <c>&lt;=</c>, or <c>&lt;3</c>) is treated as literal text, and <c>&gt;</c>
+/// inside a quoted attribute value does not end the tag. It is deliberately
 /// approximate — a guard, not a parser — so false positives only cost a
 /// skipped best-effort fallback, never correctness.
+/// </para>
+/// <para>
+/// JSON-LD extraction runs before this guard and is never affected by it; a
+/// page rejected here may still yield a JSON-LD recipe.
 /// </para>
 /// <para>
 /// The fallback's own counters (visible-node and text-item caps in
@@ -31,6 +39,15 @@ public static class HtmlDepthGuard
     {
         "area", "base", "br", "col", "embed", "hr", "img", "input",
         "link", "meta", "param", "source", "track", "wbr",
+    };
+
+    /// <summary>
+    /// Elements whose contents are raw text: a <c>&lt;</c> inside them is not a
+    /// tag and must not be counted.
+    /// </summary>
+    private static readonly HashSet<string> RawTextElements = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "script", "style", "title", "textarea",
     };
 
     /// <summary>
@@ -118,6 +135,13 @@ public static class HtmlDepthGuard
                 continue;
             }
 
+            // A real tag must start with an ASCII letter; '<', '<=' and '<3'
+            // are literal text, not markup.
+            if (!IsAsciiLetter(next))
+            {
+                continue;
+            }
+
             var nameStart = i + 1;
             var nameEnd = nameStart;
             while (nameEnd < html.Length && IsTagNameCharacter(html[nameEnd]))
@@ -134,13 +158,31 @@ public static class HtmlDepthGuard
 
             var selfClosing = html[tagEnd - 1] == '/';
             var name = html[nameStart..nameEnd];
-            if (!selfClosing && (name.Length == 0 || !VoidElements.Contains(name)))
+
+            if (selfClosing || VoidElements.Contains(name))
             {
-                depth++;
-                if (depth > maxDepth)
+                i = tagEnd;
+                continue;
+            }
+
+            depth++;
+            if (depth > maxDepth)
+            {
+                maxDepth = depth;
+            }
+
+            if (RawTextElements.Contains(name))
+            {
+                // Skip the raw-text body so its '<' characters are not counted;
+                // resume on the matching closing tag so it still decrements.
+                var closeStart = IndexOfCloseTag(html, tagEnd + 1, name);
+                if (closeStart < 0)
                 {
-                    maxDepth = depth;
+                    break;
                 }
+
+                i = closeStart - 1;
+                continue;
             }
 
             i = tagEnd;
@@ -151,14 +193,71 @@ public static class HtmlDepthGuard
 
     /// <summary>
     /// Returns the index of the <c>&gt;</c> closing the tag that starts at
-    /// <paramref name="from"/>, or <c>-1</c> when the tag is truncated.
+    /// <paramref name="from"/>, or <c>-1</c> when the tag is truncated. A
+    /// <c>&gt;</c> inside a single- or double-quoted attribute value is skipped.
     /// </summary>
     private static int SkipToTagEnd(string html, int from)
     {
-        var end = html.IndexOf('>', from);
-        return end < 0 ? -1 : end;
+        var quote = '\0';
+        for (var i = from; i < html.Length; i++)
+        {
+            var current = html[i];
+            if (quote != '\0')
+            {
+                if (current == quote)
+                {
+                    quote = '\0';
+                }
+
+                continue;
+            }
+
+            if (current is '"' or '\'')
+            {
+                quote = current;
+                continue;
+            }
+
+            if (current == '>')
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    /// <summary>
+    /// Finds the start of the case-insensitive <c>&lt;/name</c> closing tag at
+    /// or after <paramref name="from"/>, or <c>-1</c> when absent.
+    /// </summary>
+    private static int IndexOfCloseTag(string html, int from, string name)
+    {
+        var needle = string.Concat("</", name);
+        var searchFrom = from;
+        while (searchFrom < html.Length)
+        {
+            var index = html.IndexOf(needle, searchFrom, StringComparison.OrdinalIgnoreCase);
+            if (index < 0)
+            {
+                return -1;
+            }
+
+            var after = index + needle.Length;
+            if (after >= html.Length || !IsTagNameCharacter(html[after]))
+            {
+                return index;
+            }
+
+            searchFrom = after;
+        }
+
+        return -1;
     }
 
     private static bool IsTagNameCharacter(char value) =>
         value is (>= 'a' and <= 'z') or (>= 'A' and <= 'Z') or (>= '0' and <= '9');
+
+    private static bool IsAsciiLetter(char value) =>
+        value is (>= 'a' and <= 'z') or (>= 'A' and <= 'Z');
 }

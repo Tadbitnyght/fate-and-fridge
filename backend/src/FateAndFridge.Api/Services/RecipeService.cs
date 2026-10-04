@@ -738,7 +738,10 @@ public sealed class RecipeService(
     /// <summary>
     /// Minimal source-URL normalization (docs/M3_PLAN.md §1.19): lowercase the
     /// scheme and host, drop a default port, and drop the fragment. Nothing else
-    /// is rewritten, and M3 never fetches the URL.
+    /// is rewritten, and M3 never fetches the URL. This is the canonical form
+    /// stored in <see cref="Recipe.NormalizedSourceUrl"/>; M4-04 import duplicate
+    /// detection compares against the same output, so callers must not fork the
+    /// normalization.
     /// </summary>
     public static string BuildNormalizedSourceUrl(Uri uri, string raw)
     {

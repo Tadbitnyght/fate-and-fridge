@@ -253,6 +253,7 @@ public sealed class ImportEndpointsIntegrationTests(M1SetupFixture fixture) : IA
             allowed.StatusCode.Should().Be(HttpStatusCode.OK);
         }
 
+        var callsBeforeBlocked = fetcher.PageCallCount;
         var limited = await SendJsonAsync(
             session.Client, HttpMethod.Post, ImportPath, """{"url":"https://example.com/recipes/lasagna"}""",
             session.CsrfToken, cancellationToken);
@@ -260,6 +261,9 @@ public sealed class ImportEndpointsIntegrationTests(M1SetupFixture fixture) : IA
         limited.Headers.RetryAfter.Should().NotBeNull();
         (await ReadErrorAsync(limited, cancellationToken)).GetProperty("code").GetString()
             .Should().Be(ErrorCodes.ImportRateLimited);
+        fetcher.PageCallCount.Should().Be(
+            callsBeforeBlocked,
+            "the throttle must reject before any outbound fetch");
 
         clock.Advance(TimeSpan.FromHours(1) + TimeSpan.FromSeconds(1));
 
@@ -267,6 +271,32 @@ public sealed class ImportEndpointsIntegrationTests(M1SetupFixture fixture) : IA
             session.Client, HttpMethod.Post, ImportPath, """{"url":"https://example.com/recipes/lasagna"}""",
             session.CsrfToken, cancellationToken);
         recovered.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Import_recipe_url_throttles_the_single_user_actor()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.SingleUser, cancellationToken);
+        await MarkSetupCompletedAsync(cancellationToken);
+        var clock = new TestTimeProvider(DateTimeOffset.UtcNow);
+        var fetcher = new FakeImportFetcher().OnPageHtml(JsonLdHtml, new Uri(BaseUrl));
+        using var factory = CreateFactory(fetcher, clock, options => options.PageFetchesPerHour = 1);
+        using var client = factory.CreateClient();
+
+        var allowed = await SendJsonAsync(
+            client, HttpMethod.Post, ImportPath, """{"url":"https://example.com/recipes/lasagna"}""",
+            csrfToken: null, cancellationToken);
+        allowed.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var callsBeforeBlocked = fetcher.PageCallCount;
+        var limited = await SendJsonAsync(
+            client, HttpMethod.Post, ImportPath, """{"url":"https://example.com/recipes/lasagna"}""",
+            csrfToken: null, cancellationToken);
+        limited.StatusCode.Should().Be(HttpStatusCode.TooManyRequests);
+        (await ReadErrorAsync(limited, cancellationToken)).GetProperty("code").GetString()
+            .Should().Be(ErrorCodes.ImportRateLimited);
+        fetcher.PageCallCount.Should().Be(callsBeforeBlocked);
     }
 
     [Theory]
@@ -326,6 +356,62 @@ public sealed class ImportEndpointsIntegrationTests(M1SetupFixture fixture) : IA
     }
 
     [Fact]
+    public async Task Import_recipe_url_denies_a_reference_data_editor()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        var actor = await SeedUserAsync("reference", MemberPassword, cancellationToken);
+        await SeedPermissionAsync(actor.Id, PermissionKeys.ReferenceDataEdit, cancellationToken);
+        await MarkSetupCompletedAsync(cancellationToken);
+        using var factory = CreateFactory(new FakeImportFetcher().OnPageHtml(JsonLdHtml, new Uri(BaseUrl)));
+        using var session = await SignInAsync(factory, "reference", MemberPassword, cancellationToken);
+
+        var response = await SendJsonAsync(
+            session.Client, HttpMethod.Post, ImportPath, """{"url":"https://example.com/recipes/lasagna"}""",
+            session.CsrfToken, cancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await ReadErrorAsync(response, cancellationToken)).GetProperty("code").GetString()
+            .Should().Be(ErrorCodes.Forbidden);
+    }
+
+    [Fact]
+    public async Task Import_check_allows_a_recipes_editor_via_implied_view()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        var actor = await SeedUserAsync("editor", MemberPassword, cancellationToken);
+        await SeedPermissionAsync(actor.Id, PermissionKeys.RecipesEdit, cancellationToken);
+        await MarkSetupCompletedAsync(cancellationToken);
+        using var factory = CreateFactory(new FakeImportFetcher());
+        using var session = await SignInAsync(factory, "editor", MemberPassword, cancellationToken);
+
+        var response = await SendJsonAsync(
+            session.Client, HttpMethod.Post, CheckPath, """{"name":"Lasagna"}""",
+            session.CsrfToken, cancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Import_check_denies_a_reference_data_editor()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        var actor = await SeedUserAsync("reference", MemberPassword, cancellationToken);
+        await SeedPermissionAsync(actor.Id, PermissionKeys.ReferenceDataEdit, cancellationToken);
+        await MarkSetupCompletedAsync(cancellationToken);
+        using var factory = CreateFactory(new FakeImportFetcher());
+        using var session = await SignInAsync(factory, "reference", MemberPassword, cancellationToken);
+
+        var response = await SendJsonAsync(
+            session.Client, HttpMethod.Post, CheckPath, """{"name":"Lasagna"}""",
+            session.CsrfToken, cancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
     public async Task Import_recipe_url_requires_authentication()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -372,15 +458,16 @@ public sealed class ImportEndpointsIntegrationTests(M1SetupFixture fixture) : IA
         using var factory = CreateFactory(fetcher);
         using var session = await SignInAsync(factory, "root", AdminPassword, cancellationToken);
 
+        await using var context = fixture.CreateContext();
+        var before = await EntityCountSnapshot.CaptureAsync(context, cancellationToken);
+
         var response = await SendJsonAsync(
             session.Client, HttpMethod.Post, ImportPath, """{"url":"https://example.com/recipes/lasagna"}""",
             session.CsrfToken, cancellationToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        await using var context = fixture.CreateContext();
-        (await context.Recipes.CountAsync(cancellationToken)).Should().Be(0);
-        (await context.AuditEvents.CountAsync(cancellationToken)).Should().Be(0);
-        (await context.RecipeIngredients.CountAsync(cancellationToken)).Should().Be(0);
+        var after = await EntityCountSnapshot.CaptureAsync(context, cancellationToken);
+        EntityCountSnapshot.ShouldBeUnchanged(before, after);
     }
 
     [Fact]

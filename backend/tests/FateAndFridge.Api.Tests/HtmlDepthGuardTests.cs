@@ -84,6 +84,42 @@ public sealed class HtmlDepthGuardTests
         parsed[0].Name.Should().Be("Deep Lasagna");
     }
 
+    [Theory]
+    [InlineData("script")]
+    [InlineData("style")]
+    [InlineData("title")]
+    [InlineData("textarea")]
+    public void Raw_text_element_contents_are_not_counted(string tag)
+    {
+        var html = $"<div><{tag}>var x = \"<div><div><div>\";</{tag}></div>";
+
+        HtmlDepthGuard.EstimateMaxTagDepth(html).Should().Be(2);
+    }
+
+    [Fact]
+    public void Raw_text_element_without_a_closing_tag_stops_safely()
+    {
+        const string html = "<div><script>var x = \"<div><div>\";";
+
+        HtmlDepthGuard.EstimateMaxTagDepth(html).Should().Be(2);
+    }
+
+    [Fact]
+    public void Less_than_signs_that_do_not_start_a_tag_are_literal_text()
+    {
+        const string html = "<p>1 < 2 and 3 <= 4 and <3 and < b</p>";
+
+        HtmlDepthGuard.EstimateMaxTagDepth(html).Should().Be(1);
+    }
+
+    [Fact]
+    public void Greater_than_inside_quoted_attribute_values_does_not_end_the_tag()
+    {
+        const string html = "<div title=\"<a><b><c>\"><p></p></div>";
+
+        HtmlDepthGuard.EstimateMaxTagDepth(html).Should().Be(2);
+    }
+
     private static string Repeat(string value, int count) =>
         string.Concat(Enumerable.Repeat(value, count));
 }

@@ -4,7 +4,6 @@ using FateAndFridge.Api.Imports;
 using FateAndFridge.Api.Services;
 using FateAndFridge.Api.Tests.Support;
 using FluentAssertions;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace FateAndFridge.Api.Tests;
@@ -226,21 +225,37 @@ public sealed class RecipeImportServiceTests(M1SetupFixture fixture) : IAsyncLif
     }
 
     [Fact]
-    public async Task Import_creates_no_recipe_or_audit_rows()
+    public async Task Import_writes_no_entity_rows_on_success_for_any_family()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var fetcher = new FakeImportFetcher().OnPageHtml(JsonLdHtml, new Uri(BaseUrl));
         await using var context = fixture.CreateContext();
         var service = CreateService(context, fetcher);
 
-        var recipesBefore = await CountRecipesAsync(cancellationToken);
-        var auditsBefore = await CountAuditsAsync(cancellationToken);
+        var before = await EntityCountSnapshot.CaptureAsync(context, cancellationToken);
 
         var result = await service.ImportAsync(BaseUrl, canCreateReferenceData: true, cancellationToken);
 
         result.Should().BeOfType<ImportRecipeUrlResult.Success>();
-        (await CountRecipesAsync(cancellationToken)).Should().Be(recipesBefore);
-        (await CountAuditsAsync(cancellationToken)).Should().Be(auditsBefore);
+        var after = await EntityCountSnapshot.CaptureAsync(context, cancellationToken);
+        EntityCountSnapshot.ShouldBeUnchanged(before, after);
+    }
+
+    [Fact]
+    public async Task Import_writes_no_entity_rows_on_failure_for_any_family()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var fetcher = new FakeImportFetcher().OnPageFailure(ImportFetchFailureReason.HttpError, "boom");
+        await using var context = fixture.CreateContext();
+        var service = CreateService(context, fetcher);
+
+        var before = await EntityCountSnapshot.CaptureAsync(context, cancellationToken);
+
+        var result = await service.ImportAsync(BaseUrl, canCreateReferenceData: true, cancellationToken);
+
+        result.Should().BeOfType<ImportRecipeUrlResult.FetchFailed>();
+        var after = await EntityCountSnapshot.CaptureAsync(context, cancellationToken);
+        EntityCountSnapshot.ShouldBeUnchanged(before, after);
     }
 
     [Fact]
@@ -284,17 +299,5 @@ public sealed class RecipeImportServiceTests(M1SetupFixture fixture) : IAsyncLif
         context.Recipes.Add(recipe);
         await context.SaveChangesAsync(cancellationToken);
         return recipe;
-    }
-
-    private async Task<int> CountRecipesAsync(CancellationToken cancellationToken)
-    {
-        await using var context = fixture.CreateContext();
-        return await context.Recipes.CountAsync(cancellationToken);
-    }
-
-    private async Task<int> CountAuditsAsync(CancellationToken cancellationToken)
-    {
-        await using var context = fixture.CreateContext();
-        return await context.AuditEvents.CountAsync(cancellationToken);
     }
 }
