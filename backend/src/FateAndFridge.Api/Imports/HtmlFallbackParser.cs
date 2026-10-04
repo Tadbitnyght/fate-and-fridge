@@ -53,6 +53,9 @@ public static class HtmlFallbackParser
     /// <summary>Recursion guard for pathologically nested instruction markup.</summary>
     private const int MaxInstructionDepth = 32;
 
+    /// <summary>Upper bound on nodes visited by the iterative visible-text walk.</summary>
+    private const int MaxVisibleNodes = 200_000;
+
     /// <summary>
     /// Elements whose text is never recipe content and must be skipped when
     /// reading visible text (docs/SECURITY.md §8).
@@ -844,28 +847,42 @@ public static class HtmlFallbackParser
     /// recipe content (<c>script</c>, <c>style</c>, <c>template</c>,
     /// <c>noscript</c>, and <c>head</c>; docs/SECURITY.md §8). Unlike
     /// <c>TextContent</c> this cannot leak script/style source into a field.
+    /// The walk is iterative with an explicit stack and a visit cap, so its
+    /// stack depth never depends on attacker markup (docs/M4_PLAN.md §4).
     /// </summary>
     private static string GetVisibleText(IElement element)
     {
         var builder = new StringBuilder();
-        AppendVisibleText(element, builder);
-        return builder.ToString();
-    }
+        var stack = new Stack<INode>();
+        PushChildrenReversed(element, stack);
 
-    private static void AppendVisibleText(INode node, StringBuilder builder)
-    {
-        foreach (var child in node.ChildNodes)
+        var visited = 0;
+        while (stack.Count > 0 && visited < MaxVisibleNodes)
         {
-            if (child.NodeType == NodeType.Text)
+            var node = stack.Pop();
+            visited++;
+
+            if (node.NodeType == NodeType.Text)
             {
-                builder.Append(child.NodeValue);
+                builder.Append(node.NodeValue);
                 continue;
             }
 
-            if (child is IElement element && !NonTextElementNames.Contains(element.LocalName))
+            if (node is IElement child && !NonTextElementNames.Contains(child.LocalName))
             {
-                AppendVisibleText(element, builder);
+                PushChildrenReversed(child, stack);
             }
+        }
+
+        return builder.ToString();
+    }
+
+    private static void PushChildrenReversed(INode node, Stack<INode> stack)
+    {
+        var children = node.ChildNodes;
+        for (var index = children.Length - 1; index >= 0; index--)
+        {
+            stack.Push(children[index]);
         }
     }
 

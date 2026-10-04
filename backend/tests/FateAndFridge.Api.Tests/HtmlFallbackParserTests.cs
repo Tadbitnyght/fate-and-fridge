@@ -536,6 +536,45 @@ public sealed class HtmlFallbackParserTests
     }
 
     [Fact]
+    public void Parse_handles_deeply_nested_markup_inside_a_microdata_property_without_overflowing()
+    {
+        const int depth = 50_000;
+        var open = string.Concat(Enumerable.Repeat("<div>", depth));
+        var close = string.Concat(Enumerable.Repeat("</div>", depth));
+        var html = $$"""
+            <html><body>
+            <div itemscope itemtype="https://schema.org/Recipe">
+              <div itemprop="description">{{open}}1 cup deep{{close}}</div>
+            </div>
+            </body></html>
+            """;
+
+        FluentActions.Invoking(() => HtmlFallbackParser.Parse(html, PageUrl))
+            .Should().NotThrow();
+        HtmlFallbackParser.Parse(html, PageUrl).Single().Description.Should().Be("1 cup deep");
+    }
+
+    [Fact]
+    public void Parse_handles_deeply_nested_markup_inside_a_heuristic_list_item_without_overflowing()
+    {
+        const int depth = 50_000;
+        var open = string.Concat(Enumerable.Repeat("<div>", depth));
+        var close = string.Concat(Enumerable.Repeat("</div>", depth));
+        var html = $$"""
+            <html><body>
+              <h1>Deep Heuristic</h1>
+              <h2>Ingredients</h2>
+              <ul><li>{{open}}1 deep cup{{close}}</li></ul>
+            </body></html>
+            """;
+
+        FluentActions.Invoking(() => HtmlFallbackParser.Parse(html, PageUrl))
+            .Should().NotThrow();
+        HtmlFallbackParser.Parse(html, PageUrl).Single().IngredientLines
+            .Should().Equal("1 deep cup");
+    }
+
+    [Fact]
     public void Parse_returns_empty_for_null_or_blank_html()
     {
         HtmlFallbackParser.Parse(null).Should().BeEmpty();
