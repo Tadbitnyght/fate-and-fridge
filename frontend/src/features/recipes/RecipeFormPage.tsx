@@ -257,7 +257,7 @@ export function RecipeFormPage() {
         )}
 
         {imageWarning !== null && (
-          <p className="form__warning" role="status">
+          <p className="form__notice" role="status">
             {imageWarning}
           </p>
         )}

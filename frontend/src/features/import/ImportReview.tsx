@@ -135,7 +135,6 @@ export function ImportReview({
   const [loadedKey, setLoadedKey] = useState(selected.index)
   const [errors, setErrors] = useState<FieldErrors>({})
   const [formError, setFormError] = useState<string | null>(null)
-  const [imageWarning, setImageWarning] = useState<string | null>(null)
   const [useImage, setUseImage] = useState(selected.image_source_url !== null)
   const errorSummaryRef = useRef<HTMLDivElement>(null)
 
@@ -147,7 +146,6 @@ export function ImportReview({
     setState(fromImportDraft(selected))
     setErrors({})
     setFormError(null)
-    setImageWarning(null)
     setUseImage(selected.image_source_url !== null)
   }
 
@@ -161,13 +159,11 @@ export function ImportReview({
     setState(updater)
     setErrors({})
     setFormError(null)
-    setImageWarning(null)
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault()
     setFormError(null)
-    setImageWarning(null)
 
     const validation = validateRecipeForm(state)
     if (Object.keys(validation).length > 0) {
@@ -270,12 +266,6 @@ export function ImportReview({
         <p className="form__notice" role="status">
           Some ingredient lines could not be matched to your ingredient list. Choose an ingredient
           for each highlighted line before saving.
-        </p>
-      )}
-
-      {imageWarning !== null && (
-        <p className="form__notice" role="status">
-          {imageWarning}
         </p>
       )}
 
