@@ -1779,6 +1779,12 @@ a.button--primary:focus-visible {
   gap: 0.5rem;
 }
 
+/* Unrecognized unit block (M4-10): nested inside the shared unknown block. */
+.ingredient-row__unknown-unit {
+  border-top: 1px solid var(--bad-text);
+  padding-top: 0.5rem;
+}
+
 .step-row {
   display: flex;
   flex-direction: column;

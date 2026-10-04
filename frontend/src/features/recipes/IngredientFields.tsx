@@ -1,7 +1,14 @@
 import { useState } from 'react'
 
 import { fieldProps } from '../../components/fieldProps'
+import type { UnitDimension } from '../../api/referenceData'
 import type { FieldErrors } from '../../utils/fieldErrors'
+import {
+  UNIT_DIMENSIONS,
+  UNIT_DIMENSION_LABELS,
+  parseBaseFactorInput,
+  requiresFactor,
+} from '../reference-data/unitForm'
 import { formatQuantity } from './quantity'
 import {
   emptyIngredientGroup,
@@ -18,9 +25,9 @@ export interface PickerOption {
 }
 
 /**
- * Import-only resolution metadata for a row (M4-09). `IngredientFields` stays
- * reusable for the normal recipe form, so every unknown-ingredient affordance
- * is opt-in through {@link IngredientFieldsProps.unknownByRowKey}.
+ * Import-only resolution metadata for a row (M4-09/M4-10). `IngredientFields`
+ * stays reusable for the normal recipe form, so every unknown-ingredient/unit
+ * affordance is opt-in through {@link IngredientFieldsProps.unknownByRowKey}.
  */
 export interface UnknownIngredientInfo {
   /** The original parsed line, shown verbatim. */
@@ -28,6 +35,23 @@ export interface UnknownIngredientInfo {
   /** Parsed canonical-name text, offered as the default create name. */
   name: string
   /** Draft suggestions the reviewer can map the line to in one tap. */
+  suggestions: PickerOption[]
+  /** Unrecognized unit on the line, or `null` when the unit resolved. */
+  unit: UnknownUnitInfo | null
+}
+
+/**
+ * Import-only resolution metadata for a raw unit the parser could not match
+ * (M4-10). The suggested dimension is present only when the parser could infer
+ * it; otherwise the reviewer must pick one. Package-size conversion is never
+ * guessed.
+ */
+export interface UnknownUnitInfo {
+  /** The original parsed unit text, shown verbatim. */
+  raw: string
+  /** Suggested dimension when obvious, otherwise `null`. */
+  suggestedDimension: 'mass' | 'volume' | 'count' | null
+  /** Existing units the reviewer can map to in one tap. */
   suggestions: PickerOption[]
 }
 
@@ -40,6 +64,26 @@ export interface IngredientCreateControls {
   /** Per-row create error message, keyed by row key. */
   errorByRowKey: Record<string, string>
   onCreate: (row: IngredientFormRow, canonicalName: string, departmentId: number | null) => void
+}
+
+/**
+ * Inline "create unit" wiring (M4-10), only supplied when the actor holds
+ * `reference_data.edit`. The chosen dimension is always explicit: the reviewer
+ * selects it (defaulting to the parser's suggestion when there was one) and
+ * supplies a base factor for mass/volume units rather than having one guessed.
+ */
+export interface UnitCreateControls {
+  /** Row key with a unit-create request in flight, if any. */
+  pendingRowKey: string | null
+  /** Per-row unit-create error message, keyed by row key. */
+  errorByRowKey: Record<string, string>
+  onCreate: (
+    row: IngredientFormRow,
+    symbol: string,
+    displayName: string,
+    dimension: UnitDimension,
+    baseFactor: number | undefined,
+  ) => void
 }
 
 type RowUnknownByKey = Record<string, UnknownIngredientInfo>
@@ -151,6 +195,148 @@ function CreateIngredientInline({
   )
 }
 
+/**
+ * Permission-gated inline unit creation (M4-10). The dimension is never
+ * inferred from packaging: it defaults to the parser's suggestion when one
+ * exists, otherwise the reviewer must pick, and mass/volume units additionally
+ * require an explicit base factor. A duplicate create maps the row to the
+ * existing unit server-side (`UNIT_EXISTS` with `details.existing_id`).
+ */
+function CreateUnitInline({
+  row,
+  defaultSymbol,
+  suggestedDimension,
+  createControls,
+}: {
+  row: IngredientFormRow
+  defaultSymbol: string
+  suggestedDimension: 'mass' | 'volume' | 'count' | null
+  createControls: UnitCreateControls
+}) {
+  const [symbol, setSymbol] = useState(defaultSymbol)
+  const [displayName, setDisplayName] = useState(defaultSymbol)
+  // Never guess the dimension: preselect only when the parser was confident.
+  const [dimension, setDimension] = useState<UnitDimension | ''>(suggestedDimension ?? '')
+  const [factor, setFactor] = useState('')
+  const [factorError, setFactorError] = useState<string | null>(null)
+  const pending = createControls.pendingRowKey === row.key
+  const error = createControls.errorByRowKey[row.key]
+  const symbolFieldId = `${row.key}-create-unit-symbol`
+  const displayFieldId = `${row.key}-create-unit-display`
+  const dimensionFieldId = `${row.key}-create-unit-dimension`
+  const factorFieldId = `${row.key}-create-unit-factor`
+  const factorRequired = dimension !== '' && requiresFactor(dimension)
+
+  function handleCreate(): void {
+    if (dimension === '') {
+      return
+    }
+    let baseFactor: number | undefined
+    if (factorRequired) {
+      const parsed = parseBaseFactorInput(factor)
+      if (parsed.error !== undefined) {
+        setFactorError(parsed.error)
+        return
+      }
+      baseFactor = parsed.factor
+    }
+    setFactorError(null)
+    createControls.onCreate(row, symbol.trim(), displayName.trim(), dimension, baseFactor)
+  }
+
+  return (
+    <div className="ingredient-row__create ingredient-row__create-unit">
+      <p className="form__hint">
+        No matching unit? Create it once and reuse it everywhere. Choose the dimension yourself —
+        package sizes are never converted automatically.
+      </p>
+      <div className="ingredient-row__create-fields">
+        <div className="form__field">
+          <label htmlFor={symbolFieldId}>New unit symbol</label>
+          <input
+            id={symbolFieldId}
+            type="text"
+            autoComplete="off"
+            value={symbol}
+            disabled={pending}
+            onChange={(event) => setSymbol(event.target.value)}
+          />
+        </div>
+        <div className="form__field">
+          <label htmlFor={displayFieldId}>Display name</label>
+          <input
+            id={displayFieldId}
+            type="text"
+            autoComplete="off"
+            value={displayName}
+            disabled={pending}
+            onChange={(event) => setDisplayName(event.target.value)}
+          />
+        </div>
+        <div className="form__field">
+          <label htmlFor={dimensionFieldId}>Dimension</label>
+          <select
+            id={dimensionFieldId}
+            value={dimension}
+            disabled={pending}
+            onChange={(event) => {
+              setDimension(event.target.value as UnitDimension | '')
+              setFactorError(null)
+            }}
+          >
+            <option value="">Choose a dimension…</option>
+            {UNIT_DIMENSIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        {factorRequired && (
+          <div className="form__field">
+            <label htmlFor={factorFieldId}>Base factor</label>
+            <input
+              id={factorFieldId}
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
+              value={factor}
+              disabled={pending}
+              placeholder="e.g. 1"
+              onChange={(event) => {
+                setFactor(event.target.value)
+                setFactorError(null)
+              }}
+            />
+          </div>
+        )}
+      </div>
+      {factorError !== null && (
+        <p className="form__error" role="alert">
+          {factorError}
+        </p>
+      )}
+      {error !== undefined && (
+        <p className="form__error" role="alert">
+          {error}
+        </p>
+      )}
+      <button
+        type="button"
+        disabled={
+          pending ||
+          symbol.trim().length === 0 ||
+          displayName.trim().length === 0 ||
+          dimension === ''
+        }
+        onClick={handleCreate}
+      >
+        {pending ? 'Creating…' : 'Create unit'}
+      </button>
+    </div>
+  )
+}
+
 function IngredientRowEditor({
   row,
   ariaLabel,
@@ -160,6 +346,7 @@ function IngredientRowEditor({
   errors,
   unknown,
   createControls,
+  unitCreateControls,
   onRowChange,
   onRemove,
   onMove,
@@ -174,6 +361,7 @@ function IngredientRowEditor({
   errors: FieldErrors
   unknown?: UnknownIngredientInfo
   createControls?: IngredientCreateControls
+  unitCreateControls?: UnitCreateControls
   onRowChange: (row: IngredientFormRow) => void
   onRemove: () => void
   onMove: (delta: number) => void
@@ -182,6 +370,7 @@ function IngredientRowEditor({
 }) {
   const ingredientError = errors[`${prefix}.ingredient_id`]
   const quantityError = errors[`${prefix}.quantity`]
+  const unitError = errors[`${prefix}.unit_id`]
   const quantityHint =
     row.quantity.trim().length > 0 && Number.isFinite(Number(row.quantity))
       ? formatQuantity(row.quantity)
@@ -194,10 +383,24 @@ function IngredientRowEditor({
   // reference; mapping it via the select, a suggestion, or inline creation
   // sets `ingredientId` and clears the state.
   const needsIngredient = unknown !== undefined && row.ingredientId === ''
+  // A genuinely unrecognized raw unit (M4-10) blocks saving until the reviewer
+  // maps or creates a unit. Blank units and already-resolved units do not.
+  const unknownUnit =
+    unknown?.unit !== null && unknown !== undefined && unknown.unit.raw.trim().length > 0
+      ? unknown.unit
+      : null
+  const needsUnit = unknownUnit !== null && row.unitId === ''
+  const rowUnresolved = needsIngredient || needsUnit
   const unknownNoticeId = `${ingredientId}-unknown`
   const ingredientDescribedBy = [
     ingredientError !== undefined ? `${ingredientId}-error` : null,
     needsIngredient ? unknownNoticeId : null,
+  ]
+    .filter((value): value is string => value !== null)
+    .join(' ')
+  const unitDescribedBy = [
+    unitError !== undefined ? `${unitId}-error` : null,
+    needsUnit ? `${unitId}-unknown` : null,
   ]
     .filter((value): value is string => value !== null)
     .join(' ')
@@ -216,7 +419,7 @@ function IngredientRowEditor({
   )
 
   return (
-    <li className={`ingredient-row${needsIngredient ? ' ingredient-row--unknown' : ''}`}>
+    <li className={`ingredient-row${rowUnresolved ? ' ingredient-row--unknown' : ''}`}>
       <div className="ingredient-row__grid">
         <div className="form__field">
           <label htmlFor={ingredientId}>Ingredient</label>
@@ -272,6 +475,7 @@ function IngredientRowEditor({
           <label htmlFor={unitId}>Unit</label>
           <select
             id={unitId}
+            aria-describedby={unitDescribedBy.length > 0 ? unitDescribedBy : undefined}
             value={row.unitId}
             onChange={(event) => onRowChange({ ...row, unitId: event.target.value, unitLabel: '' })}
           >
@@ -282,6 +486,16 @@ function IngredientRowEditor({
               </option>
             ))}
           </select>
+          {unitError && (
+            <p className="form__error" id={`${unitId}-error`}>
+              {unitError}
+            </p>
+          )}
+          {needsUnit && (
+            <p className="ingredient-row__unknown-note" id={`${unitId}-unknown`} role="status">
+              Choose or create a unit before this recipe can be saved.
+            </p>
+          )}
         </div>
 
         <div className="form__field">
@@ -339,6 +553,52 @@ function IngredientRowEditor({
         </div>
       )}
 
+      {needsUnit && unknownUnit !== null && (
+        <div className="ingredient-row__unknown ingredient-row__unknown-unit">
+          <p className="ingredient-row__unknown-raw">
+            Unrecognized unit: <q>{unknownUnit.raw.trim()}</q>
+            {unknownUnit.suggestedDimension !== null && (
+              <> (looks like {UNIT_DIMENSION_LABELS[unknownUnit.suggestedDimension]})</>
+            )}
+          </p>
+          {unknownUnit.suggestions.length > 0 && (
+            <div className="ingredient-row__suggestions">
+              <span className="ingredient-row__suggestions-label">Suggestions:</span>
+              {unknownUnit.suggestions.map((suggestion) => (
+                <button
+                  key={suggestion.id}
+                  type="button"
+                  aria-label={`Use ${suggestion.label} for ${ariaLabel} unit`}
+                  onClick={() =>
+                    onRowChange({
+                      ...row,
+                      unitId: String(suggestion.id),
+                      unitLabel: suggestion.label,
+                      unitActive: suggestion.isActive,
+                    })
+                  }
+                >
+                  {suggestion.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {unitCreateControls !== undefined ? (
+            <CreateUnitInline
+              row={row}
+              defaultSymbol={row.unitLabel || unknownUnit.raw.trim()}
+              suggestedDimension={unknownUnit.suggestedDimension}
+              createControls={unitCreateControls}
+            />
+          ) : (
+            <p className="form__hint">
+              You cannot create units. Choose an existing unit, set the line to no unit, or ask an
+              Admin to add this one.
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="ingredient-row__footer">
         <label className="recipes__checkbox">
           <input
@@ -383,6 +643,7 @@ function IngredientRowList({
   errors,
   unknownByRowKey,
   createControls,
+  unitCreateControls,
   onChange,
 }: {
   rows: IngredientFormRow[]
@@ -393,6 +654,7 @@ function IngredientRowList({
   errors: FieldErrors
   unknownByRowKey?: RowUnknownByKey
   createControls?: IngredientCreateControls
+  unitCreateControls?: UnitCreateControls
   onChange: (rows: IngredientFormRow[]) => void
 }) {
   return (
@@ -408,6 +670,7 @@ function IngredientRowList({
           errors={errors}
           unknown={unknownByRowKey?.[row.key]}
           createControls={createControls}
+          unitCreateControls={unitCreateControls}
           onRowChange={(next) => onChange(replaceAt(rows, index, next))}
           onRemove={() => onChange(rows.filter((_, current) => current !== index))}
           onMove={(delta) => onChange(moveItem(rows, index, delta))}
@@ -433,6 +696,7 @@ export function IngredientFields({
   errors,
   unknownByRowKey,
   createControls,
+  unitCreateControls,
 }: {
   rows: IngredientFormRow[]
   groups: IngredientGroupFormRow[]
@@ -441,10 +705,12 @@ export function IngredientFields({
   ingredientOptions: PickerOption[]
   unitOptions: PickerOption[]
   errors: FieldErrors
-  /** Import-only unknown-line resolution metadata (M4-09). */
+  /** Import-only unknown-line resolution metadata (M4-09/M4-10). */
   unknownByRowKey?: RowUnknownByKey
-  /** Import-only inline-create wiring, absent when the actor cannot create. */
+  /** Import-only ingredient inline-create wiring, absent when not permitted. */
   createControls?: IngredientCreateControls
+  /** Import-only unit inline-create wiring, absent when not permitted. */
+  unitCreateControls?: UnitCreateControls
 }) {
   return (
     <>
@@ -462,6 +728,7 @@ export function IngredientFields({
             errors={errors}
             unknownByRowKey={unknownByRowKey}
             createControls={createControls}
+            unitCreateControls={unitCreateControls}
             onChange={onRowsChange}
           />
         )}
@@ -530,6 +797,7 @@ export function IngredientFields({
                   ingredientOptions={ingredientOptions}
                   unitOptions={unitOptions}
                   errors={errors}
+                  unitCreateControls={unitCreateControls}
                   onChange={(next) =>
                     onGroupsChange(replaceAt(groups, groupIndex, { ...group, ingredients: next }))
                   }

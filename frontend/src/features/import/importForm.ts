@@ -1,10 +1,15 @@
-import type { ImportReference, ImportRecipeDraft } from '../../api/importRecipes'
+import type {
+  ImportReference,
+  ImportRecipeDraft,
+  ImportUnitDimension,
+} from '../../api/importRecipes'
 import {
   newFormKey,
   type IngredientFormRow,
   type InstructionSectionFormRow,
   type RecipeFormState,
 } from '../recipes/recipeForm'
+import type { FieldErrors } from '../../utils/fieldErrors'
 
 /**
  * Maps a parsed import draft (docs/API.md §15) into the editable
@@ -71,10 +76,12 @@ function extractRawQuantityText(raw: string, name: string): string {
 }
 
 /**
- * Per-row import-resolution metadata (M4-09). Keyed by the {@link IngredientFormRow.key}
- * created by {@link fromImportDraft}, so it survives adding, removing, and
- * reordering rows. A line is only surfaced as "needs an ingredient" while its
- * row has no `ingredientId`; mapping the row clears it naturally.
+ * Per-row import-resolution metadata (M4-09/M4-10). Keyed by the
+ * {@link IngredientFormRow.key} created by {@link fromImportDraft}, so it
+ * survives adding, removing, and reordering rows. An ingredient is surfaced as
+ * "needs an ingredient" only while its row has no `ingredientId`; mapping the
+ * row clears it naturally. The nested {@link UnknownUnitLine} carries the same
+ * treatment for a unit the parser could not recognize (M4-10).
  */
 export interface UnknownIngredientLine {
   /** The original parsed ingredient line, shown verbatim to the reviewer. */
@@ -83,11 +90,42 @@ export interface UnknownIngredientLine {
   name: string
   /** Draft suggestions (already bounded by the server) for this line. */
   suggestions: ImportReference[]
+  /** Unrecognized unit text on this line, or `null` when the unit resolved. */
+  unit: UnknownUnitLine | null
+}
+
+/**
+ * Resolution metadata for a raw unit the parser could not match (M4-10). The
+ * server only suggests a dimension when it is obvious; otherwise the reviewer
+ * must choose one explicitly — package-size conversion is never guessed.
+ */
+export interface UnknownUnitLine {
+  /** The original parsed unit text, shown verbatim. */
+  raw: string
+  /** Suggested dimension when obvious, otherwise `null`. */
+  suggestedDimension: ImportUnitDimension | null
+  /** Existing units the reviewer can map to in one tap. */
+  suggestions: Array<{ id: number; symbol: string; display_name: string }>
+}
+
+function unknownUnitLine(
+  ingredient: ImportRecipeDraft['ingredients'][number],
+): UnknownUnitLine | null {
+  if (!ingredient.unit.is_unknown) {
+    return null
+  }
+  return {
+    raw: ingredient.unit.raw,
+    suggestedDimension: ingredient.unit.suggested_dimension,
+    suggestions: ingredient.unit.suggestions,
+  }
 }
 
 /**
  * Builds the unknown-line map for a freshly seeded draft. `rows` must be the
- * rows returned by {@link fromImportDraft} for the same draft, in order.
+ * rows returned by {@link fromImportDraft} for the same draft, in order. A row
+ * is seeded when either its ingredient or its unit is unresolved, so a
+ * known-ingredient line with an unknown unit still gets a resolution affordance.
  */
 export function seedUnknownLines(
   draft: ImportRecipeDraft,
@@ -96,16 +134,51 @@ export function seedUnknownLines(
   const unknown: Record<string, UnknownIngredientLine> = {}
   draft.ingredients.forEach((ingredient, index) => {
     const row = rows[index]
-    if (row === undefined || !ingredient.is_unknown) {
+    if (row === undefined) {
+      return
+    }
+    const unit = unknownUnitLine(ingredient)
+    if (!ingredient.is_unknown && unit === null) {
       return
     }
     unknown[row.key] = {
       raw: ingredient.raw,
       name: ingredient.name,
       suggestions: ingredient.suggestions,
+      unit,
     }
   })
   return unknown
+}
+
+/**
+ * Server-aligned validation for unresolved raw units (M4-10). A blank unit is
+ * always allowed (M3 nullable unit), and a line whose unit already resolved (or
+ * was mapped/created) is fine; only a present-but-unrecognized unit blocks
+ * saving. Keys use the same `ingredients[i].unit_id` paths as the server so the
+ * message lands on the unit field.
+ */
+export function validateUnknownUnits(
+  state: RecipeFormState,
+  unknownLines: Record<string, UnknownIngredientLine>,
+): FieldErrors {
+  const errors: FieldErrors = {}
+  state.ingredients.forEach((row, index) => {
+    const unit = unknownLines[row.key]?.unit
+    if (unit !== null && unit !== undefined && unit.raw.trim().length > 0 && row.unitId === '') {
+      errors[`ingredients[${index}].unit_id`] = `Choose or create a unit for “${unit.raw.trim()}”.`
+    }
+  })
+  state.groups.forEach((group, groupIndex) => {
+    group.ingredients.forEach((row, index) => {
+      const unit = unknownLines[row.key]?.unit
+      if (unit !== null && unit !== undefined && unit.raw.trim().length > 0 && row.unitId === '') {
+        errors[`ingredient_groups[${groupIndex}].ingredients[${index}].unit_id`] =
+          `Choose or create a unit for “${unit.raw.trim()}”.`
+      }
+    })
+  })
+  return errors
 }
 
 export function fromImportDraft(draft: ImportRecipeDraft): RecipeFormState {

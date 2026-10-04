@@ -12,17 +12,21 @@ import { Field } from '../../components/Field'
 import { fieldProps } from '../../components/fieldProps'
 import {
   useCreateIngredient,
+  useCreateUnit,
   useDepartments,
   useIngredients,
   useProteins,
   useTags,
   useUnits,
 } from '../reference-data/useReferenceData'
+import type { UnitDimension } from '../../api/referenceData'
 import {
   IngredientFields,
   type IngredientCreateControls,
   type PickerOption,
+  type UnitCreateControls,
   type UnknownIngredientInfo,
+  type UnknownUnitInfo,
 } from '../recipes/IngredientFields'
 import { InstructionFields } from '../recipes/InstructionFields'
 import { ReferenceCheckboxes } from '../recipes/ReferenceCheckboxes'
@@ -38,7 +42,12 @@ import {
   extractServerFieldErrors,
   type FieldErrors,
 } from '../../utils/fieldErrors'
-import { fromImportDraft, seedUnknownLines, type UnknownIngredientLine } from './importForm'
+import {
+  fromImportDraft,
+  seedUnknownLines,
+  validateUnknownUnits,
+  type UnknownIngredientLine,
+} from './importForm'
 import { useRecipeImageFromUrl } from './useImport'
 
 const MAX_NAME_MATCHES = 5
@@ -140,6 +149,7 @@ export function ImportReview({
   const createRecipe = useCreateRecipe()
   const imageFromUrl = useRecipeImageFromUrl()
   const createIngredient = useCreateIngredient()
+  const createUnit = useCreateUnit()
 
   const ingredientsQuery = useIngredients('', false)
   const unitsQuery = useUnits('', false)
@@ -164,6 +174,8 @@ export function ImportReview({
   )
   const [createPendingRowKey, setCreatePendingRowKey] = useState<string | null>(null)
   const [createErrorByRowKey, setCreateErrorByRowKey] = useState<Record<string, string>>({})
+  const [unitCreatePendingRowKey, setUnitCreatePendingRowKey] = useState<string | null>(null)
+  const [unitCreateErrorByRowKey, setUnitCreateErrorByRowKey] = useState<Record<string, string>>({})
   const errorSummaryRef = useRef<HTMLDivElement>(null)
 
   // Re-seed the editable state when the reviewer picks a different candidate.
@@ -176,6 +188,8 @@ export function ImportReview({
     setUnknownLines(seedUnknownLines(selected, seeded.ingredients))
     setCreateErrorByRowKey({})
     setCreatePendingRowKey(null)
+    setUnitCreateErrorByRowKey({})
+    setUnitCreatePendingRowKey(null)
     setErrors({})
     setFormError(null)
     setUseImage(selected.image_source_url !== null)
@@ -260,11 +274,87 @@ export function ImportReview({
     }
   }
 
+  function mapRowToUnit(rowKey: string, id: number, label: string): void {
+    setState((current) => ({
+      ...current,
+      ingredients: current.ingredients.map((row) =>
+        row.key === rowKey
+          ? { ...row, unitId: String(id), unitLabel: label, unitActive: true }
+          : row,
+      ),
+    }))
+    setErrors({})
+    setFormError(null)
+  }
+
+  /**
+   * Permission-gated inline unit creation (M4-10). The draft's
+   * `capabilities.can_create_reference_data` decides whether this is reachable;
+   * the M2 `POST /units` endpoint still authorises the actor server-side. The
+   * dimension and base factor are always explicit — package sizes are never
+   * guessed. A duplicate create (`UNIT_EXISTS`) maps the line to the existing
+   * unit through `details.existing_id`.
+   */
+  async function handleCreateUnit(
+    row: IngredientFormRow,
+    symbol: string,
+    displayName: string,
+    dimension: UnitDimension,
+    baseFactor: number | undefined,
+  ): Promise<void> {
+    setUnitCreatePendingRowKey(row.key)
+    setUnitCreateErrorByRowKey((current) => {
+      const next = { ...current }
+      delete next[row.key]
+      return next
+    })
+    try {
+      const created = await createUnit.mutateAsync({
+        symbol,
+        display_name: displayName,
+        dimension,
+        ...(baseFactor === undefined ? {} : { base_factor: baseFactor }),
+      })
+      mapRowToUnit(row.key, created.id, created.symbol)
+    } catch (caught) {
+      if (isApiError(caught) && caught.code === ErrorCodes.UnitExists) {
+        const existingId = caught.details['existing_id']
+        if (typeof existingId === 'number') {
+          mapRowToUnit(row.key, existingId, symbol)
+          return
+        }
+      }
+      if (isApiError(caught) && caught.code === ErrorCodes.Forbidden) {
+        setUnitCreateErrorByRowKey((current) => ({
+          ...current,
+          [row.key]: 'You do not have permission to create units.',
+        }))
+        return
+      }
+      if (isApiError(caught) && caught.code === ErrorCodes.ValidationFailed) {
+        setUnitCreateErrorByRowKey((current) => ({
+          ...current,
+          [row.key]: 'Enter a valid unit symbol, display name, and dimension.',
+        }))
+        return
+      }
+      setUnitCreateErrorByRowKey((current) => ({
+        ...current,
+        [row.key]: 'Creating the unit failed. Check the server and try again.',
+      }))
+    } finally {
+      setUnitCreatePendingRowKey(null)
+    }
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault()
     setFormError(null)
 
-    const validation = validateRecipeForm(state)
+    const validation = {
+      ...validateRecipeForm(state),
+      ...validateUnknownUnits(state, unknownLines),
+    }
     if (Object.keys(validation).length > 0) {
       setErrors(validation)
       return
@@ -325,6 +415,7 @@ export function ImportReview({
   // list, so merge them into the picker options (active, exact label) to keep
   // every suggested id selectable.
   const optionById = new Map(ingredientOptions.map((option) => [option.id, option]))
+  const unitOptionById = new Map(unitOptions.map((option) => [option.id, option]))
   for (const line of Object.values(unknownLines)) {
     for (const suggestion of line.suggestions) {
       if (!optionById.has(suggestion.id)) {
@@ -337,6 +428,17 @@ export function ImportReview({
         ingredientOptions.push(option)
       }
     }
+    for (const suggestion of line.unit?.suggestions ?? []) {
+      if (!unitOptionById.has(suggestion.id)) {
+        const option: PickerOption = {
+          id: suggestion.id,
+          label: suggestion.symbol,
+          isActive: true,
+        }
+        unitOptionById.set(suggestion.id, option)
+        unitOptions.push(option)
+      }
+    }
   }
 
   const unknownByRowKey: Record<string, UnknownIngredientInfo> = {}
@@ -345,6 +447,21 @@ export function ImportReview({
     if (line === undefined) {
       continue
     }
+    const unit: UnknownUnitInfo | null =
+      line.unit === null
+        ? null
+        : {
+            raw: line.unit.raw,
+            suggestedDimension: line.unit.suggestedDimension,
+            suggestions: line.unit.suggestions.map(
+              (suggestion) =>
+                unitOptionById.get(suggestion.id) ?? {
+                  id: suggestion.id,
+                  label: suggestion.symbol,
+                  isActive: true,
+                },
+            ),
+          }
     unknownByRowKey[row.key] = {
       raw: line.raw,
       name: line.name,
@@ -356,6 +473,7 @@ export function ImportReview({
             isActive: true,
           },
       ),
+      unit,
     }
   }
 
@@ -377,6 +495,16 @@ export function ImportReview({
         errorByRowKey: createErrorByRowKey,
         onCreate: (row, canonicalName, departmentId) =>
           void handleCreateIngredient(row, canonicalName, departmentId),
+      }
+    : undefined
+
+  const unitCreateControls: UnitCreateControls | undefined = result.capabilities
+    .can_create_reference_data
+    ? {
+        pendingRowKey: unitCreatePendingRowKey,
+        errorByRowKey: unitCreateErrorByRowKey,
+        onCreate: (row, symbol, displayName, dimension, baseFactor) =>
+          void handleCreateUnit(row, symbol, displayName, dimension, baseFactor),
       }
     : undefined
 
@@ -569,6 +697,7 @@ export function ImportReview({
           errors={errors}
           unknownByRowKey={unknownByRowKey}
           createControls={createControls}
+          unitCreateControls={unitCreateControls}
         />
 
         <InstructionFields

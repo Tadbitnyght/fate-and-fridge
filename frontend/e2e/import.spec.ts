@@ -29,6 +29,8 @@ interface ImportDraftOptions {
   candidates?: number
   /** Include an unmatched "salt" line that must be resolved in review. */
   unknownIngredient?: boolean
+  /** Give the matched flour line an unrecognized unit ("pkg") (M4-10). */
+  unknownUnit?: boolean
   /** Report that the actor may create reference data inline. */
   canCreateReferenceData?: boolean
 }
@@ -68,14 +70,24 @@ async function mockImportApi(
         match_kind: 'exact',
         is_unknown: false,
         suggestions: [],
-        unit: {
-          raw: 'cups',
-          matched_unit_id: 3,
-          matched_symbol: 'cup',
-          is_unknown: false,
-          suggested_dimension: null,
-          suggestions: [],
-        },
+        unit:
+          options.unknownUnit === true
+            ? {
+                raw: 'pkg',
+                matched_unit_id: null,
+                matched_symbol: null,
+                is_unknown: true,
+                suggested_dimension: 'mass',
+                suggestions: [{ id: 20, symbol: 'g', display_name: 'gram' }],
+              }
+            : {
+                raw: 'cups',
+                matched_unit_id: 3,
+                matched_symbol: 'cup',
+                is_unknown: false,
+                suggested_dimension: null,
+                suggestions: [],
+              },
       },
       ...(options.unknownIngredient === true
         ? [
@@ -163,6 +175,16 @@ async function mockImportApi(
             symbol: 'cup',
             display_name: 'cup',
             dimension: 'volume',
+            base_factor: 1,
+            is_custom: false,
+            is_active: true,
+            aliases: [],
+          },
+          {
+            id: 20,
+            symbol: 'g',
+            display_name: 'gram',
+            dimension: 'mass',
             base_factor: 1,
             is_custom: false,
             is_active: true,
@@ -354,6 +376,44 @@ test('import: resolve an unknown ingredient line before saving', async ({ page }
   )
   expect(createRequest?.body).toMatchObject({
     ingredients: [{ ingredient_id: 12 }, { ingredient_id: 14 }],
+  })
+})
+
+test('import: resolve an unknown unit before saving', async ({ page }) => {
+  const { requests } = await mockImportApi(page, { unknownUnit: true })
+
+  await page.goto('/recipes/import')
+  await page.getByLabel('Recipe URL').fill('https://example.com/lasagna')
+  await page.getByRole('button', { name: 'Import' }).click()
+
+  await expect(
+    page.getByRole('heading', { level: 2, name: 'Review imported recipe' }),
+  ).toBeVisible()
+  // The unrecognized unit is surfaced with its raw text and a suggestion.
+  await expect(page.getByText('Unrecognized unit:')).toBeVisible()
+  await expect(page.getByText('pkg')).toBeVisible()
+  await expect(page.getByText('looks like Mass')).toBeVisible()
+
+  // Saving is blocked while the unit is unresolved.
+  await page.getByRole('button', { name: 'Save recipe' }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Fix these problems before saving' }),
+  ).toBeVisible()
+  expect(requests.some((entry) => entry.method === 'POST' && entry.path === '/recipes')).toBe(false)
+
+  // Map the unit to the existing suggestion, then save.
+  await page.getByRole('button', { name: /Use g for ingredient 1 unit/i }).click()
+  await expect(
+    page.getByText('Choose or create a unit before this recipe can be saved.'),
+  ).toHaveCount(0)
+  await page.getByRole('button', { name: 'Save recipe' }).click()
+
+  await expect(page).toHaveURL('/recipes/1/edit')
+  const createRequest = requests.find(
+    (entry) => entry.method === 'POST' && entry.path === '/recipes',
+  )
+  expect(createRequest?.body).toMatchObject({
+    ingredients: [{ ingredient_id: 12, unit_id: 20 }],
   })
 })
 

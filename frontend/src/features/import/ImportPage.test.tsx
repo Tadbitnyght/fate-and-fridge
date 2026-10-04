@@ -154,6 +154,80 @@ const createCapableCandidate: ImportParseResponse = {
   capabilities: { can_create_reference_data: true },
 }
 
+const gram = {
+  id: 20,
+  symbol: 'g',
+  display_name: 'gram',
+  dimension: 'mass',
+  base_factor: 1,
+  is_custom: false,
+  is_active: true,
+  aliases: [],
+}
+
+/**
+ * The flour line is fully matched but its unit ("pkg") is unrecognized (M4-10).
+ * It has a `mass` suggested dimension and an existing-unit suggestion so the
+ * reviewer can either map it or create it with an explicit dimension.
+ */
+const unknownUnitCandidate: ImportParseResponse = {
+  ...singleCandidate,
+  recipes: [
+    {
+      ...singleCandidate.recipes[0],
+      ingredients: [
+        {
+          ...singleCandidate.recipes[0].ingredients[0],
+          raw: '1 1/2 pkg flour, sifted',
+          unit: {
+            raw: 'pkg',
+            matched_unit_id: null,
+            matched_symbol: null,
+            is_unknown: true,
+            suggested_dimension: 'mass',
+            suggestions: [{ id: 20, symbol: 'g', display_name: 'gram' }],
+          },
+        },
+      ],
+      warnings: [],
+    },
+  ],
+}
+
+/**
+ * Same as {@link unknownUnitCandidate} but the parser could not infer a
+ * dimension, so the reviewer must choose one explicitly (never guessed).
+ */
+const unknownUnitNoDimensionCandidate: ImportParseResponse = {
+  ...unknownUnitCandidate,
+  recipes: [
+    {
+      ...unknownUnitCandidate.recipes[0],
+      ingredients: [
+        {
+          ...unknownUnitCandidate.recipes[0].ingredients[0],
+          unit: {
+            ...unknownUnitCandidate.recipes[0].ingredients[0].unit,
+            suggested_dimension: null,
+          },
+        },
+      ],
+    },
+  ],
+}
+
+/** Same unknown-unit draft but the actor holds `reference_data.edit`. */
+const unknownUnitCreateCapableCandidate: ImportParseResponse = {
+  ...unknownUnitCandidate,
+  capabilities: { can_create_reference_data: true },
+}
+
+/** No suggested dimension, and the actor may create units. */
+const unknownUnitNoDimensionCreateCapableCandidate: ImportParseResponse = {
+  ...unknownUnitNoDimensionCandidate,
+  capabilities: { can_create_reference_data: true },
+}
+
 const cup = {
   id: 3,
   symbol: 'cup',
@@ -598,5 +672,253 @@ describe('import unknown ingredient flow', () => {
     expect(body.ingredients[1]).toMatchObject({ ingredient_id: 14 })
     // Only ids cross the wire — never the parsed free-text name.
     expect(JSON.stringify(body)).not.toContain('a pinch of salt')
+  })
+})
+
+describe('import unknown unit flow', () => {
+  async function openReview(candidate: ImportParseResponse, routes: MockRoute[] = []) {
+    const mock = baseMocks([
+      { path: '/import/recipe-url', method: 'POST', body: candidate },
+      ...routes,
+    ])
+    renderWithProviders(<App />, { route: '/recipes/import' })
+    fireEvent.change(await screen.findByLabelText('Recipe URL'), {
+      target: { value: 'https://example.com/lasagna' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Import' }))
+    await screen.findByRole('heading', { level: 2, name: 'Review imported recipe' })
+    // Reference data resolves asynchronously; wait for the unit picker options.
+    await waitFor(() => {
+      const first = screen.getAllByLabelText('Unit')[0]
+      expect(first.querySelectorAll('option').length).toBeGreaterThan(1)
+    })
+    return mock
+  }
+
+  it('surfaces an unknown unit with its raw text, suggested dimension, and suggestions', async () => {
+    await openReview(unknownUnitCandidate)
+
+    expect(screen.getByText(/Unrecognized unit:/)).toBeVisible()
+    expect(screen.getByText('pkg')).toBeVisible()
+    expect(screen.getByText(/looks like Mass/i)).toBeVisible()
+    expect(screen.getByRole('button', { name: /Use g for ingredient 1 unit/i })).toBeVisible()
+    // Blank/no-unit is still allowed on the row, but this raw unit blocks save.
+    expect(
+      screen.getByText(/Choose or create a unit before this recipe can be saved/i),
+    ).toBeVisible()
+  })
+
+  it('maps an unknown unit to an existing suggestion and clears the state', async () => {
+    const mock = await openReview(unknownUnitCandidate)
+
+    fireEvent.click(screen.getByRole('button', { name: /Use g for ingredient 1 unit/i }))
+
+    const units = screen.getAllByLabelText('Unit') as HTMLSelectElement[]
+    expect(units[0].value).toBe('20')
+    await waitFor(() =>
+      expect(
+        screen.queryByText(/Choose or create a unit before this recipe can be saved/i),
+      ).not.toBeInTheDocument(),
+    )
+    expect(mock.callsFor('/units')).toBe(0)
+  })
+
+  it('maps an unknown unit through the unit select', async () => {
+    await openReview(unknownUnitCandidate)
+
+    const units = screen.getAllByLabelText('Unit') as HTMLSelectElement[]
+    fireEvent.change(units[0], { target: { value: '20' } })
+
+    await waitFor(() =>
+      expect(
+        screen.queryByText(/Choose or create a unit before this recipe can be saved/i),
+      ).not.toBeInTheDocument(),
+    )
+    expect(units[0].value).toBe('20')
+  })
+
+  it('creates a unit inline with an explicit dimension, then maps the row', async () => {
+    const created = { ...gram, id: 55, symbol: 'pkg', display_name: 'package' }
+    const mock = await openReview(unknownUnitCreateCapableCandidate, [
+      { path: '/units', method: 'POST', status: 201, body: created },
+    ])
+
+    // Suggested dimension is preselected (mass) so the reviewer can accept it.
+    expect(screen.getByLabelText('New unit symbol')).toHaveValue('pkg')
+    expect((screen.getByLabelText('Dimension') as HTMLSelectElement).value).toBe('mass')
+    // Mass units require an explicit base factor — never guessed.
+    fireEvent.change(screen.getByLabelText('Base factor'), { target: { value: '1' } })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create unit' }))
+
+    await waitFor(() => {
+      const units = screen.getAllByLabelText('Unit') as HTMLSelectElement[]
+      expect(units[0].value).toBe('55')
+    })
+    expect(requestBodyFor(mock, '/units', 'POST')).toMatchObject({
+      symbol: 'pkg',
+      display_name: 'pkg',
+      dimension: 'mass',
+      base_factor: 1,
+    })
+  })
+
+  it('requires an explicit dimension when the parser had no suggestion', async () => {
+    const mock = await openReview(unknownUnitNoDimensionCreateCapableCandidate, [
+      {
+        path: '/units',
+        method: 'POST',
+        status: 201,
+        body: { ...gram, id: 56, symbol: 'pkg', display_name: 'package' },
+      },
+    ])
+
+    // No dimension is preselected, so create stays disabled until chosen.
+    expect((screen.getByLabelText('Dimension') as HTMLSelectElement).value).toBe('')
+    const createButton = screen.getByRole('button', { name: 'Create unit' })
+    expect(createButton).toBeDisabled()
+
+    fireEvent.change(screen.getByLabelText('Dimension'), { target: { value: 'count' } })
+    expect(createButton).not.toBeDisabled()
+    fireEvent.click(createButton)
+
+    await waitFor(() => {
+      const units = screen.getAllByLabelText('Unit') as HTMLSelectElement[]
+      expect(units[0].value).toBe('56')
+    })
+    expect(requestBodyFor(mock, '/units', 'POST')).toMatchObject({
+      symbol: 'pkg',
+      display_name: 'pkg',
+      dimension: 'count',
+    })
+    // Count units never carry a base factor.
+    expect(requestBodyFor(mock, '/units', 'POST')).not.toHaveProperty('base_factor')
+  })
+
+  it('maps a UNIT_EXISTS conflict to the existing unit', async () => {
+    const mock = await openReview(unknownUnitCreateCapableCandidate, [
+      {
+        path: '/units',
+        method: 'POST',
+        status: 409,
+        body: {
+          error: {
+            code: 'UNIT_EXISTS',
+            message: 'Unit exists',
+            details: { existing_id: 20 },
+          },
+        },
+      },
+    ])
+
+    fireEvent.change(screen.getByLabelText('Base factor'), { target: { value: '1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create unit' }))
+
+    await waitFor(() => {
+      const units = screen.getAllByLabelText('Unit') as HTMLSelectElement[]
+      expect(units[0].value).toBe('20')
+    })
+    expect(screen.queryByText(/Creating the unit failed/i)).not.toBeInTheDocument()
+    expect(mock.callsFor('/units')).toBe(1)
+  })
+
+  it('shows a permission error when an inline unit create is forbidden', async () => {
+    const mock = await openReview(unknownUnitCreateCapableCandidate, [
+      {
+        path: '/units',
+        method: 'POST',
+        status: 403,
+        body: { error: { code: 'FORBIDDEN', message: 'Not allowed', details: {} } },
+      },
+    ])
+
+    fireEvent.change(screen.getByLabelText('Base factor'), { target: { value: '1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create unit' }))
+
+    expect(await screen.findByText('You do not have permission to create units.')).toBeVisible()
+    expect(
+      screen.getByText(/Choose or create a unit before this recipe can be saved/i),
+    ).toBeVisible()
+    expect(mock.callsFor('/recipes')).toBe(0)
+  })
+
+  it('hides inline unit create and shows guidance when not permitted', async () => {
+    await openReview(unknownUnitCandidate)
+
+    expect(screen.queryByLabelText('New unit symbol')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Create unit' })).not.toBeInTheDocument()
+    expect(screen.getByText(/ask an Admin to add this one/i)).toBeVisible()
+    // Mapping to an existing unit still works.
+    expect(screen.getByRole('button', { name: /Use g for ingredient 1 unit/i })).toBeVisible()
+  })
+
+  it('blocks save while a raw unit is unresolved and reports it per line', async () => {
+    const mock = await openReview(unknownUnitCandidate)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save recipe' }))
+
+    expect(await screen.findByRole('heading', { name: /Fix these problems/i })).toBeVisible()
+    expect(screen.getAllByText(/Choose or create a unit for “pkg”\./).length).toBeGreaterThan(0)
+    expect(mock.callsFor('/recipes')).toBe(0)
+  })
+
+  it('saves a draft whose resolved unit was mapped', async () => {
+    const mock = await openReview(unknownUnitCandidate, [
+      { path: '/recipes', method: 'POST', status: 201, body: createdRecipe },
+      { path: '/recipes/1', method: 'GET', body: createdRecipe },
+    ])
+
+    fireEvent.click(screen.getByRole('button', { name: /Use g for ingredient 1 unit/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save recipe' }))
+
+    await waitFor(() => expect(requestBodyFor(mock, '/recipes', 'POST')).toBeDefined(), {
+      timeout: 4000,
+    })
+    const body = requestBodyFor(mock, '/recipes', 'POST') as {
+      ingredients: Array<Record<string, unknown>>
+    }
+    expect(body.ingredients[0]).toMatchObject({ ingredient_id: 12, unit_id: 20 })
+    // The raw unresolved unit text never crosses the wire.
+    expect(JSON.stringify(body)).not.toContain('pkg')
+  })
+
+  it('allows a blank unit to save without resolution', async () => {
+    // A draft where the parser extracted no unit text at all (M3 nullable unit).
+    const blankUnitCandidate: ImportParseResponse = {
+      ...singleCandidate,
+      recipes: [
+        {
+          ...singleCandidate.recipes[0],
+          ingredients: [
+            {
+              ...singleCandidate.recipes[0].ingredients[0],
+              unit: {
+                raw: '',
+                matched_unit_id: null,
+                matched_symbol: null,
+                is_unknown: false,
+                suggested_dimension: null,
+                suggestions: [],
+              },
+            },
+          ],
+          warnings: [],
+        },
+      ],
+    }
+    const mock = await openReview(blankUnitCandidate, [
+      { path: '/recipes', method: 'POST', status: 201, body: createdRecipe },
+      { path: '/recipes/1', method: 'GET', body: createdRecipe },
+    ])
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save recipe' }))
+
+    await waitFor(() => expect(requestBodyFor(mock, '/recipes', 'POST')).toBeDefined(), {
+      timeout: 4000,
+    })
+    const body = requestBodyFor(mock, '/recipes', 'POST') as {
+      ingredients: Array<Record<string, unknown>>
+    }
+    expect(body.ingredients[0]).toMatchObject({ ingredient_id: 12, unit_id: null })
   })
 })
