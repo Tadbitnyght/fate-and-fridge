@@ -522,6 +522,53 @@ describe('import unknown ingredient flow', () => {
     expect(mock.callsFor('/ingredients')).toBe(1)
   })
 
+  it('shows a permission error when an inline create is forbidden', async () => {
+    const mock = await openReview(createCapableCandidate, [
+      {
+        path: '/ingredients',
+        method: 'POST',
+        status: 403,
+        body: {
+          error: {
+            code: 'FORBIDDEN',
+            message: 'Not allowed',
+            details: {},
+          },
+        },
+      },
+    ])
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create ingredient' }))
+
+    expect(
+      await screen.findByText('You do not have permission to create ingredients.'),
+    ).toBeVisible()
+    // The row is still unresolved, so saving stays blocked.
+    expect(screen.getByText(/Needs an ingredient before this recipe can be saved/i)).toBeVisible()
+    expect(mock.callsFor('/recipes')).toBe(0)
+  })
+
+  it('reports a validation error when an inline create name is rejected', async () => {
+    await openReview(createCapableCandidate, [
+      {
+        path: '/ingredients',
+        method: 'POST',
+        status: 400,
+        body: {
+          error: {
+            code: 'VALIDATION_FAILED',
+            message: 'Invalid name',
+            details: { field_errors: { canonical_name: 'Required' } },
+          },
+        },
+      },
+    ])
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create ingredient' }))
+
+    expect(await screen.findByText('Enter a valid ingredient name.')).toBeVisible()
+  })
+
   it('hides inline create and shows ask-an-admin guidance when not permitted', async () => {
     await openReview(saltedCandidate)
 
