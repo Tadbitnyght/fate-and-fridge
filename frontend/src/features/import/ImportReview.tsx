@@ -207,7 +207,6 @@ export function ImportReview({
           isApiError(caught) && caught.code === ErrorCodes.ImportUrlBlocked
             ? 'The recipe was saved, but its photo could not be downloaded for security reasons.'
             : 'The recipe was saved, but its photo could not be downloaded.'
-        setImageWarning(message)
         navigate(`/recipes/${created.id}/edit`, { replace: true, state: { imageWarning: message } })
         return
       }

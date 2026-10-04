@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 
 import { isApiError } from '../../api/client'
 import { ErrorCodes } from '../../api/errorCodes'
@@ -53,7 +53,15 @@ function checkboxRow(
 export function RecipeFormPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
   const { canEdit } = useRecipeAccess()
+
+  // The import review flow navigates here after saving; if the optional photo
+  // download failed it passes a non-fatal warning through router state (M4-08).
+  const imageWarning =
+    typeof (location.state as { imageWarning?: unknown } | null)?.imageWarning === 'string'
+      ? (location.state as { imageWarning: string }).imageWarning
+      : null
 
   const recipeId = id === undefined ? undefined : Number(id)
   const isEdit = recipeId !== undefined
@@ -245,6 +253,12 @@ export function RecipeFormPage() {
         {savedNotice && (
           <p className="form__notice" role="status">
             {savedNotice}
+          </p>
+        )}
+
+        {imageWarning !== null && (
+          <p className="form__warning" role="status">
+            {imageWarning}
           </p>
         )}
 

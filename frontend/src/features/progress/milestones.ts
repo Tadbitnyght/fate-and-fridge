@@ -164,9 +164,9 @@ export const MILESTONES: Milestone[] = [
       'Image downloader, import review screen, duplicate/similar warnings',
       'Import security tests',
     ],
-    issues: [],
+    issues: [51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64],
     issuesNote:
-      'Planned in docs/MILESTONES.md; GitHub issues are created when the milestone starts.',
+      'Tracking #51; M4-01…M4-13: #52, #53, #54, #55, #56, #57, #58, #59, #60, #61, #62, #63, #64.',
   },
   {
     id: 'M5',
