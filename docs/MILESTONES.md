@@ -128,6 +128,10 @@ Issues:
 ---
 
 ## Milestone 4 — URL Import
+Approved decisions (2026-10-03): see `docs/M4_PLAN.md` for the authoritative
+draft-only import architecture, SSRF/fetch limits, parser/normalization rules,
+image policy, API contract, issue order, and execution protocol.
+
 Issues:
 1. Safe URL fetcher.
 2. JSON-LD Recipe parser.

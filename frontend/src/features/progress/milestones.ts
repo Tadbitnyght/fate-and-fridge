@@ -152,7 +152,7 @@ export const MILESTONES: Milestone[] = [
     id: 'M4',
     number: 4,
     name: 'URL Import',
-    status: 'planned',
+    status: 'in_progress',
     summary:
       'Safe recipe import from the web: SSRF-hardened fetching, JSON-LD first, HTML fallback, and a mandatory review step.',
     features: [
