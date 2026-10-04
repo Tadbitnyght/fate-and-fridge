@@ -168,14 +168,14 @@ public static class IngredientLineParser
         }
 
         int afterSeparator;
-        if (text[separator] is '-' or '\u2013' or '\u2014')
+        if (IsDash(text[separator]))
         {
             afterSeparator = separator + 1;
         }
         else if ((text[separator] is 't' or 'T')
             && separator + 1 < text.Length
             && (text[separator + 1] is 'o' or 'O')
-            && (separator + 2 >= text.Length || char.IsWhiteSpace(text[separator + 2])))
+            && (separator + 2 >= text.Length || !char.IsLetter(text[separator + 2])))
         {
             afterSeparator = separator + 2;
         }
@@ -187,6 +187,14 @@ public static class IngredientLineParser
         return TryParseQuantityAt(text, afterSeparator, out _, out _);
     }
 
+    /// <summary>
+    /// Dash-like separators accepted in ranges: hyphen-minus, hyphen, non-breaking
+    /// hyphen, figure dash, en dash, em dash, horizontal bar, minus sign, and
+    /// fullwidth hyphen-minus.
+    /// </summary>
+    private static bool IsDash(char character) => character
+        is '-' or '\u2010' or '\u2011' or '\u2012' or '\u2013' or '\u2014' or '\u2015' or '\u2212' or '\uFF0D';
+
     /// <summary>True when the trailing token is a multiplier such as <c>2x</c>.</summary>
     private static bool IsMultiplier(string text, int afterQuantity)
     {
@@ -197,7 +205,10 @@ public static class IngredientLineParser
         }
 
         var end = index + 1;
-        return end >= text.Length || char.IsWhiteSpace(text[end]);
+        return end >= text.Length
+            || char.IsWhiteSpace(text[end])
+            || char.IsAsciiDigit(text[end])
+            || text[end] == '(';
     }
 
     private static bool StartsWithWordQuantity(string text)
@@ -327,7 +338,9 @@ public static class IngredientLineParser
 
         var afterWhole = ScanDigits(text, index);
 
-        // Mixed number: "1 1/2" or "1 ½".
+        // Mixed number: "1 1/2" or "1 ½". The addition of the whole and the
+        // fraction is guarded so an out-of-range value returns "unparseable"
+        // instead of throwing OverflowException.
         if (afterWhole > index)
         {
             var fractionStart = SkipWhitespace(text, afterWhole);
@@ -335,35 +348,36 @@ public static class IngredientLineParser
                 && TryParseFractionAt(text, fractionStart, out var mixedFraction, out var mixedConsumed)
                 && TryParseWhole(text, index, afterWhole, out var whole))
             {
-                value = whole + mixedFraction;
-                consumed = mixedConsumed;
-                return true;
+                return TryAdd(text, whole, mixedFraction, mixedConsumed, out value, out consumed);
+            }
+
+            if (fractionStart > afterWhole
+                && LooksLikeMalformedFraction(text, fractionStart))
+            {
+                // A whitespace-separated numeric token with a slash that did not
+                // parse (for example an overflowing denominator) is malformed;
+                // the whole token must not degrade to its integer prefix.
+                return false;
             }
 
             if (fractionStart < text.Length
                 && VulgarFractions.TryGetValue(text[fractionStart], out var mixedVulgar)
                 && TryParseWhole(text, index, afterWhole, out var vulgarWhole))
             {
-                value = vulgarWhole + mixedVulgar;
-                consumed = fractionStart + 1;
-                return true;
+                return TryAdd(text, vulgarWhole, mixedVulgar, fractionStart + 1, out value, out consumed);
             }
         }
 
         // Bare vulgar fraction.
         if (VulgarFractions.TryGetValue(text[index], out var alone))
         {
-            value = alone;
-            consumed = index + 1;
-            return true;
+            return Accept(text, alone, index + 1, out value, out consumed);
         }
 
         // Simple fraction "1/2".
         if (TryParseFractionAt(text, index, out var fraction, out var fractionConsumed))
         {
-            value = fraction;
-            consumed = fractionConsumed;
-            return true;
+            return Accept(text, fraction, fractionConsumed, out value, out consumed);
         }
 
         // Decimal "2.5" (requires a decimal point).
@@ -376,21 +390,82 @@ public static class IngredientLineParser
                     CultureInfo.InvariantCulture,
                     out var parsedDecimal))
             {
-                value = parsedDecimal;
-                consumed = decimalEnd;
-                return true;
+                return Accept(text, parsedDecimal, decimalEnd, out value, out consumed);
             }
         }
 
         // Integer.
         if (afterWhole > index && TryParseWhole(text, index, afterWhole, out var integer))
         {
-            value = integer;
-            consumed = afterWhole;
-            return true;
+            return Accept(text, integer, afterWhole, out value, out consumed);
         }
 
         return false;
+    }
+
+    /// <summary>Adds a whole number and a fraction without ever throwing.</summary>
+    private static bool TryAdd(
+        string text,
+        decimal whole,
+        decimal fraction,
+        int candidateConsumed,
+        out decimal value,
+        out int consumed)
+    {
+        decimal sum;
+        try
+        {
+            sum = whole + fraction;
+        }
+        catch (OverflowException)
+        {
+            value = 0m;
+            consumed = 0;
+            return false;
+        }
+
+        return Accept(text, sum, candidateConsumed, out value, out consumed);
+    }
+
+    /// <summary>
+    /// Accepts a parsed quantity unless the token continues with an
+    /// unconsumed <c>.</c> or <c>/</c>, which marks a malformed number
+    /// (<c>1.2.3</c>, <c>1..2</c>, <c>1/2/3</c>) that must stay unparseable.
+    /// </summary>
+    private static bool Accept(
+        string text,
+        decimal candidate,
+        int candidateConsumed,
+        out decimal value,
+        out int consumed)
+    {
+        if (candidateConsumed < text.Length && text[candidateConsumed] is '/' or '.')
+        {
+            value = 0m;
+            consumed = 0;
+            return false;
+        }
+
+        value = candidate;
+        consumed = candidateConsumed;
+        return true;
+    }
+
+    /// <summary>True when the token at <paramref name="start"/> looks like a malformed numeric fraction.</summary>
+    private static bool LooksLikeMalformedFraction(string text, int start)
+    {
+        if (start >= text.Length || !char.IsAsciiDigit(text[start]))
+        {
+            return false;
+        }
+
+        var end = start;
+        while (end < text.Length && !char.IsWhiteSpace(text[end]))
+        {
+            end++;
+        }
+
+        return text.AsSpan(start, end - start).Contains('/');
     }
 
     private static bool TryParseFractionAt(string text, int start, out decimal value, out int consumed)

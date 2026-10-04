@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using FateAndFridge.Api.Imports;
 using FluentAssertions;
 
@@ -198,7 +200,14 @@ public sealed class IngredientLineParserTests
     [Theory]
     [InlineData("1-2 cups flour")]
     [InlineData("1 to 2 cups flour")]
+    [InlineData("1 to2 cups flour")]
     [InlineData("1\u20132 cups flour")]
+    [InlineData("1\u22122 cups flour")]
+    [InlineData("1\u20102 cups flour")]
+    [InlineData("1\u20112 cups flour")]
+    [InlineData("1\u20122 cups flour")]
+    [InlineData("1\u20152 cups flour")]
+    [InlineData("1\uFF0D2 cups flour")]
     public void Preserves_ranges_verbatim(string input)
     {
         var parsed = IngredientLineParser.Parse(input, KnownUnits);
@@ -210,11 +219,11 @@ public sealed class IngredientLineParserTests
         parsed.PreparationNote.Should().BeNull();
     }
 
-    [Fact]
-    public void Preserves_multipliers_verbatim()
+    [Theory]
+    [InlineData("2x 400g cans tomatoes")]
+    [InlineData("2x4 cans tomatoes")]
+    public void Preserves_multipliers_verbatim(string input)
     {
-        const string input = "2x 400g cans tomatoes";
-
         var parsed = IngredientLineParser.Parse(input, KnownUnits);
 
         parsed.Quantity.Should().BeNull();
@@ -266,5 +275,41 @@ public sealed class IngredientLineParserTests
         parsed.Quantity.Should().Be(1.5m);
         parsed.UnitText.Should().BeNull();
         parsed.Name.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Mixed_number_overflow_never_throws_and_stays_raw()
+    {
+        var max = decimal.MaxValue.ToString(CultureInfo.InvariantCulture);
+        string[] inputs =
+        [
+            $"{max} 1/2 cups flour",
+            $"{max} \u00BD cups flour",
+            $"9 {max}/1 cups flour",
+        ];
+
+        foreach (var input in inputs)
+        {
+            var parsed = IngredientLineParser.Parse(input, KnownUnits);
+            parsed.Quantity.Should().BeNull("overflowing input '{0}' must not be guessed", input);
+            parsed.UnitText.Should().BeNull();
+            parsed.Name.Should().Be(input);
+        }
+    }
+
+    [Theory]
+    [InlineData("1/0 cups flour")]
+    [InlineData("1/99999999999999999999999999999999999 cups flour")]
+    [InlineData("1/2/3 cups flour")]
+    [InlineData("1.2.3 cups flour")]
+    [InlineData("1..2 cups flour")]
+    [InlineData("1.5/2 cups flour")]
+    public void Malformed_numeric_tokens_stay_unparseable(string input)
+    {
+        var parsed = IngredientLineParser.Parse(input, KnownUnits);
+
+        parsed.Quantity.Should().BeNull("malformed input '{0}' must not degrade to a prefix", input);
+        parsed.UnitText.Should().BeNull();
+        parsed.Name.Should().Be(input);
     }
 }

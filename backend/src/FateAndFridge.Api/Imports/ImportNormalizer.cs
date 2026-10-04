@@ -90,13 +90,53 @@ public static class ImportUnitText
         return false;
     }
 
+    /// <summary>
+    /// Case-preserving normalization for exact unit matching: trim, collapse
+    /// whitespace, and remove periods. The letter case is kept so <c>T</c>
+    /// (tablespoon) and <c>t</c> (teaspoon) remain distinct, as
+    /// docs/PRODUCT_SPEC.md §36 intends.
+    /// </summary>
+    public static string ExactKey(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var builder = new StringBuilder(value.Length);
+        var previousWasWhitespace = false;
+        foreach (var character in value.Trim())
+        {
+            if (character == '.')
+            {
+                continue;
+            }
+
+            if (char.IsWhiteSpace(character))
+            {
+                if (!previousWasWhitespace)
+                {
+                    builder.Append(' ');
+                    previousWasWhitespace = true;
+                }
+
+                continue;
+            }
+
+            builder.Append(character);
+            previousWasWhitespace = false;
+        }
+
+        return builder.ToString().Trim();
+    }
+
     private static Dictionary<string, UnitDimension> BuildDimensionHints()
     {
         var hints = new Dictionary<string, UnitDimension>(StringComparer.Ordinal);
         Add(hints, UnitDimension.Volume, "ml", "milliliter", "milliliters", "millilitre", "millilitres",
             "l", "liter", "liters", "litre", "litres", "dl", "cl", "cc");
         Add(hints, UnitDimension.Mass, "mg", "milligram", "milligrams", "mcg", "microgram", "micrograms",
-            "ug", "tonne", "tonnes", "ton", "tons");
+            "ug", "tonne", "tonnes", "ton", "tons", "g", "gram", "grams", "kg", "kilogram", "kilograms");
         Add(hints, UnitDimension.Count, "dozen", "dozens", "dz", "piece", "pieces", "pc", "pcs",
             "stalk", "stalks", "sprig", "sprigs", "head", "heads", "handful", "handfuls", "dash", "dashes",
             "drop", "drops", "ear", "ears", "rib", "ribs", "knob", "knobs", "punnet", "punnets",
@@ -126,18 +166,27 @@ public sealed class ImportNormalizer
 
     private readonly IReadOnlyList<ImportUnitCandidate> _units;
     private readonly IReadOnlyList<string> _knownPhrases;
-    private readonly Dictionary<string, ImportUnitCandidate> _byFoldedPhrase;
+    private readonly Dictionary<long, ImportUnitCandidate> _byId;
+    private readonly Dictionary<string, HashSet<long>> _exactUnits;
+    private readonly Dictionary<string, HashSet<long>> _foldedUnits;
 
-    /// <summary>Builds the folded lookup from the supplied active units and their aliases.</summary>
+    /// <summary>
+    /// Builds the case-sensitive and folded lookups from the supplied active
+    /// units and their aliases. A folded key shared by more than one unit is
+    /// recorded as ambiguous and resolved only by an exact-case match.
+    /// </summary>
     public ImportNormalizer(IReadOnlyList<ImportUnitCandidate> units)
     {
         _units = units ?? [];
+        _byId = new Dictionary<long, ImportUnitCandidate>();
+        _exactUnits = new Dictionary<string, HashSet<long>>(StringComparer.Ordinal);
+        _foldedUnits = new Dictionary<string, HashSet<long>>(StringComparer.Ordinal);
         var phrases = new List<string>();
         var phraseSet = new HashSet<string>(StringComparer.Ordinal);
-        _byFoldedPhrase = new Dictionary<string, ImportUnitCandidate>(StringComparer.Ordinal);
 
         foreach (var unit in _units)
         {
+            _byId.TryAdd(unit.Id, unit);
             AddPhrase(unit.Symbol, unit, phrases, phraseSet);
             AddPhrase(unit.DisplayName, unit, phrases, phraseSet);
             foreach (var alias in unit.Aliases)
@@ -157,9 +206,12 @@ public sealed class ImportNormalizer
         IngredientLineParser.Parse(rawLine, _knownPhrases);
 
     /// <summary>
-    /// Resolves raw unit text against the catalog. Unknown text stays
-    /// <c>is_unknown = true</c> with a suggested dimension when obvious and up
-    /// to <see cref="MaxSuggestions"/> near matches.
+    /// Resolves raw unit text against the catalog. An exact, case-sensitive
+    /// match is tried first (so <c>T</c> → tablespoon and <c>t</c> → teaspoon);
+    /// a folded key shared by multiple units stays <c>is_unknown = true</c>
+    /// with the colliding units as suggestions rather than guessing. Unknown
+    /// text reports a suggested dimension when obvious and up to
+    /// <see cref="MaxSuggestions"/> near matches.
     /// </summary>
     public ImportDraftUnit ResolveUnit(string? rawUnit)
     {
@@ -169,20 +221,60 @@ public sealed class ImportNormalizer
         }
 
         var raw = rawUnit.Trim();
-        var folded = ImportUnitText.Fold(raw);
-        if (folded.Length > 0 && _byFoldedPhrase.TryGetValue(folded, out var unit))
+
+        var exact = ImportUnitText.ExactKey(raw);
+        if (exact.Length > 0 && _exactUnits.TryGetValue(exact, out var exactIds))
         {
-            return new ImportDraftUnit(
-                raw,
-                unit.Id,
-                unit.Symbol,
-                false,
-                null,
-                [new ImportDraftUnitSuggestion(unit.Id, unit.Symbol, unit.DisplayName)]);
+            return exactIds.Count == 1
+                ? Matched(raw, _byId[First(exactIds)])
+                : Ambiguous(raw, exactIds);
+        }
+
+        var folded = ImportUnitText.Fold(raw);
+        if (folded.Length > 0 && _foldedUnits.TryGetValue(folded, out var foldedIds))
+        {
+            return foldedIds.Count == 1
+                ? Matched(raw, _byId[First(foldedIds)])
+                : Ambiguous(raw, foldedIds);
         }
 
         var dimension = ImportUnitText.TryGetDimension(folded, out var hinted) ? DimensionName(hinted) : null;
         return new ImportDraftUnit(raw, null, null, true, dimension, Suggest(folded));
+    }
+
+    private static ImportDraftUnit Matched(string raw, ImportUnitCandidate unit) =>
+        new(
+            raw,
+            unit.Id,
+            unit.Symbol,
+            false,
+            null,
+            [new ImportDraftUnitSuggestion(unit.Id, unit.Symbol, unit.DisplayName)]);
+
+    /// <summary>A folded key shared by several units: never guess, offer them.</summary>
+    private ImportDraftUnit Ambiguous(string raw, HashSet<long> ids)
+    {
+        var dimension = ImportUnitText.TryGetDimension(ImportUnitText.Fold(raw), out var hinted)
+            ? DimensionName(hinted)
+            : null;
+        var suggestions = ids
+            .Select(id => _byId[id])
+            .OrderBy(unit => unit.Symbol, StringComparer.Ordinal)
+            .ThenBy(unit => unit.Id)
+            .Take(MaxSuggestions)
+            .Select(unit => new ImportDraftUnitSuggestion(unit.Id, unit.Symbol, unit.DisplayName))
+            .ToArray();
+        return new ImportDraftUnit(raw, null, null, true, dimension, suggestions);
+    }
+
+    private static long First(HashSet<long> ids)
+    {
+        foreach (var id in ids)
+        {
+            return id;
+        }
+
+        throw new InvalidOperationException("A unit lookup set must not be empty.");
     }
 
     /// <summary>
@@ -285,12 +377,33 @@ public sealed class ImportNormalizer
         HashSet<string> phraseSet)
     {
         var folded = ImportUnitText.Fold(phrase);
-        if (folded.Length == 0 || !phraseSet.Add(folded))
+        if (folded.Length == 0)
         {
             return;
         }
 
-        phrases.Add(folded);
-        _byFoldedPhrase[folded] = unit;
+        if (phraseSet.Add(folded))
+        {
+            phrases.Add(folded);
+        }
+
+        AddLookup(_foldedUnits, folded, unit.Id);
+
+        var exact = ImportUnitText.ExactKey(phrase);
+        if (exact.Length > 0)
+        {
+            AddLookup(_exactUnits, exact, unit.Id);
+        }
+    }
+
+    private static void AddLookup(Dictionary<string, HashSet<long>> lookup, string key, long unitId)
+    {
+        if (!lookup.TryGetValue(key, out var ids))
+        {
+            ids = [];
+            lookup[key] = ids;
+        }
+
+        ids.Add(unitId);
     }
 }

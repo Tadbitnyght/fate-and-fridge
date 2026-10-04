@@ -78,11 +78,64 @@ public sealed class ImportNormalizerTests
     [Fact]
     public void Unknown_unit_without_a_hint_has_no_dimension()
     {
-        var unit = Standard().ResolveUnit("grams");
+        var unit = Standard().ResolveUnit("smidgen");
 
         unit.IsUnknown.Should().BeTrue();
         unit.MatchedUnitId.Should().BeNull();
         unit.SuggestedDimension.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("grams")]
+    [InlineData("kg")]
+    [InlineData("kilograms")]
+    public void Mass_hint_covers_gram_and_kilogram(string rawUnit)
+    {
+        var unit = Standard().ResolveUnit(rawUnit);
+
+        unit.IsUnknown.Should().BeTrue();
+        unit.SuggestedDimension.Should().Be("mass");
+    }
+
+    [Fact]
+    public void Case_sensitive_exact_match_distinguishes_T_from_t()
+    {
+        var normalizer = Standard();
+
+        normalizer.ResolveUnit("T").MatchedUnitId.Should().Be(2, "'T' is the tablespoon abbreviation");
+        normalizer.ResolveUnit("T").MatchedSymbol.Should().Be("tbsp");
+        normalizer.ResolveUnit("t").MatchedUnitId.Should().Be(1, "'t' is the teaspoon abbreviation");
+        normalizer.ResolveUnit("t").MatchedSymbol.Should().Be("tsp");
+    }
+
+    [Fact]
+    public void Parser_and_normalizer_resolve_T_and_t_end_to_end()
+    {
+        var normalizer = Standard();
+
+        var bigT = normalizer.ResolveUnit(normalizer.Parse("1 T butter").UnitText);
+        bigT.MatchedUnitId.Should().Be(2);
+
+        var littleT = normalizer.ResolveUnit(normalizer.Parse("1 t butter").UnitText);
+        littleT.MatchedUnitId.Should().Be(1);
+    }
+
+    [Fact]
+    public void Ambiguous_folded_key_is_unknown_with_suggestions()
+    {
+        ImportUnitCandidate[] units =
+        [
+            new(1, "zz", "zz", UnitDimension.Count, []),
+            new(2, "w", "w", UnitDimension.Count, ["ZZ"]),
+        ];
+
+        var unit = new ImportNormalizer(units).ResolveUnit("zZ");
+
+        unit.Raw.Should().Be("zZ");
+        unit.MatchedUnitId.Should().BeNull("the folded key 'zz' names two distinct units");
+        unit.IsUnknown.Should().BeTrue();
+        unit.Suggestions.Should().HaveCount(2);
+        unit.Suggestions.Select(suggestion => suggestion.Id).Should().Equal(2, 1);
     }
 
     [Fact]

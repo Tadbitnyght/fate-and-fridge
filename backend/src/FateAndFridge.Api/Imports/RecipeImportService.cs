@@ -225,6 +225,7 @@ public sealed class RecipeImportService(
         var units = await dbContext.Units
             .AsNoTracking()
             .Where(unit => unit.IsActive)
+            .OrderBy(unit => unit.Id)
             .Select(unit => new { unit.Id, unit.Symbol, unit.DisplayName, unit.Dimension })
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
@@ -236,6 +237,8 @@ public sealed class RecipeImportService(
         var aliases = await dbContext.UnitAliases
             .AsNoTracking()
             .Where(alias => dbContext.Units.Any(unit => unit.Id == alias.UnitId && unit.IsActive))
+            .OrderBy(alias => alias.UnitId)
+            .ThenBy(alias => alias.Alias)
             .Select(alias => new { alias.UnitId, alias.Alias })
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);

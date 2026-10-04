@@ -59,9 +59,10 @@ public sealed record ImportDraftRecipe(
     IReadOnlyList<string> Warnings);
 
 /// <summary>
-/// One raw ingredient line in a draft. M4-04 carries only <see cref="Raw"/>;
-/// M4-05 splits quantity/unit/name/note and M4-06 resolves matches, so every
-/// enrichment field keeps its safe default here.
+/// One raw ingredient line in a draft. The quantity, name, preparation note,
+/// and unit slice are populated by M4-05; canonical ingredient matching
+/// (<see cref="MatchedIngredientId"/>, <see cref="MatchKind"/>, and ingredient
+/// suggestions) arrives in M4-06, so those fields keep their safe defaults here.
 /// </summary>
 public sealed record ImportDraftIngredient(
     string Raw,
