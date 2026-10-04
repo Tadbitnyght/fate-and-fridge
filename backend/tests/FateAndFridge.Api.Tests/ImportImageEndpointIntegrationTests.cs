@@ -133,6 +133,70 @@ public sealed class ImportImageEndpointIntegrationTests(M1SetupFixture fixture) 
     }
 
     [Fact]
+    public async Task Download_records_the_final_post_redirect_source_url()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        await SeedUserAsync("root", AdminPassword, cancellationToken, UserRole.Admin);
+        await MarkSetupCompletedAsync(cancellationToken);
+        const string requestedUrl = "https://example.test/redirected-image";
+        const string finalUrl = "https://cdn.example.test/final-image.jpg";
+        var fetcher = new FakeImportFetcher().OnImage(_ =>
+            ImportFetchResult.Success(new Uri(finalUrl), 200, "image/jpeg", Jpeg(64, 64)));
+        using var factory = CreateFactory(fetcher);
+        var recipe = await SeedRecipeAsync("Redirect Target", cancellationToken);
+        using var session = await SignInAsync(factory, "root", AdminPassword, cancellationToken);
+
+        var response = await SendJsonAsync(
+            session.Client,
+            FromUrlPath(recipe.Id),
+            $$"""{"source_url":"{{requestedUrl}}"}""",
+            session.CsrfToken,
+            cancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var image = await ReadJsonAsync(response, cancellationToken);
+        image.GetProperty("source_url").GetString().Should().Be(
+            finalUrl,
+            "the stored source_url must be the final post-redirect URL");
+
+        var stored = await ReadStoredImageAsync(recipe.Id, cancellationToken);
+        stored.Should().NotBeNull();
+        stored!.SourceUrl.Should().Be(finalUrl);
+    }
+
+    [Fact]
+    public async Task Download_replacing_an_existing_image_leaves_exactly_one_file()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        await SeedUserAsync("root", AdminPassword, cancellationToken, UserRole.Admin);
+        await MarkSetupCompletedAsync(cancellationToken);
+        var fetcher = new FakeImportFetcher().OnImage(_ =>
+            ImportFetchResult.Success(new Uri(SourceUrl), 200, "image/jpeg", Jpeg(320, 240)));
+        using var factory = CreateFactory(fetcher);
+        var recipe = await SeedRecipeAsync("Replace Twice", cancellationToken);
+        using var session = await SignInAsync(factory, "root", AdminPassword, cancellationToken);
+
+        for (var i = 0; i < 2; i++)
+        {
+            var response = await SendJsonAsync(
+                session.Client,
+                FromUrlPath(recipe.Id),
+                $$"""{"source_url":"{{SourceUrl}}"}""",
+                session.CsrfToken,
+                cancellationToken);
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+        }
+
+        // The old file must be removed by the atomic replacement: one row, one file.
+        ReadImageFiles().Should().ContainSingle();
+        var stored = await ReadStoredImageAsync(recipe.Id, cancellationToken);
+        stored.Should().NotBeNull();
+        ReadImageFiles()[0].Should().Be(stored!.StoragePath);
+    }
+
+    [Fact]
     public async Task Download_supports_png_and_webp_actual_bytes()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -392,6 +456,47 @@ public sealed class ImportImageEndpointIntegrationTests(M1SetupFixture fixture) 
             .Should().Be(ErrorCodes.NotFound);
         fetcher.ImageCallCount.Should().Be(0, "a missing recipe is rejected before any outbound fetch");
         ReadImageFiles().Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Download_missing_recipe_does_not_consume_the_throttle_budget()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        await SeedUserAsync("root", AdminPassword, cancellationToken, UserRole.Admin);
+        await MarkSetupCompletedAsync(cancellationToken);
+        var clock = new TestTimeProvider(DateTimeOffset.UtcNow);
+        var fetcher = new FakeImportFetcher().OnImage(_ =>
+            ImportFetchResult.Success(new Uri(SourceUrl), 200, "image/jpeg", Jpeg(64, 64)));
+        using var factory = CreateFactory(fetcher, clock, options => options.ImageFetchesPerHour = 1);
+        var recipe = await SeedRecipeAsync("Budget Target", cancellationToken);
+        using var session = await SignInAsync(factory, "root", AdminPassword, cancellationToken);
+
+        // Burn several 404s against caller-chosen ids; they must not consume the budget.
+        for (var i = 0; i < 3; i++)
+        {
+            var missing = await SendJsonAsync(
+                session.Client,
+                FromUrlPath(900000000 + i),
+                $$"""{"source_url":"{{SourceUrl}}"}""",
+                session.CsrfToken,
+                cancellationToken);
+            missing.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        }
+
+        fetcher.ImageCallCount.Should().Be(0);
+
+        var allowed = await SendJsonAsync(
+            session.Client,
+            FromUrlPath(recipe.Id),
+            $$"""{"source_url":"{{SourceUrl}}"}""",
+            session.CsrfToken,
+            cancellationToken);
+
+        allowed.StatusCode.Should().Be(
+            HttpStatusCode.OK,
+            "a 404 for an unknown recipe must not consume the caller's image budget");
+        fetcher.ImageCallCount.Should().Be(1);
     }
 
     [Fact]

@@ -223,6 +223,15 @@ public static class RecipeImageEndpoints
                 AuthRequiredMessage);
         }
 
+        // A 404 on an unknown recipe must not consume an image-fetch slot and
+        // must not perform any outbound request: the id is caller-chosen, so a
+        // hostile actor could otherwise exhaust a victim's 60/hour budget with
+        // requests for nonexistent recipes.
+        if (!await imageImport.RecipeExistsAsync(id, cancellationToken))
+        {
+            return NotFound();
+        }
+
         var actorKey = actor.IsSystem
             ? "system"
             : actor.UserId?.ToString(CultureInfo.InvariantCulture) ?? "system";

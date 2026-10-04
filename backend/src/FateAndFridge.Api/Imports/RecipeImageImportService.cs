@@ -52,6 +52,15 @@ public sealed class RecipeImageImportService(
     ILogger<RecipeImageImportService> logger)
 {
     /// <summary>
+    /// True when the recipe exists. The endpoint calls this <b>before</b>
+    /// reserving an image-fetch throttle slot so a 404 on an unknown recipe
+    /// neither consumes a slot nor performs any outbound request.
+    /// </summary>
+    public Task<bool> RecipeExistsAsync(long recipeId, CancellationToken cancellationToken = default) =>
+        dbContext.Recipes.AsNoTracking()
+            .AnyAsync(recipe => recipe.Id == recipeId, cancellationToken);
+
+    /// <summary>
     /// Safe-fetches <paramref name="sourceUrl"/> as an image, validates it, and
     /// replaces the recipe's active image. Missing recipes are reported before
     /// any outbound request is made.
@@ -63,9 +72,7 @@ public sealed class RecipeImageImportService(
         long? actorUserId,
         CancellationToken cancellationToken = default)
     {
-        if (!await dbContext.Recipes.AsNoTracking()
-                .AnyAsync(recipe => recipe.Id == recipeId, cancellationToken)
-                .ConfigureAwait(false))
+        if (!await RecipeExistsAsync(recipeId, cancellationToken).ConfigureAwait(false))
         {
             return new ImportImageResult.NotFound();
         }
