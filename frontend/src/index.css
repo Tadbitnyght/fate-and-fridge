@@ -1728,6 +1728,57 @@ a.button--primary:focus-visible {
   gap: 0.5rem;
 }
 
+/* ---------- unknown ingredient resolution (M4-09) ---------- */
+
+.ingredient-row--unknown {
+  border-color: var(--bad-text);
+  border-left-width: 4px;
+}
+
+.ingredient-row__unknown-note {
+  margin: 0.35rem 0 0;
+  color: var(--bad-text);
+  font-weight: 600;
+}
+
+.ingredient-row__unknown {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.5rem;
+  background: var(--bad-bg);
+  color: var(--bad-text);
+}
+
+.ingredient-row__unknown-raw {
+  margin: 0;
+}
+
+.ingredient-row__suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.ingredient-row__suggestions-label {
+  font-weight: 600;
+}
+
+.ingredient-row__create {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  color: var(--text);
+}
+
+.ingredient-row__create-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.5rem;
+}
+
 .step-row {
   display: flex;
   flex-direction: column;
@@ -1745,8 +1796,14 @@ a.button--primary:focus-visible {
 
   .group-card__actions button,
   .section-card__actions button,
-  .ingredient-row__actions button {
+  .ingredient-row__actions button,
+  .ingredient-row__suggestions button,
+  .ingredient-row__create button {
     min-height: 2.25rem;
+  }
+
+  .ingredient-row__create button {
+    align-self: stretch;
   }
 }
 

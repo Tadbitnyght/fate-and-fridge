@@ -1,4 +1,4 @@
-import type { ImportRecipeDraft } from '../../api/importRecipes'
+import type { ImportReference, ImportRecipeDraft } from '../../api/importRecipes'
 import {
   newFormKey,
   type IngredientFormRow,
@@ -68,6 +68,44 @@ function extractRawQuantityText(raw: string, name: string): string {
   const prefix = trimmed.slice(0, index).trim()
   // Only numeric-ish prefixes are useful as an editable quantity hint.
   return /[\d/]/.test(prefix) ? prefix : ''
+}
+
+/**
+ * Per-row import-resolution metadata (M4-09). Keyed by the {@link IngredientFormRow.key}
+ * created by {@link fromImportDraft}, so it survives adding, removing, and
+ * reordering rows. A line is only surfaced as "needs an ingredient" while its
+ * row has no `ingredientId`; mapping the row clears it naturally.
+ */
+export interface UnknownIngredientLine {
+  /** The original parsed ingredient line, shown verbatim to the reviewer. */
+  raw: string
+  /** Parsed canonical-name text, offered as the default create name. */
+  name: string
+  /** Draft suggestions (already bounded by the server) for this line. */
+  suggestions: ImportReference[]
+}
+
+/**
+ * Builds the unknown-line map for a freshly seeded draft. `rows` must be the
+ * rows returned by {@link fromImportDraft} for the same draft, in order.
+ */
+export function seedUnknownLines(
+  draft: ImportRecipeDraft,
+  rows: IngredientFormRow[],
+): Record<string, UnknownIngredientLine> {
+  const unknown: Record<string, UnknownIngredientLine> = {}
+  draft.ingredients.forEach((ingredient, index) => {
+    const row = rows[index]
+    if (row === undefined || !ingredient.is_unknown) {
+      return
+    }
+    unknown[row.key] = {
+      raw: ingredient.raw,
+      name: ingredient.name,
+      suggestions: ingredient.suggestions,
+    }
+  })
+  return unknown
 }
 
 export function fromImportDraft(draft: ImportRecipeDraft): RecipeFormState {

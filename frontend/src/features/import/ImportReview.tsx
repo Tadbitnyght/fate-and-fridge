@@ -10,18 +10,35 @@ import type {
 } from '../../api/importRecipes'
 import { Field } from '../../components/Field'
 import { fieldProps } from '../../components/fieldProps'
-import { useIngredients, useProteins, useTags, useUnits } from '../reference-data/useReferenceData'
-import { IngredientFields, type PickerOption } from '../recipes/IngredientFields'
+import {
+  useCreateIngredient,
+  useDepartments,
+  useIngredients,
+  useProteins,
+  useTags,
+  useUnits,
+} from '../reference-data/useReferenceData'
+import {
+  IngredientFields,
+  type IngredientCreateControls,
+  type PickerOption,
+  type UnknownIngredientInfo,
+} from '../recipes/IngredientFields'
 import { InstructionFields } from '../recipes/InstructionFields'
 import { ReferenceCheckboxes } from '../recipes/ReferenceCheckboxes'
-import { buildRecipeRequest, validateRecipeForm, type RecipeFormState } from '../recipes/recipeForm'
+import {
+  buildRecipeRequest,
+  validateRecipeForm,
+  type IngredientFormRow,
+  type RecipeFormState,
+} from '../recipes/recipeForm'
 import { useCreateRecipe } from '../recipes/useRecipes'
 import {
   firstFieldError,
   extractServerFieldErrors,
   type FieldErrors,
 } from '../../utils/fieldErrors'
-import { fromImportDraft } from './importForm'
+import { fromImportDraft, seedUnknownLines, type UnknownIngredientLine } from './importForm'
 import { useRecipeImageFromUrl } from './useImport'
 
 const MAX_NAME_MATCHES = 5
@@ -122,28 +139,43 @@ export function ImportReview({
   const navigate = useNavigate()
   const createRecipe = useCreateRecipe()
   const imageFromUrl = useRecipeImageFromUrl()
+  const createIngredient = useCreateIngredient()
 
   const ingredientsQuery = useIngredients('', false)
   const unitsQuery = useUnits('', false)
   const proteinsQuery = useProteins('', false)
   const tagsQuery = useTags('')
+  const departmentsQuery = useDepartments('')
 
   const selected =
     result.recipes.find((candidate) => candidate.index === selectedIndex) ?? result.recipes[0]
 
-  const [state, setState] = useState<RecipeFormState>(() => fromImportDraft(selected))
+  const [seed] = useState(() => {
+    const seeded = fromImportDraft(selected)
+    return { seeded, unknown: seedUnknownLines(selected, seeded.ingredients) }
+  })
+  const [state, setState] = useState<RecipeFormState>(seed.seeded)
   const [loadedKey, setLoadedKey] = useState(selected.index)
   const [errors, setErrors] = useState<FieldErrors>({})
   const [formError, setFormError] = useState<string | null>(null)
   const [useImage, setUseImage] = useState(selected.image_source_url !== null)
+  const [unknownLines, setUnknownLines] = useState<Record<string, UnknownIngredientLine>>(
+    seed.unknown,
+  )
+  const [createPendingRowKey, setCreatePendingRowKey] = useState<string | null>(null)
+  const [createErrorByRowKey, setCreateErrorByRowKey] = useState<Record<string, string>>({})
   const errorSummaryRef = useRef<HTMLDivElement>(null)
 
   // Re-seed the editable state when the reviewer picks a different candidate.
   // Adjusting state during render is React's documented derive-from-props
   // pattern and avoids a cascading effect render.
   if (loadedKey !== selected.index) {
+    const seeded = fromImportDraft(selected)
     setLoadedKey(selected.index)
-    setState(fromImportDraft(selected))
+    setState(seeded)
+    setUnknownLines(seedUnknownLines(selected, seeded.ingredients))
+    setCreateErrorByRowKey({})
+    setCreatePendingRowKey(null)
     setErrors({})
     setFormError(null)
     setUseImage(selected.image_source_url !== null)
@@ -159,6 +191,73 @@ export function ImportReview({
     setState(updater)
     setErrors({})
     setFormError(null)
+  }
+
+  function mapRowToIngredient(rowKey: string, id: number, name: string): void {
+    setState((current) => ({
+      ...current,
+      ingredients: current.ingredients.map((row) =>
+        row.key === rowKey
+          ? { ...row, ingredientId: String(id), ingredientName: name, ingredientActive: true }
+          : row,
+      ),
+    }))
+    setErrors({})
+    setFormError(null)
+  }
+
+  /**
+   * Permission-gated inline creation (M4-09). The draft's
+   * `capabilities.can_create_reference_data` decides whether this is reachable;
+   * the M2 endpoint still authorises the actor server-side. A duplicate create
+   * maps the line to the existing ingredient instead of erroring.
+   */
+  async function handleCreateIngredient(
+    row: IngredientFormRow,
+    canonicalName: string,
+    departmentId: number | null,
+  ): Promise<void> {
+    setCreatePendingRowKey(row.key)
+    setCreateErrorByRowKey((current) => {
+      const next = { ...current }
+      delete next[row.key]
+      return next
+    })
+    try {
+      const created = await createIngredient.mutateAsync({
+        canonical_name: canonicalName,
+        department_id: departmentId,
+      })
+      mapRowToIngredient(row.key, created.id, created.canonical_name)
+    } catch (caught) {
+      if (isApiError(caught) && caught.code === ErrorCodes.IngredientExists) {
+        const existingId = caught.details['existing_id']
+        if (typeof existingId === 'number') {
+          mapRowToIngredient(row.key, existingId, canonicalName)
+          return
+        }
+      }
+      if (isApiError(caught) && caught.code === ErrorCodes.Forbidden) {
+        setCreateErrorByRowKey((current) => ({
+          ...current,
+          [row.key]: 'You do not have permission to create ingredients.',
+        }))
+        return
+      }
+      if (isApiError(caught) && caught.code === ErrorCodes.ValidationFailed) {
+        setCreateErrorByRowKey((current) => ({
+          ...current,
+          [row.key]: 'Enter a valid ingredient name.',
+        }))
+        return
+      }
+      setCreateErrorByRowKey((current) => ({
+        ...current,
+        [row.key]: 'Creating the ingredient failed. Check the server and try again.',
+      }))
+    } finally {
+      setCreatePendingRowKey(null)
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
@@ -221,6 +320,65 @@ export function ImportReview({
     label: unit.symbol,
     isActive: unit.is_active,
   }))
+
+  // Draft suggestions can reference ingredients outside the first page of the
+  // list, so merge them into the picker options (active, exact label) to keep
+  // every suggested id selectable.
+  const optionById = new Map(ingredientOptions.map((option) => [option.id, option]))
+  for (const line of Object.values(unknownLines)) {
+    for (const suggestion of line.suggestions) {
+      if (!optionById.has(suggestion.id)) {
+        const option: PickerOption = {
+          id: suggestion.id,
+          label: suggestion.name,
+          isActive: true,
+        }
+        optionById.set(suggestion.id, option)
+        ingredientOptions.push(option)
+      }
+    }
+  }
+
+  const unknownByRowKey: Record<string, UnknownIngredientInfo> = {}
+  for (const row of state.ingredients) {
+    const line = unknownLines[row.key]
+    if (line === undefined) {
+      continue
+    }
+    unknownByRowKey[row.key] = {
+      raw: line.raw,
+      name: line.name,
+      suggestions: line.suggestions.map(
+        (suggestion) =>
+          optionById.get(suggestion.id) ?? {
+            id: suggestion.id,
+            label: suggestion.name,
+            isActive: true,
+          },
+      ),
+    }
+  }
+
+  const departmentOptions: PickerOption[] = (departmentsQuery.data ?? [])
+    .filter((department) => department.is_active)
+    .map((department) => ({
+      id: department.id,
+      label: department.name,
+      isActive: department.is_active,
+    }))
+
+  // Only offer inline create when the server said the actor holds
+  // `reference_data.edit`; otherwise the UI shows ask-an-admin guidance.
+  const createControls: IngredientCreateControls | undefined = result.capabilities
+    .can_create_reference_data
+    ? {
+        departments: departmentOptions,
+        pendingRowKey: createPendingRowKey,
+        errorByRowKey: createErrorByRowKey,
+        onCreate: (row, canonicalName, departmentId) =>
+          void handleCreateIngredient(row, canonicalName, departmentId),
+      }
+    : undefined
 
   const proteinOptions = (proteinsQuery.data ?? [])
     .filter((protein) => protein.is_active)
@@ -409,6 +567,8 @@ export function ImportReview({
           ingredientOptions={ingredientOptions}
           unitOptions={unitOptions}
           errors={errors}
+          unknownByRowKey={unknownByRowKey}
+          createControls={createControls}
         />
 
         <InstructionFields

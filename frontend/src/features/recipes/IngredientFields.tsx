@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 import { fieldProps } from '../../components/fieldProps'
 import type { FieldErrors } from '../../utils/fieldErrors'
 import { formatQuantity } from './quantity'
@@ -14,6 +16,33 @@ export interface PickerOption {
   label: string
   isActive: boolean
 }
+
+/**
+ * Import-only resolution metadata for a row (M4-09). `IngredientFields` stays
+ * reusable for the normal recipe form, so every unknown-ingredient affordance
+ * is opt-in through {@link IngredientFieldsProps.unknownByRowKey}.
+ */
+export interface UnknownIngredientInfo {
+  /** The original parsed line, shown verbatim. */
+  raw: string
+  /** Parsed canonical-name text, offered as the default create name. */
+  name: string
+  /** Draft suggestions the reviewer can map the line to in one tap. */
+  suggestions: PickerOption[]
+}
+
+/** Inline "create ingredient" wiring, only supplied when the actor may do it. */
+export interface IngredientCreateControls {
+  /** Active grocery departments for the optional department picker. */
+  departments: PickerOption[]
+  /** Row key with a create request in flight, if any. */
+  pendingRowKey: string | null
+  /** Per-row create error message, keyed by row key. */
+  errorByRowKey: Record<string, string>
+  onCreate: (row: IngredientFormRow, canonicalName: string, departmentId: number | null) => void
+}
+
+type RowUnknownByKey = Record<string, UnknownIngredientInfo>
 
 /** Keeps a retired currently-selected reference visible and selectable. */
 function mergeCurrentOption(
@@ -47,6 +76,81 @@ function replaceAt<T>(items: T[], index: number, value: T): T[] {
   return items.map((item, current) => (current === index ? value : item))
 }
 
+/**
+ * Permission-gated inline ingredient creation (M4-09). Only rendered when the
+ * draft reports `capabilities.can_create_reference_data`; the call itself is
+ * still authorised server-side by the M2 `POST /ingredients` endpoint.
+ */
+function CreateIngredientInline({
+  row,
+  defaultName,
+  createControls,
+}: {
+  row: IngredientFormRow
+  defaultName: string
+  createControls: IngredientCreateControls
+}) {
+  const [name, setName] = useState(defaultName)
+  const [departmentId, setDepartmentId] = useState('')
+  const pending = createControls.pendingRowKey === row.key
+  const error = createControls.errorByRowKey[row.key]
+  const nameFieldId = `${row.key}-create-name`
+  const departmentFieldId = `${row.key}-create-department`
+
+  return (
+    <div className="ingredient-row__create">
+      <p className="form__hint">No good match? Create it once and reuse it everywhere.</p>
+      <div className="ingredient-row__create-fields">
+        <div className="form__field">
+          <label htmlFor={nameFieldId}>New ingredient name</label>
+          <input
+            id={nameFieldId}
+            type="text"
+            autoComplete="off"
+            value={name}
+            disabled={pending}
+            onChange={(event) => setName(event.target.value)}
+          />
+        </div>
+        <div className="form__field">
+          <label htmlFor={departmentFieldId}>Department (optional)</label>
+          <select
+            id={departmentFieldId}
+            value={departmentId}
+            disabled={pending}
+            onChange={(event) => setDepartmentId(event.target.value)}
+          >
+            <option value="">No department</option>
+            {createControls.departments.map((department) => (
+              <option key={department.id} value={department.id}>
+                {department.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      {error !== undefined && (
+        <p className="form__error" role="alert">
+          {error}
+        </p>
+      )}
+      <button
+        type="button"
+        disabled={pending || name.trim().length === 0}
+        onClick={() =>
+          createControls.onCreate(
+            row,
+            name.trim(),
+            departmentId === '' ? null : Number(departmentId),
+          )
+        }
+      >
+        {pending ? 'Creating…' : 'Create ingredient'}
+      </button>
+    </div>
+  )
+}
+
 function IngredientRowEditor({
   row,
   ariaLabel,
@@ -54,6 +158,8 @@ function IngredientRowEditor({
   ingredientOptions,
   unitOptions,
   errors,
+  unknown,
+  createControls,
   onRowChange,
   onRemove,
   onMove,
@@ -66,6 +172,8 @@ function IngredientRowEditor({
   ingredientOptions: PickerOption[]
   unitOptions: PickerOption[]
   errors: FieldErrors
+  unknown?: UnknownIngredientInfo
+  createControls?: IngredientCreateControls
   onRowChange: (row: IngredientFormRow) => void
   onRemove: () => void
   onMove: (delta: number) => void
@@ -82,6 +190,17 @@ function IngredientRowEditor({
   const quantityId = `${prefix}-quantity`
   const unitId = `${prefix}-unit`
   const noteId = `${prefix}-note`
+  // A line is unresolved while it arrived unknown and still has no selected
+  // reference; mapping it via the select, a suggestion, or inline creation
+  // sets `ingredientId` and clears the state.
+  const needsIngredient = unknown !== undefined && row.ingredientId === ''
+  const unknownNoticeId = `${ingredientId}-unknown`
+  const ingredientDescribedBy = [
+    ingredientError !== undefined ? `${ingredientId}-error` : null,
+    needsIngredient ? unknownNoticeId : null,
+  ]
+    .filter((value): value is string => value !== null)
+    .join(' ')
 
   const currentIngredientOptions = mergeCurrentOption(
     ingredientOptions,
@@ -97,12 +216,13 @@ function IngredientRowEditor({
   )
 
   return (
-    <li className="ingredient-row">
+    <li className={`ingredient-row${needsIngredient ? ' ingredient-row--unknown' : ''}`}>
       <div className="ingredient-row__grid">
         <div className="form__field">
           <label htmlFor={ingredientId}>Ingredient</label>
           <select
             {...fieldProps(ingredientId, { error: ingredientError })}
+            aria-describedby={ingredientDescribedBy.length > 0 ? ingredientDescribedBy : undefined}
             value={row.ingredientId}
             onChange={(event) =>
               onRowChange({ ...row, ingredientId: event.target.value, ingredientName: '' })
@@ -118,6 +238,11 @@ function IngredientRowEditor({
           {ingredientError && (
             <p className="form__error" id={`${ingredientId}-error`}>
               {ingredientError}
+            </p>
+          )}
+          {needsIngredient && (
+            <p className="ingredient-row__unknown-note" id={unknownNoticeId} role="status">
+              Needs an ingredient before this recipe can be saved.
             </p>
           )}
         </div>
@@ -172,6 +297,48 @@ function IngredientRowEditor({
         </div>
       </div>
 
+      {needsIngredient && unknown !== undefined && (
+        <div className="ingredient-row__unknown">
+          <p className="ingredient-row__unknown-raw">
+            Imported line: <q>{unknown.raw}</q>
+          </p>
+          {unknown.suggestions.length > 0 && (
+            <div className="ingredient-row__suggestions">
+              <span className="ingredient-row__suggestions-label">Suggestions:</span>
+              {unknown.suggestions.map((suggestion) => (
+                <button
+                  key={suggestion.id}
+                  type="button"
+                  aria-label={`Use ${suggestion.label} for ${ariaLabel}`}
+                  onClick={() =>
+                    onRowChange({
+                      ...row,
+                      ingredientId: String(suggestion.id),
+                      ingredientName: suggestion.label,
+                      ingredientActive: true,
+                    })
+                  }
+                >
+                  {suggestion.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {createControls !== undefined ? (
+            <CreateIngredientInline
+              row={row}
+              defaultName={row.ingredientName || unknown.name}
+              createControls={createControls}
+            />
+          ) : (
+            <p className="form__hint">
+              You cannot create ingredients. Choose an existing ingredient, or ask an Admin to add
+              this one.
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="ingredient-row__footer">
         <label className="recipes__checkbox">
           <input
@@ -214,6 +381,8 @@ function IngredientRowList({
   ingredientOptions,
   unitOptions,
   errors,
+  unknownByRowKey,
+  createControls,
   onChange,
 }: {
   rows: IngredientFormRow[]
@@ -222,6 +391,8 @@ function IngredientRowList({
   ingredientOptions: PickerOption[]
   unitOptions: PickerOption[]
   errors: FieldErrors
+  unknownByRowKey?: RowUnknownByKey
+  createControls?: IngredientCreateControls
   onChange: (rows: IngredientFormRow[]) => void
 }) {
   return (
@@ -235,6 +406,8 @@ function IngredientRowList({
           ingredientOptions={ingredientOptions}
           unitOptions={unitOptions}
           errors={errors}
+          unknown={unknownByRowKey?.[row.key]}
+          createControls={createControls}
           onRowChange={(next) => onChange(replaceAt(rows, index, next))}
           onRemove={() => onChange(rows.filter((_, current) => current !== index))}
           onMove={(delta) => onChange(moveItem(rows, index, delta))}
@@ -258,6 +431,8 @@ export function IngredientFields({
   ingredientOptions,
   unitOptions,
   errors,
+  unknownByRowKey,
+  createControls,
 }: {
   rows: IngredientFormRow[]
   groups: IngredientGroupFormRow[]
@@ -266,6 +441,10 @@ export function IngredientFields({
   ingredientOptions: PickerOption[]
   unitOptions: PickerOption[]
   errors: FieldErrors
+  /** Import-only unknown-line resolution metadata (M4-09). */
+  unknownByRowKey?: RowUnknownByKey
+  /** Import-only inline-create wiring, absent when the actor cannot create. */
+  createControls?: IngredientCreateControls
 }) {
   return (
     <>
@@ -281,6 +460,8 @@ export function IngredientFields({
             ingredientOptions={ingredientOptions}
             unitOptions={unitOptions}
             errors={errors}
+            unknownByRowKey={unknownByRowKey}
+            createControls={createControls}
             onChange={onRowsChange}
           />
         )}

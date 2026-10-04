@@ -27,6 +27,10 @@ interface RecordedRequest {
 interface ImportDraftOptions {
   /** Number of parsed candidates to return (>= 1). */
   candidates?: number
+  /** Include an unmatched "salt" line that must be resolved in review. */
+  unknownIngredient?: boolean
+  /** Report that the actor may create reference data inline. */
+  canCreateReferenceData?: boolean
 }
 
 /**
@@ -73,11 +77,33 @@ async function mockImportApi(
           suggestions: [],
         },
       },
+      ...(options.unknownIngredient === true
+        ? [
+            {
+              raw: 'a pinch of salt',
+              quantity: null,
+              name: 'salt',
+              preparation_note: null,
+              matched_ingredient_id: null,
+              match_kind: null,
+              is_unknown: true,
+              suggestions: [{ id: 14, name: 'Salt' }],
+              unit: {
+                raw: '',
+                matched_unit_id: null,
+                matched_symbol: null,
+                is_unknown: false,
+                suggested_dimension: null,
+                suggestions: [],
+              },
+            },
+          ]
+        : []),
     ],
     instruction_sections: [{ title: null, steps: ['Boil the noodles.'] }],
     proteins: [],
     tags: [],
-    warnings: [],
+    warnings: options.unknownIngredient === true ? ['ingredient_unknown'] : [],
   })
 
   await page.route('**/api/v1/**', async (route) => {
@@ -112,8 +138,21 @@ async function mockImportApi(
             updated_at: now,
             aliases: [],
           },
+          {
+            id: 14,
+            canonical_name: 'Salt',
+            department_id: null,
+            is_active: true,
+            created_at: now,
+            updated_at: now,
+            aliases: [],
+          },
         ],
       })
+      return
+    }
+    if (path === '/departments') {
+      await route.fulfill({ json: [] })
       return
     }
     if (path === '/units') {
@@ -153,7 +192,9 @@ async function mockImportApi(
             parse_method: 'json_ld',
           },
           source_url_match: null,
-          capabilities: { can_create_reference_data: false },
+          capabilities: {
+            can_create_reference_data: options.canCreateReferenceData === true,
+          },
           recipes,
         },
       })
@@ -277,6 +318,43 @@ test('import: pick a candidate when the page has several recipes', async ({ page
     (entry) => entry.method === 'POST' && entry.path === '/recipes',
   )
   expect(createRequest?.body).toMatchObject({ name: 'Lasagna Bolognese' })
+})
+
+test('import: resolve an unknown ingredient line before saving', async ({ page }) => {
+  const { requests } = await mockImportApi(page, { unknownIngredient: true })
+
+  await page.goto('/recipes/import')
+  await page.getByLabel('Recipe URL').fill('https://example.com/lasagna')
+  await page.getByRole('button', { name: 'Import' }).click()
+
+  await expect(
+    page.getByRole('heading', { level: 2, name: 'Review imported recipe' }),
+  ).toBeVisible()
+  // The unknown line is surfaced with its raw text and a suggestion.
+  await expect(page.getByText('Needs an ingredient before this recipe can be saved.')).toBeVisible()
+  await expect(page.getByText('a pinch of salt')).toBeVisible()
+
+  // Saving is blocked while the line is unresolved.
+  await page.getByRole('button', { name: 'Save recipe' }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Fix these problems before saving' }),
+  ).toBeVisible()
+  expect(requests.some((entry) => entry.method === 'POST' && entry.path === '/recipes')).toBe(false)
+
+  // Map the line to the existing suggested ingredient, then save.
+  await page.getByRole('button', { name: /Use Salt for ingredient 2/i }).click()
+  await expect(page.getByText('Needs an ingredient before this recipe can be saved.')).toHaveCount(
+    0,
+  )
+  await page.getByRole('button', { name: 'Save recipe' }).click()
+
+  await expect(page).toHaveURL('/recipes/1/edit')
+  const createRequest = requests.find(
+    (entry) => entry.method === 'POST' && entry.path === '/recipes',
+  )
+  expect(createRequest?.body).toMatchObject({
+    ingredients: [{ ingredient_id: 12 }, { ingredient_id: 14 }],
+  })
 })
 
 test('import: an entry point on the recipe browser opens the import page', async ({ page }) => {
