@@ -49,7 +49,7 @@ import {
   validateUnknownUnits,
   type UnknownIngredientLine,
 } from './importForm'
-import { useRecipeImageFromUrl } from './useImport'
+import { useCheckImport, useRecipeImageFromUrl } from './useImport'
 
 const MAX_NAME_MATCHES = 5
 
@@ -188,6 +188,7 @@ export function ImportReview({
   const navigate = useNavigate()
   const createRecipe = useCreateRecipe()
   const imageFromUrl = useRecipeImageFromUrl()
+  const checkImport = useCheckImport()
   const createIngredient = useCreateIngredient()
   const createUnit = useCreateUnit()
 
@@ -210,6 +211,8 @@ export function ImportReview({
   const [formError, setFormError] = useState<string | null>(null)
   const [useImage, setUseImage] = useState(selected.image_source_url !== null)
   const [acknowledgedDuplicate, setAcknowledgedDuplicate] = useState(false)
+  const [nameMatches, setNameMatches] = useState<ImportReference[]>(selected.name_matches)
+  const [nameCheckStatus, setNameCheckStatus] = useState<'idle' | 'checking' | 'error'>('idle')
   const [unknownLines, setUnknownLines] = useState<Record<string, UnknownIngredientLine>>(
     seed.unknown,
   )
@@ -218,6 +221,17 @@ export function ImportReview({
   const [unitCreatePendingRowKey, setUnitCreatePendingRowKey] = useState<string | null>(null)
   const [unitCreateErrorByRowKey, setUnitCreateErrorByRowKey] = useState<Record<string, string>>({})
   const errorSummaryRef = useRef<HTMLDivElement>(null)
+
+  // Rename-recheck state (M4-12): the name the server last checked, the latest
+  // typed name (so a slow response for a superseded name is discarded), and the
+  // pending debounce timer.
+  const lastCheckedNameRef = useRef(selected.name)
+  const latestNameRef = useRef(selected.name)
+  const checkImportRef = useRef(checkImport.mutateAsync)
+  const nameCheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    checkImportRef.current = checkImport.mutateAsync
+  })
 
   // Re-seed the editable state when the reviewer picks a different candidate.
   // Adjusting state during render is React's documented derive-from-props
@@ -235,7 +249,21 @@ export function ImportReview({
     setFormError(null)
     setUseImage(selected.image_source_url !== null)
     setAcknowledgedDuplicate(false)
+    setNameMatches(selected.name_matches)
+    setNameCheckStatus('idle')
   }
+
+  // Keep the rename-recheck baseline in sync when the reviewer switches
+  // candidate and drop any timer left over from the previous candidate.
+  // Refs cannot be written during render, so this runs after commit.
+  useEffect(() => {
+    lastCheckedNameRef.current = selected.name
+    latestNameRef.current = selected.name
+    if (nameCheckTimerRef.current !== null) {
+      clearTimeout(nameCheckTimerRef.current)
+      nameCheckTimerRef.current = null
+    }
+  }, [selected])
 
   useEffect(() => {
     if (Object.keys(errors).length > 0) {
@@ -243,10 +271,68 @@ export function ImportReview({
     }
   }, [errors])
 
+  // Clear any pending rename recheck when the review unmounts.
+  useEffect(
+    () => () => {
+      if (nameCheckTimerRef.current !== null) {
+        clearTimeout(nameCheckTimerRef.current)
+      }
+    },
+    [],
+  )
+
   function updateState(updater: (current: RecipeFormState) => RecipeFormState): void {
     setState(updater)
     setErrors({})
     setFormError(null)
+  }
+
+  /**
+   * Debounced rename recheck (M4-12). Editing the name re-runs the server's
+   * similar-name scoring through `POST /import/check` and refreshes the warning.
+   * The draft's own matches are the seed, so no request runs until the name
+   * actually changes, and a late response for a superseded name is discarded.
+   */
+  function handleNameChange(value: string): void {
+    updateState((current) => ({ ...current, name: value }))
+    latestNameRef.current = value
+
+    if (nameCheckTimerRef.current !== null) {
+      clearTimeout(nameCheckTimerRef.current)
+      nameCheckTimerRef.current = null
+    }
+
+    const trimmed = value.trim()
+    if (trimmed.length === 0) {
+      setNameMatches([])
+      setNameCheckStatus('idle')
+      return
+    }
+    if (trimmed === lastCheckedNameRef.current) {
+      setNameCheckStatus('idle')
+      return
+    }
+
+    setNameCheckStatus('checking')
+    nameCheckTimerRef.current = setTimeout(() => {
+      nameCheckTimerRef.current = null
+      void checkImportRef
+        .current({ name: trimmed })
+        .then((response) => {
+          if (latestNameRef.current.trim() !== trimmed) {
+            return
+          }
+          lastCheckedNameRef.current = trimmed
+          setNameMatches(response.name_matches)
+          setNameCheckStatus('idle')
+        })
+        .catch(() => {
+          if (latestNameRef.current.trim() !== trimmed) {
+            return
+          }
+          setNameCheckStatus('error')
+        })
+    }, 400)
   }
 
   function mapRowToIngredient(rowKey: string, id: number, name: string): void {
@@ -589,7 +675,17 @@ export function ImportReview({
         />
       )}
 
-      <MatchWarning matches={selected.name_matches} />
+      <MatchWarning matches={nameMatches} />
+      {nameCheckStatus === 'checking' && (
+        <p className="form__hint" role="status">
+          Checking for similar names…
+        </p>
+      )}
+      {nameCheckStatus === 'error' && (
+        <p className="form__hint" role="status">
+          Could not check for similar names. You can still save the recipe.
+        </p>
+      )}
 
       {selected.warnings.includes('ingredient_unknown') && (
         <p className="form__notice" role="status">
@@ -629,9 +725,7 @@ export function ImportReview({
               type="text"
               autoComplete="off"
               value={state.name}
-              onChange={(event) =>
-                updateState((current) => ({ ...current, name: event.target.value }))
-              }
+              onChange={(event) => handleNameChange(event.target.value)}
             />
           </Field>
 

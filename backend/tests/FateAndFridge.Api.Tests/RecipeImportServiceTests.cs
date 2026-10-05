@@ -363,6 +363,39 @@ public sealed class RecipeImportServiceTests(M1SetupFixture fixture) : IAsyncLif
     }
 
     [Fact]
+    public async Task Check_name_matches_include_token_overlap_and_edit_distance_candidates()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var curry = await SeedRecipeAsync("Chicken Curry", normalizedSourceUrl: null, cancellationToken);
+        var chili = await SeedRecipeAsync("Chili", normalizedSourceUrl: null, cancellationToken);
+        await SeedRecipeAsync("Chocolate Cake", normalizedSourceUrl: null, cancellationToken);
+        await using var context = fixture.CreateContext();
+        var service = CreateService(context, new FakeImportFetcher());
+
+        // Shared token ("chicken") but no whole-word containment.
+        var overlap = await service.CheckAsync(null, "Chicken Soup", cancellationToken);
+        overlap.NameMatches.Should().ContainSingle().Which.Id.Should().Be(curry.Id);
+
+        // No shared token and no containment: only the small edit distance matches.
+        var edit = await service.CheckAsync(null, "Chile", cancellationToken);
+        edit.NameMatches.Should().ContainSingle().Which.Id.Should().Be(chili.Id);
+    }
+
+    [Fact]
+    public async Task Check_returns_no_name_matches_for_an_unrelated_name()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedRecipeAsync("Chicken Curry", normalizedSourceUrl: null, cancellationToken);
+        await SeedRecipeAsync("Chocolate Cake", normalizedSourceUrl: null, cancellationToken);
+        await using var context = fixture.CreateContext();
+        var service = CreateService(context, new FakeImportFetcher());
+
+        var result = await service.CheckAsync(null, "Zebra Steak", cancellationToken);
+
+        result.NameMatches.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task Import_matches_canonical_and_alias_ingredient_names()
     {
         var cancellationToken = TestContext.Current.CancellationToken;

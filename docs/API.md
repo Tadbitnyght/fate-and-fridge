@@ -456,8 +456,17 @@ element):
   query, a trailing `&` is preserved, percent-encoding case is not folded, and
   repeated keys are compared as sorted pairs. Recipes saved before this
   canonicalization are matched by re-folding up to 200 same-origin rows in
-  memory, so a legacy duplicate beyond that bound may not warn. `name_matches`
-  is a bounded (max 5) normalized-name containment list.
+  memory, so a legacy duplicate beyond that bound may not warn.
+- `name_matches` (M4-12) is the bounded (max 5) list of existing recipes whose
+  folded name is similar, ranked by descending score with ties broken by id.
+  Similarity is, in descending confidence: folded exact equality, whole-word
+  containment in either direction (so `lasagna` matches `Best Lasagna Ever` but
+  not `lasagnabake`), one or more shared whole tokens (two characters or
+  longer), or a Levenshtein distance of at most 2 on the folded forms. The
+  candidate set is a bounded, id-ordered scan (1000 rows), so a catalog beyond
+  that window could miss a warning for an older recipe. Editing the draft name
+  re-runs this through `POST /import/check`; it is a warning only, never a save
+  block.
 - `capabilities.can_create_reference_data` reflects whether the actor holds
   `reference_data.edit`, so the review UI can hide inline create affordances.
   (Canonical creation during review is still enforced by the M2 endpoints.)
@@ -483,9 +492,9 @@ element):
   The review screen maps an unknown line to an existing ingredient or creates
   one when permitted; no free-text ingredient id is ever sent to `POST /recipes`.
 
-**M4 limitations (filled in by later M4 issues):** `source.page_title` is
-`null`; similar-name scoring (beyond the current bounded name containment) and
-rename rechecks arrive in M4-12.
+**M4 note:** `source.page_title` is `null` (page-title enrichment is deferred);
+duplicate detection covers the exact normalized source URL (M4-11) plus the
+scored similar-name list above (M4-12), including a rename recheck.
 
 ### `POST /api/v1/import/check`
 

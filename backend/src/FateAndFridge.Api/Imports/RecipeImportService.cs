@@ -70,6 +70,14 @@ public sealed class RecipeImportService(
     /// </summary>
     private const int MaxLegacySourceUrlScan = 200;
 
+    /// <summary>
+    /// Upper bound on recipe names scored in memory for the similar-name
+    /// warning (M4-12). A bounded scan keeps a warning from becoming an
+    /// unbounded read; a catalog larger than this could miss a warning for a
+    /// recipe outside the window.
+    /// </summary>
+    public const int MaxNameScanCandidates = 1_000;
+
     /// <summary>Fetches and parses a page into a draft, or returns a structured failure.</summary>
     public async Task<ImportRecipeUrlResult> ImportAsync(
         string url,
@@ -405,7 +413,20 @@ public sealed class RecipeImportService(
         ];
     }
 
-    /// <summary>Bounded normalized-name containment query (M4-12 replaces this with scoring).</summary>
+    /// <summary>
+    /// Scores existing recipes against the draft name (docs/M4_PLAN.md §1.9):
+    /// folded exact equality, whole-word containment, shared tokens, or a small
+    /// edit distance, ranked by <see cref="RecipeNameSimilarity"/> and bounded
+    /// to <see cref="MaxNameMatches"/>. It re-runs for a rename through
+    /// <c>POST /import/check</c>; it is read-only.
+    /// </summary>
+    /// <remarks>
+    /// The candidate read is a bounded, id-ordered window
+    /// (<see cref="MaxNameScanCandidates"/>) that is scored in memory, so all
+    /// four signals are evaluated uniformly. A catalog beyond the window could
+    /// miss a warning for an older recipe; that is preferred over an unbounded
+    /// scan for a non-blocking warning.
+    /// </remarks>
     private async Task<IReadOnlyList<ImportDraftReference>> FindNameMatchesAsync(
         string? name,
         CancellationToken cancellationToken)
@@ -420,14 +441,30 @@ public sealed class RecipeImportService(
             return [];
         }
 
-        return await dbContext.Recipes
+        var candidates = await dbContext.Recipes
             .AsNoTracking()
-            .Where(recipe => recipe.NormalizedName.Contains(success.Normalized))
             .OrderBy(recipe => recipe.Id)
-            .Take(MaxNameMatches)
-            .Select(recipe => new ImportDraftReference(recipe.Id, recipe.Name))
+            .Take(MaxNameScanCandidates)
+            .Select(recipe => new { recipe.Id, recipe.Name, recipe.NormalizedName })
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
+
+        var matches = new List<(int Score, long Id, string Name)>();
+        foreach (var candidate in candidates)
+        {
+            var scored = RecipeNameSimilarity.Evaluate(success.Normalized, candidate.NormalizedName);
+            if (scored is not null)
+            {
+                matches.Add((scored.Score, candidate.Id, candidate.Name));
+            }
+        }
+
+        return matches
+            .OrderByDescending(match => match.Score)
+            .ThenBy(match => match.Id)
+            .Take(MaxNameMatches)
+            .Select(match => new ImportDraftReference(match.Id, match.Name))
+            .ToArray();
     }
 
     private static string? FirstAuthor(IReadOnlyList<ParsedRecipe> candidates)

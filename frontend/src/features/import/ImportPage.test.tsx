@@ -1037,3 +1037,87 @@ describe('import duplicate source URL flow', () => {
     )
   })
 })
+
+describe('import similar-name rename recheck', () => {
+  async function openReview(candidate: ImportParseResponse, routes: MockRoute[] = []) {
+    const mock = baseMocks([
+      { path: '/import/recipe-url', method: 'POST', body: candidate },
+      ...routes,
+    ])
+    renderWithProviders(<App />, { route: '/recipes/import' })
+    fireEvent.change(await screen.findByLabelText('Recipe URL'), {
+      target: { value: 'https://example.com/lasagna' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Import' }))
+    await screen.findByRole('heading', { level: 2, name: 'Review imported recipe' })
+    return mock
+  }
+
+  it('seeds the similar-name warning from the draft without a check request', async () => {
+    const mock = await openReview(similarNameCandidate)
+
+    expect(screen.getByRole('link', { name: 'Lasagna Bolognese' })).toBeVisible()
+    expect(mock.callsFor('/import/check')).toBe(0)
+  })
+
+  it('rechecks and refreshes similar names after a rename', async () => {
+    const mock = await openReview(similarNameCandidate, [
+      {
+        path: '/import/check',
+        method: 'POST',
+        body: { source_url_match: null, name_matches: [{ id: 9, name: 'Grandma Lasagna' }] },
+      },
+    ])
+
+    fireEvent.change(screen.getByLabelText('Name'), {
+      target: { value: 'Totally Different Dish' },
+    })
+
+    await waitFor(
+      () =>
+        expect(requestBodyFor(mock, '/import/check', 'POST')).toMatchObject({
+          name: 'Totally Different Dish',
+        }),
+      { timeout: 3000 },
+    )
+    await waitFor(
+      () => expect(screen.getByRole('link', { name: 'Grandma Lasagna' })).toBeVisible(),
+      {
+        timeout: 3000,
+      },
+    )
+    expect(screen.queryByRole('link', { name: 'Lasagna Bolognese' })).not.toBeInTheDocument()
+  })
+
+  it('shows a non-blocking message when the recheck fails', async () => {
+    await openReview(similarNameCandidate, [
+      {
+        path: '/import/check',
+        method: 'POST',
+        status: 500,
+        body: { error: { code: 'INTERNAL_ERROR', message: 'boom', details: {} } },
+      },
+    ])
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Another Name' } })
+
+    await waitFor(
+      () =>
+        expect(
+          screen.getByText('Could not check for similar names. You can still save the recipe.'),
+        ).toBeVisible(),
+      { timeout: 3000 },
+    )
+  })
+
+  it('clears the warning and makes no request when the name is emptied', async () => {
+    const mock = await openReview(similarNameCandidate)
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: '' } })
+
+    await waitFor(() =>
+      expect(screen.queryByRole('link', { name: 'Lasagna Bolognese' })).not.toBeInTheDocument(),
+    )
+    expect(mock.callsFor('/import/check')).toBe(0)
+  })
+})

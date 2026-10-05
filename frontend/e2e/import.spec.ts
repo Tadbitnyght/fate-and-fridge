@@ -35,6 +35,10 @@ interface ImportDraftOptions {
   canCreateReferenceData?: boolean
   /** Report that the page's exact normalized source URL already exists (M4-11). */
   sourceUrlMatch?: boolean
+  /** Similar-name candidates on the parsed draft (M4-12). */
+  nameMatches?: Array<{ id: number; name: string }>
+  /** Similar-name candidates returned by the rename recheck (M4-12). */
+  checkNameMatches?: Array<{ id: number; name: string }>
 }
 
 /**
@@ -61,7 +65,7 @@ async function mockImportApi(
     cook_minutes: 45,
     notes: null,
     image_source_url: null,
-    name_matches: [],
+    name_matches: options.nameMatches ?? [],
     ingredients: [
       {
         raw: '1 1/2 cups flour, sifted',
@@ -221,6 +225,16 @@ async function mockImportApi(
             can_create_reference_data: options.canCreateReferenceData === true,
           },
           recipes,
+        },
+      })
+      return
+    }
+    if (path === '/import/check' && method === 'POST') {
+      await route.fulfill({
+        json: {
+          source_url_match:
+            options.sourceUrlMatch === true ? { id: 6, name: 'Lasagna Bolognese' } : null,
+          name_matches: options.checkNameMatches ?? [],
         },
       })
       return
@@ -479,6 +493,24 @@ test('import: the duplicate warning is usable at a mobile viewport', async ({ pa
   expect(box).not.toBeNull()
   expect(box!.height).toBeGreaterThanOrEqual(44)
   expect(box!.x + box!.width).toBeLessThanOrEqual(375)
+})
+
+test('import: rechecks similar names after a rename', async ({ page }) => {
+  await mockImportApi(page, {
+    nameMatches: [{ id: 6, name: 'Lasagna Bolognese' }],
+    checkNameMatches: [{ id: 9, name: 'Grandma Lasagna' }],
+  })
+
+  await page.goto('/recipes/import')
+  await page.getByLabel('Recipe URL').fill('https://example.com/lasagna')
+  await page.getByRole('button', { name: 'Import' }).click()
+
+  await expect(page.getByRole('link', { name: 'Lasagna Bolognese' })).toBeVisible()
+
+  await page.getByLabel('Name').fill('Totally Different Dish')
+
+  await expect(page.getByRole('link', { name: 'Grandma Lasagna' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Lasagna Bolognese' })).toHaveCount(0)
 })
 
 test('import: an entry point on the recipe browser opens the import page', async ({ page }) => {
