@@ -224,6 +224,29 @@ public sealed class RecipeImportServiceTests(M1SetupFixture fixture) : IAsyncLif
     }
 
     [Fact]
+    public async Task Import_matches_a_legacy_normalized_source_url_via_the_bounded_fallback()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        // Store the pre-M4-11 canonical form directly (trailing slash and
+        // unsorted query retained), bypassing today's BuildNormalizedSourceUrl,
+        // so the exact-canonical query misses and the bounded same-origin
+        // re-fold fallback must find the row.
+        const string legacyStored = "https://example.com/recipes/lasagna/?b=2&a=1";
+        var seeded = await SeedRecipeAsync("Legacy Lasagna", legacyStored, cancellationToken);
+        const string incoming = "https://example.com/recipes/lasagna?a=1&b=2";
+        var fetcher = new FakeImportFetcher().OnPageHtml(JsonLdHtml, new Uri(incoming));
+        await using var context = fixture.CreateContext();
+        var service = CreateService(context, fetcher);
+
+        var result = await service.ImportAsync(incoming, canCreateReferenceData: false, cancellationToken);
+
+        var success = result.Should().BeOfType<ImportRecipeUrlResult.Success>().Subject;
+        success.Draft.SourceUrlMatch.Should().NotBeNull(
+            "a recipe saved before the M4-11 canonicalization must still warn");
+        success.Draft.SourceUrlMatch!.Id.Should().Be(seeded.Id);
+    }
+
+    [Fact]
     public async Task Import_name_matches_are_bounded_to_five()
     {
         var cancellationToken = TestContext.Current.CancellationToken;

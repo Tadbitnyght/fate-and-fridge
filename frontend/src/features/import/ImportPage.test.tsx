@@ -981,7 +981,7 @@ describe('import duplicate source URL flow', () => {
     )
   })
 
-  it('blocks saving until the duplicate is acknowledged, then allows it', async () => {
+  it('dismisses the dialog after Import anyway and then allows saving', async () => {
     const mock = await openReview(duplicateCandidate, [
       { path: '/recipes', method: 'POST', status: 201, body: createdRecipe },
       { path: '/recipes/1', method: 'GET', body: createdRecipe },

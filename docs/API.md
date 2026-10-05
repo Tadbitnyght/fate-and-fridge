@@ -448,10 +448,16 @@ element):
 - `source_url_match` (M4-11) is the existing recipe whose normalized source URL
   equals the page URL, or `null`. Equality uses the same canonical folding as
   recipe save (`BuildNormalizedSourceUrl`): lowercase scheme/host, dropped
-  default port, dropped fragment, a trailing slash trimmed from a non-root path,
-  and query parameters sorted, so `?a=1&b=2` matches `?b=2&a=1` and
-  `/recipe/` matches `/recipe`. `name_matches` is a bounded (max 5)
-  normalized-name containment list.
+  default port, dropped fragment, trailing slashes trimmed (so the root path
+  `https://example.com/` collapses to `https://example.com`), and query
+  parameters sorted, so `?a=1&b=2` matches `?b=2&a=1` and `/recipe/` matches
+  `/recipe`. Folding is deliberately narrow and only ever causes a warning to be
+  *missed*, never a false warning: an empty query (`…?`) stays distinct from no
+  query, a trailing `&` is preserved, percent-encoding case is not folded, and
+  repeated keys are compared as sorted pairs. Recipes saved before this
+  canonicalization are matched by re-folding up to 200 same-origin rows in
+  memory, so a legacy duplicate beyond that bound may not warn. `name_matches`
+  is a bounded (max 5) normalized-name containment list.
 - `capabilities.can_create_reference_data` reflects whether the actor holds
   `reference_data.edit`, so the review UI can hide inline create affordances.
   (Canonical creation during review is still enforced by the M2 endpoints.)

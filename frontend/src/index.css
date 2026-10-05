@@ -1903,4 +1903,13 @@ a.recipes__import:focus-visible {
   .import-review .recipe-form__actions a {
     min-height: 2.75rem;
   }
+
+  /* The M4-11 duplicate warning uses the shared Modal; keep its actions at a
+     comfortable touch-target height on phones. */
+  .modal__actions button,
+  .modal__actions a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+  }
 }

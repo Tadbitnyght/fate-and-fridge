@@ -433,9 +433,13 @@ test('import: warns on an exact source-URL duplicate and can import anyway', asy
     'href',
     '/recipes/6/edit',
   )
+  // While the warning is open the rest of the app is inert, so the review form
+  // and its Save button cannot be reached before the user chooses.
+  await expect(page.locator('#root')).toHaveAttribute('inert', '')
 
   await dialog.getByRole('button', { name: 'Import anyway' }).click()
   await expect(dialog).toHaveCount(0)
+  await expect(page.locator('#root')).not.toHaveAttribute('inert', '')
 
   await page.getByRole('button', { name: 'Save recipe' }).click()
   await expect(page).toHaveURL('/recipes/1/edit')
@@ -454,6 +458,27 @@ test('import: cancelling the duplicate warning discards the draft', async ({ pag
 
   await expect(page.getByRole('heading', { level: 2, name: 'Import from URL' })).toBeVisible()
   await expect(page.getByLabel('Recipe URL')).toHaveValue('')
+})
+
+test('import: the duplicate warning is usable at a mobile viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 720 })
+  await mockImportApi(page, { sourceUrlMatch: true })
+
+  await page.goto('/recipes/import')
+  await page.getByLabel('Recipe URL').fill('https://example.com/lasagna')
+  await page.getByRole('button', { name: 'Import' }).click()
+
+  const dialog = page.getByRole('dialog', { name: 'This page has already been imported' })
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Import anyway' })).toBeVisible()
+
+  const openExisting = dialog.getByRole('link', { name: 'Open existing recipe' })
+  await expect(openExisting).toBeVisible()
+  const box = await openExisting.boundingBox()
+  expect(box).not.toBeNull()
+  expect(box!.height).toBeGreaterThanOrEqual(44)
+  expect(box!.x + box!.width).toBeLessThanOrEqual(375)
 })
 
 test('import: an entry point on the recipe browser opens the import page', async ({ page }) => {
