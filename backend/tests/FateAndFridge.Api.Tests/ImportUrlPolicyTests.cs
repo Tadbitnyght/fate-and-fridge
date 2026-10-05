@@ -172,6 +172,7 @@ public sealed class ImportUrlPolicyTests
     [InlineData("fc00::1")]
     [InlineData("fd00:ec2::254")]
     [InlineData("fe80::1")]
+    [InlineData("fec0::1")]
     [InlineData("ff02::1")]
     public void IsBlockedAddress_blocks_ipv6_ssrf_ranges(string address) =>
         ImportUrlPolicy.IsBlockedAddress(IPAddress.Parse(address)).Should().BeTrue();

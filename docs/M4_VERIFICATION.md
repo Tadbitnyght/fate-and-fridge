@@ -41,23 +41,26 @@ npx playwright test
 | Parser robustness (malformed/truncated JSON-LD, arrays, `@graph`, multiple recipes, entities, huge values, deep nesting, no-recipe, microdata) | `StructuredRecipeParserTests`, `HtmlFallbackParserTests`, `HtmlDepthGuardTests` |
 | Normalization table (vulgar/mixed fractions, ranges raw, word quantities, unit aliases/symbols/case, prep notes, parenthetical sizes) | `ImportNormalizerTests`, `IngredientLineParserTests`, `RecipeImportServiceTests` |
 | Matching (canonical/alias exact, bounded suggestions, retired never suggested, ambiguity unknown) | `IngredientMatcherTests`, `RecipeImportServiceTests` |
-| Draft integrity (no writes before save, no audit rows, no image files during parse) | `RecipeImportServiceTests`, `ImportEndpointsIntegrationTests` |
+| Draft integrity (no writes before save, no audit rows, no image files during parse) | `RecipeImportServiceTests`, `ImportEndpointsIntegrationTests` (image-file absence follows from the parse path never downloading images; there is no dedicated file-count assertion) |
 | Duplicate checks (normalized URL equality variants; similar-name scoring: exact/containment/overlap/edit distance; rename recheck) | `RecipeSourceUrlNormalizationTests`, `RecipeNameSimilarityTests`, `RecipeImportServiceTests`, `ImportEndpointsIntegrationTests` |
 | Permission matrix on every import route (Admin, `recipes.edit`, `recipes.view` only, `reference_data.edit` only, unauthenticated, single-user) | `ImportEndpointsIntegrationTests`, `ImportImageEndpointIntegrationTests` |
 | Throttling (per-user page/image budgets, 429 shape, window reset, isolated budgets, single-user actor) | `ImportThrottleTests`, `ImportEndpointsIntegrationTests`, `ImportImageEndpointIntegrationTests` |
 | Untrusted content (markup stripped, control/format chars removed, length limits, no HTML/JS/svg/data rendering) | `ImportTextSanitizerTests`, `StructuredRecipeParserTests`, `ImportReview.tsx` (React-escaped text) |
 | Image download (signature/content mismatch, SVG/HTML/GIF/truncated rejection, size and dimension limits, replacement atomicity, no partial files) | `ImportImageEndpointIntegrationTests`, `RecipeImageFormatDetectorTests` |
-| UI (keyboard operation, focus management, labels, error states, mobile layout/touch targets, multi-candidate selection, unknown-resolution blocking, duplicate dialogs) | `ImportPage.test.tsx`, `Modal.test.tsx`, `e2e/import.spec.ts` (incl. mobile viewport) |
+| UI (labels, focus management/trap, error states, mobile layout/touch targets, multi-candidate selection, unknown-resolution blocking, duplicate dialogs) | `ImportPage.test.tsx`, `Modal.test.tsx` (shared focus trap/Escape/Tab), `e2e/import.spec.ts` (incl. mobile viewport and inert background). Import-form keyboard operation is not separately scripted beyond labelled controls; keyboard-only form flow is covered for recipes in `e2e/recipes.spec.ts`. |
 
 ## Evidence at completion
 
-- Backend tests: **1614 passed** (all passing; import + SSRF battery included).
+- Backend tests: **1615 passed** (all passing; import + SSRF battery included).
 - Frontend Vitest: **220 passed**.
 - Playwright (hermetic): **33 passed / 2 pre-existing stack skips**.
 - Backend gates: `dotnet format --verify-no-changes` clean, Release build clean,
   `ef migrations has-pending-model-changes` → none.
-- Independent review: M4-11, M4-12, and M4-13 reviewed separately; no blocker or
-  major findings; minors fixed on-branch.
+- Independent review: M4-11, M4-12, and M4-13 were each reviewed separately.
+  The M4-13 sweep found one blocker — a stale Playwright progress-summary
+  assertion (`e2e/app.spec.ts`) left by the manifest completion — which was
+  fixed and the full Playwright suite re-run green before tagging. All other
+  findings were minor or nits, fixed or documented in this report.
 
 ## Known limitations (deferred, per `docs/M4_PLAN.md §6`)
 

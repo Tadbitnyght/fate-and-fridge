@@ -102,6 +102,7 @@ public static class ImportUrlPolicy
         IPNetwork.Parse("5f00::/16"),
         IPNetwork.Parse("fc00::/7"),
         IPNetwork.Parse("fe80::/10"),
+        IPNetwork.Parse("fec0::/10"), // deprecated site-local
         IPNetwork.Parse("ff00::/8"),
     ];
 

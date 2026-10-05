@@ -167,7 +167,7 @@ export const MILESTONES: Milestone[] = [
     completedOn: '2026-10-05',
     tag: 'm4-complete',
     evidence: [
-      { label: 'Backend tests', value: '1614' },
+      { label: 'Backend tests', value: '1615' },
       { label: 'Vitest', value: '220' },
       { label: 'Playwright (hermetic)', value: '33 passed / 2 pre-existing stack skips' },
       { label: 'M4 verification', value: 'independent review + full §4 battery' },
