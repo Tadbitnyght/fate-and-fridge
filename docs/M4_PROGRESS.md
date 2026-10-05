@@ -1,6 +1,8 @@
 # M4 Execution Progress
 
-Last updated: 2026-10-05 (M4 in progress; M4-11 and M4-12 merged, M4-13 next)
+Last updated: 2026-10-05 — **M4 complete** (tag `m4-complete`).
+
+Final verification report: `docs/M4_VERIFICATION.md`.
 
 ## Completed and merged to `main`
 
@@ -19,31 +21,21 @@ Last updated: 2026-10-05 (M4 in progress; M4-11 and M4-12 merged, M4-13 next)
 | M4-10 (#61) | Unknown custom unit flow | b0ed4ee |
 | M4-11 (#62) | Duplicate source-URL warning + canonical folding + legacy fallback | a83c749, fd4a0c0 |
 | M4-12 (#63) | Similar-name scoring + rename recheck | e7512e9, 332a64a |
+| M4-13 (#64) | Import security tests + M4 verification sweep | _this milestone-completion commit_ |
 
-Notes: the Roslyn MCP workspace was refreshed and now resolves the M4 `Imports/*.cs`
-files (diagnostics clean); `dotnet build`/`dotnet test` remain the release gate.
-Frontend Vitest/Playwright workers time out on the 9p share `/mnt/y`, so frontend
-gates run from the local mirror `/tmp/opencode/fe-mirror` (rsync/tar copy of `frontend/`).
-`OPENCODE_MCP_SETUP.md` has a pre-existing working-tree deletion that must NOT be committed.
+Implementation notes:
+- The Roslyn MCP workspace resolves the M4 `Imports/*.cs` files (diagnostics clean);
+  `dotnet build` / `dotnet test` remain the release gate.
+- Frontend Vitest/Playwright workers time out on the 9p share `/mnt/y`, so frontend
+  gates run from the local mirror `/tmp/opencode/fe-mirror` (a copy of `frontend/`).
+- `OPENCODE_MCP_SETUP.md` had a pre-existing working-tree deletion that was never
+  committed.
 
-M4-11 evidence: backend full suite 1575 passed; import suites 40 + service 15; frontend
-Vitest 214, build/lint/typecheck clean, Playwright `e2e/import.spec.ts` 8 passed (incl.
-mobile). Independent review: no blocker/major; minors fixed on-branch.
+## Completion checklist (all done)
 
-M4-12 evidence: pure scorer unit matrix (13 cases) + 3 service tests; backend full suite
-1599 passed; frontend Vitest import 39, full build/lint/typecheck/prettier clean,
-Playwright `e2e/import.spec.ts` 9 passed. Independent review: no blocker/major; minors
-(score clamping, stale-response sequencing, docs, coalescing test) fixed on-branch.
-
-## Next: M4-13 (#64) — Import security tests + M4 verification
-
-Full §4 battery, docs, manifest M4 `complete` with evidence, `CHANGELOG.md`,
-tag `m4-complete`, close #51.
-
-## Final M4 completion checklist (for M4-13)
-
-- Set M4 `status: 'complete'` + `completedOn` + evidence in
-  `frontend/src/features/progress/milestones.ts`; update any affected
-  `milestones.test.ts` expectations.
-- Update `docs/API.md` (import contract already documented through §15) and `CHANGELOG.md`.
-- Push `main`, tag `m4-complete`, close tracking issue #51.
+- M4 `status: 'complete'` + `completedOn` + `tag` + evidence in
+  `frontend/src/features/progress/milestones.ts`; `milestones.test.ts` updated.
+- `docs/API.md §15` reflects the M4-11 canonical folding and M4-12 scoring.
+- `CHANGELOG.md` records Milestone 4.
+- `docs/M4_VERIFICATION.md` maps the §4 battery to its tests and records evidence.
+- `main` pushed; annotated tag `m4-complete` cut; tracking issue #51 closed.

@@ -72,6 +72,22 @@ versions follow [Semantic Versioning](https://semver.org/).
   paging, explicit no-history statistics states). Real reference-data usage
   checks replace the M2 seam: recipe references block ingredient/unit/protein/
   tag hard deletes and ingredient merges reassign recipe ingredients.
+- Milestone 4 — URL import (2026-10-05): import a recipe from a pasted URL,
+  stateless and draft-only. An SSRF-hardened fetcher (HTTP/HTTPS only, DNS
+  revalidated per hop, manual redirects re-validated, 5 s connect / 15 s read
+  timeouts, 2 MiB HTML / 5 MiB image ceilings, no credentials or cookies,
+  loopback/private/link-local/ULA/CGNAT/multicast/reserved/metadata ranges
+  blocked) feeds a schema.org Recipe JSON-LD parser with a static AngleSharp
+  HTML fallback (never executes third-party JavaScript). Deterministic
+  quantity/fraction/unit normalization and canonical/alias ingredient matching
+  produce an editable, multi-candidate review draft; unknown ingredients and
+  units are resolved in review (permission-gated inline creation), photos are
+  downloaded after review through the same SSRF and M3 image policy, and
+  duplicate detection warns on an exact normalized source URL and on similar
+  names (with a rename recheck). Import routes require `recipes.edit`
+  (`/import/check` requires `recipes.view`), are per-user throttled
+  (30 page fetches/hour, 60 image fetches/hour), and never write until the
+  reviewed draft is saved through `POST /recipes`.
 
 ### Changed
 
