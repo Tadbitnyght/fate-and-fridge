@@ -150,6 +150,11 @@ Issues:
 ---
 
 ## Milestone 5 — Calendar Core
+Approved decisions (2026-10-05): see `docs/M5_PLAN.md` for the authoritative
+entry model, per-type field rules, route contract, timezone/historical freeze,
+lock semantics, icon catalog, UI/a11y scope, issue order, and verification
+battery.
+
 Issues:
 1. Calendar entry model.
 2. Month calendar.
