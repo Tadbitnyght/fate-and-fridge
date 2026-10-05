@@ -53,6 +53,9 @@ import { useCheckImport, useRecipeImageFromUrl } from './useImport'
 
 const MAX_NAME_MATCHES = 5
 
+/** Delay before a rename recheck is sent, so a typing burst issues one request. */
+const NAME_CHECK_DEBOUNCE_MS = 400
+
 function checkboxRow(
   id: string,
   label: string,
@@ -222,11 +225,11 @@ export function ImportReview({
   const [unitCreateErrorByRowKey, setUnitCreateErrorByRowKey] = useState<Record<string, string>>({})
   const errorSummaryRef = useRef<HTMLDivElement>(null)
 
-  // Rename-recheck state (M4-12): the name the server last checked, the latest
-  // typed name (so a slow response for a superseded name is discarded), and the
-  // pending debounce timer.
+  // Rename-recheck state (M4-12): the name the server last checked, a sequence
+  // number that invalidates a response for a superseded name or candidate, and
+  // the pending debounce timer.
   const lastCheckedNameRef = useRef(selected.name)
-  const latestNameRef = useRef(selected.name)
+  const nameCheckSeqRef = useRef(0)
   const checkImportRef = useRef(checkImport.mutateAsync)
   const nameCheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
@@ -254,11 +257,12 @@ export function ImportReview({
   }
 
   // Keep the rename-recheck baseline in sync when the reviewer switches
-  // candidate and drop any timer left over from the previous candidate.
-  // Refs cannot be written during render, so this runs after commit.
+  // candidate: invalidate any in-flight check and drop a timer left over from
+  // the previous candidate. Refs cannot be written during render, so this runs
+  // after commit.
   useEffect(() => {
+    nameCheckSeqRef.current += 1
     lastCheckedNameRef.current = selected.name
-    latestNameRef.current = selected.name
     if (nameCheckTimerRef.current !== null) {
       clearTimeout(nameCheckTimerRef.current)
       nameCheckTimerRef.current = null
@@ -295,7 +299,9 @@ export function ImportReview({
    */
   function handleNameChange(value: string): void {
     updateState((current) => ({ ...current, name: value }))
-    latestNameRef.current = value
+
+    nameCheckSeqRef.current += 1
+    const sequence = nameCheckSeqRef.current
 
     if (nameCheckTimerRef.current !== null) {
       clearTimeout(nameCheckTimerRef.current)
@@ -319,7 +325,7 @@ export function ImportReview({
       void checkImportRef
         .current({ name: trimmed })
         .then((response) => {
-          if (latestNameRef.current.trim() !== trimmed) {
+          if (sequence !== nameCheckSeqRef.current) {
             return
           }
           lastCheckedNameRef.current = trimmed
@@ -327,12 +333,12 @@ export function ImportReview({
           setNameCheckStatus('idle')
         })
         .catch(() => {
-          if (latestNameRef.current.trim() !== trimmed) {
+          if (sequence !== nameCheckSeqRef.current) {
             return
           }
           setNameCheckStatus('error')
         })
-    }, 400)
+    }, NAME_CHECK_DEBOUNCE_MS)
   }
 
   function mapRowToIngredient(rowKey: string, id: number, name: string): void {

@@ -45,6 +45,13 @@ public static class RecipeNameSimilarity
     private const int TokenOverlapWeight = 10;
     private const int EditDistanceBaseScore = 300;
 
+    /// <summary>
+    /// Cap on counted shared tokens. With a base of 400 and a weight of 10 this
+    /// keeps the largest token-overlap score at 600, below containment's
+    /// minimum of 601, so the documented confidence order cannot invert.
+    /// </summary>
+    private const int TokenOverlapWeightCap = 20;
+
     /// <summary>A non-null match: the ranking score (higher is closer) and its kind.</summary>
     public sealed record Result(int Score, string Kind);
 
@@ -79,7 +86,11 @@ public static class RecipeNameSimilarity
         var shared = CountSharedTokens(queryTokens, candidateTokens);
         if (shared > 0)
         {
-            return new Result(TokenOverlapBaseScore + (shared * TokenOverlapWeight), TokenOverlapKind);
+            // Clamp the overlap component so a token-overlap match can never
+            // outrank containment or exact equality (the documented confidence
+            // bands); the cap keeps the maximum overlap score at 600.
+            var boundedShared = Math.Min(shared, TokenOverlapWeightCap);
+            return new Result(TokenOverlapBaseScore + (boundedShared * TokenOverlapWeight), TokenOverlapKind);
         }
 
         // Length pruning keeps the edit-distance pass cheap and ignores pairs
@@ -191,7 +202,10 @@ public static class RecipeNameSimilarity
 
     /// <summary>
     /// Levenshtein distance, abandoned as soon as every cell in a row exceeds
-    /// <paramref name="maxDistance"/> (returns <c>maxDistance + 1</c>).
+    /// <paramref name="maxDistance"/>. When abandoned it returns
+    /// <c>maxDistance + 1</c>; otherwise the exact distance, which may still
+    /// exceed <paramref name="maxDistance"/>. Callers only compare against
+    /// <paramref name="maxDistance"/>.
     /// </summary>
     private static int LevenshteinDistance(string a, string b, int maxDistance)
     {

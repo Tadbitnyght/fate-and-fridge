@@ -1089,6 +1089,32 @@ describe('import similar-name rename recheck', () => {
     expect(screen.queryByRole('link', { name: 'Lasagna Bolognese' })).not.toBeInTheDocument()
   })
 
+  it('coalesces rapid keystrokes into one recheck for the final name', async () => {
+    const mock = await openReview(similarNameCandidate, [
+      {
+        path: '/import/check',
+        method: 'POST',
+        body: { source_url_match: null, name_matches: [] },
+      },
+    ])
+
+    const input = screen.getByLabelText('Name')
+    fireEvent.change(input, { target: { value: 'Alpha' } })
+    fireEvent.change(input, { target: { value: 'Alphabet' } })
+    fireEvent.change(input, { target: { value: 'Alphabet Soup' } })
+
+    await waitFor(
+      () =>
+        expect(requestBodyFor(mock, '/import/check', 'POST')).toMatchObject({
+          name: 'Alphabet Soup',
+        }),
+      { timeout: 3000 },
+    )
+    // Let any superseded timer fire, then prove only the final name was checked.
+    await new Promise((resolve) => setTimeout(resolve, 600))
+    expect(mock.callsFor('/import/check')).toBe(1)
+  })
+
   it('shows a non-blocking message when the recheck fails', async () => {
     await openReview(similarNameCandidate, [
       {

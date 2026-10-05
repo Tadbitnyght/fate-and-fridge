@@ -423,9 +423,10 @@ public sealed class RecipeImportService(
     /// <remarks>
     /// The candidate read is a bounded, id-ordered window
     /// (<see cref="MaxNameScanCandidates"/>) that is scored in memory, so all
-    /// four signals are evaluated uniformly. A catalog beyond the window could
-    /// miss a warning for an older recipe; that is preferred over an unbounded
-    /// scan for a non-blocking warning.
+    /// four signals are evaluated uniformly. The window holds the lowest-id
+    /// recipes, so a catalog beyond it could miss a warning for a newer,
+    /// higher-id recipe; that is preferred over an unbounded scan for a
+    /// non-blocking warning.
     /// </remarks>
     private async Task<IReadOnlyList<ImportDraftReference>> FindNameMatchesAsync(
         string? name,

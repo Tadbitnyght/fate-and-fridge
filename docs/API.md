@@ -463,8 +463,9 @@ element):
   containment in either direction (so `lasagna` matches `Best Lasagna Ever` but
   not `lasagnabake`), one or more shared whole tokens (two characters or
   longer), or a Levenshtein distance of at most 2 on the folded forms. The
-  candidate set is a bounded, id-ordered scan (1000 rows), so a catalog beyond
-  that window could miss a warning for an older recipe. Editing the draft name
+  candidate set is a bounded, id-ordered scan of the lowest-id 1000 rows, so a
+  catalog beyond that window could miss a warning for a newer, higher-id
+  recipe. Editing the draft name
   re-runs this through `POST /import/check`; it is a warning only, never a save
   block.
 - `capabilities.can_create_reference_data` reflects whether the actor holds

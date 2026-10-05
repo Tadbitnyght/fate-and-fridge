@@ -382,6 +382,23 @@ public sealed class RecipeImportServiceTests(M1SetupFixture fixture) : IAsyncLif
     }
 
     [Fact]
+    public async Task Check_orders_name_matches_by_signal_class()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var overlap = await SeedRecipeAsync("Chicken Pasta", normalizedSourceUrl: null, cancellationToken);
+        var containment = await SeedRecipeAsync("Best Chicken Lasagna", normalizedSourceUrl: null, cancellationToken);
+        var exact = await SeedRecipeAsync("Chicken Lasagna", normalizedSourceUrl: null, cancellationToken);
+        await using var context = fixture.CreateContext();
+        var service = CreateService(context, new FakeImportFetcher());
+
+        var result = await service.CheckAsync(null, "Chicken Lasagna", cancellationToken);
+
+        // Exact (1000) outranks containment (602) outranks token overlap (410).
+        result.NameMatches.Select(match => match.Id)
+            .Should().Equal(exact.Id, containment.Id, overlap.Id);
+    }
+
+    [Fact]
     public async Task Check_returns_no_name_matches_for_an_unrelated_name()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
