@@ -445,9 +445,13 @@ element):
 - `source.url` / `source.site` reflect the **final** URL after redirects;
   `recipe.source_url` and `recipe.image_source_url` are resolved absolute
   URLs (same-site relative references resolve against the final URL).
-- `source_url_match` is the existing recipe whose normalized source URL equals
-  the page URL, or `null`. `name_matches` is a bounded (max 5) normalized-name
-  containment list.
+- `source_url_match` (M4-11) is the existing recipe whose normalized source URL
+  equals the page URL, or `null`. Equality uses the same canonical folding as
+  recipe save (`BuildNormalizedSourceUrl`): lowercase scheme/host, dropped
+  default port, dropped fragment, a trailing slash trimmed from a non-root path,
+  and query parameters sorted, so `?a=1&b=2` matches `?b=2&a=1` and
+  `/recipe/` matches `/recipe`. `name_matches` is a bounded (max 5)
+  normalized-name containment list.
 - `capabilities.can_create_reference_data` reflects whether the actor holds
   `reference_data.edit`, so the review UI can hide inline create affordances.
   (Canonical creation during review is still enforced by the M2 endpoints.)
@@ -473,9 +477,9 @@ element):
   The review screen maps an unknown line to an existing ingredient or creates
   one when permitted; no free-text ingredient id is ever sent to `POST /recipes`.
 
-**M4-06 limitations (filled in by later M4 issues):** `source.page_title` is
-`null`; advanced duplicate scoring (beyond exact normalized URL and bounded name
-containment) and rename rechecks arrive in M4-11/M4-12.
+**M4 limitations (filled in by later M4 issues):** `source.page_title` is
+`null`; similar-name scoring (beyond the current bounded name containment) and
+rename rechecks arrive in M4-12.
 
 ### `POST /api/v1/import/check`
 

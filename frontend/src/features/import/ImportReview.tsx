@@ -10,6 +10,7 @@ import type {
 } from '../../api/importRecipes'
 import { Field } from '../../components/Field'
 import { fieldProps } from '../../components/fieldProps'
+import { Modal } from '../../components/Modal'
 import {
   useCreateIngredient,
   useCreateUnit,
@@ -107,14 +108,14 @@ function CandidatePicker({
   )
 }
 
-function MatchWarning({ label, matches }: { label: string; matches: ImportReference[] }) {
+function MatchWarning({ matches }: { matches: ImportReference[] }) {
   if (matches.length === 0) {
     return null
   }
   const shown = matches.slice(0, MAX_NAME_MATCHES)
   return (
     <div className="import-review__warning" role="status">
-      <p>{label} An existing recipe has a similar name:</p>
+      <p>An existing recipe has a similar name:</p>
       <ul>
         {shown.map((match) => (
           <li key={match.id}>
@@ -123,6 +124,45 @@ function MatchWarning({ label, matches }: { label: string; matches: ImportRefere
         ))}
       </ul>
     </div>
+  )
+}
+
+/**
+ * Strong duplicate warning for an exact normalized source-URL match (M4-11,
+ * docs/M4_PLAN.md §1.9, docs/PRODUCT_SPEC.md §29). Rendered with the shared
+ * accessible `Modal`, so the rest of the page is inert until the reviewer picks
+ * one of the three approved actions: open the existing recipe, import anyway, or
+ * cancel. Escape/backdrop also cancel the import, which discards the draft.
+ */
+function DuplicateSourceDialog({
+  existing,
+  onImportAnyway,
+  onCancel,
+}: {
+  existing: ImportReference
+  onImportAnyway: () => void
+  onCancel: () => void
+}) {
+  return (
+    <Modal title="This page has already been imported" onClose={onCancel}>
+      <div className="modal__body">
+        <p>
+          A recipe with this exact source URL already exists: <strong>{existing.name}</strong>.
+        </p>
+        <p>Open the existing recipe, or import this page as a new recipe anyway.</p>
+      </div>
+      <div className="modal__actions">
+        <button type="button" onClick={onCancel}>
+          Cancel
+        </button>
+        <button type="button" onClick={onImportAnyway}>
+          Import anyway
+        </button>
+        <Link className="button--primary" to={`/recipes/${existing.id}/edit`}>
+          Open existing recipe
+        </Link>
+      </div>
+    </Modal>
   )
 }
 
@@ -169,6 +209,7 @@ export function ImportReview({
   const [errors, setErrors] = useState<FieldErrors>({})
   const [formError, setFormError] = useState<string | null>(null)
   const [useImage, setUseImage] = useState(selected.image_source_url !== null)
+  const [acknowledgedDuplicate, setAcknowledgedDuplicate] = useState(false)
   const [unknownLines, setUnknownLines] = useState<Record<string, UnknownIngredientLine>>(
     seed.unknown,
   )
@@ -193,6 +234,7 @@ export function ImportReview({
     setErrors({})
     setFormError(null)
     setUseImage(selected.image_source_url !== null)
+    setAcknowledgedDuplicate(false)
   }
 
   useEffect(() => {
@@ -539,14 +581,15 @@ export function ImportReview({
         />
       )}
 
-      <MatchWarning
-        label={
-          result.source_url_match !== null
-            ? 'This page has already been imported once.'
-            : 'Check for duplicates.'
-        }
-        matches={selected.name_matches}
-      />
+      {result.source_url_match !== null && !acknowledgedDuplicate && (
+        <DuplicateSourceDialog
+          existing={result.source_url_match}
+          onImportAnyway={() => setAcknowledgedDuplicate(true)}
+          onCancel={onCancel}
+        />
+      )}
+
+      <MatchWarning matches={selected.name_matches} />
 
       {selected.warnings.includes('ingredient_unknown') && (
         <p className="form__notice" role="status">

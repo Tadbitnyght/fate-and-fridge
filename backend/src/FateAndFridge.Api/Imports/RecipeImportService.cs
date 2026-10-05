@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 
 using FateAndFridge.Api.Data;
@@ -61,6 +62,13 @@ public sealed class RecipeImportService(
 {
     /// <summary>Maximum similar-name candidates returned per recipe or check.</summary>
     public const int MaxNameMatches = 5;
+
+    /// <summary>
+    /// Upper bound on same-origin rows re-folded in memory by the legacy
+    /// source-URL fallback (M4-11). Bounds the read for installs that saved
+    /// recipes before the canonical trailing-slash/query-order folding.
+    /// </summary>
+    private const int MaxLegacySourceUrlScan = 200;
 
     /// <summary>Fetches and parses a page into a draft, or returns a structured failure.</summary>
     public async Task<ImportRecipeUrlResult> ImportAsync(
@@ -312,20 +320,89 @@ public sealed class RecipeImportService(
             .ToArray();
     }
 
-    /// <summary>Exact normalized-URL match against <c>recipes.normalized_source_url</c> (M4-11 extends this).</summary>
+    /// <summary>
+    /// Exact normalized-URL match against <c>recipes.normalized_source_url</c>
+    /// (docs/M4_PLAN.md §1.9). The incoming URL is folded with the same
+    /// <see cref="RecipeService.BuildNormalizedSourceUrl"/> used when a recipe is
+    /// saved, so import detection and recipe save agree: trailing slash, query
+    /// parameter order, fragment, case, and default port do not affect equality.
+    /// This is a strictly read-only lookup.
+    /// </summary>
+    /// <remarks>
+    /// Recipes saved before M4-11 stored the earlier minimal form (no trailing
+    /// slash / query-order folding). Equality on the new canonical key misses
+    /// those rows, so a bounded fallback re-folds candidate rows that share the
+    /// incoming origin and compares in memory. It never writes and is ordered by
+    /// id so the lowest-id match stays deterministic.
+    /// </remarks>
     private async Task<ImportDraftReference?> FindSourceUrlMatchAsync(
         Uri uri,
         string rawSourceUrl,
         CancellationToken cancellationToken)
     {
         var normalized = RecipeService.BuildNormalizedSourceUrl(uri, rawSourceUrl);
-        return await dbContext.Recipes
+
+        var exact = await dbContext.Recipes
             .AsNoTracking()
             .Where(recipe => recipe.NormalizedSourceUrl == normalized)
             .OrderBy(recipe => recipe.Id)
             .Select(recipe => new ImportDraftReference(recipe.Id, recipe.Name))
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
+        if (exact is not null)
+        {
+            return exact;
+        }
+
+        // Legacy rows may predate the M4-11 canonicalization. Re-fold a bounded
+        // set of same-origin candidates in memory and compare against the key.
+        var originPrefixes = BuildOriginPrefixes(uri);
+        var candidates = await dbContext.Recipes
+            .AsNoTracking()
+            .Where(recipe => recipe.NormalizedSourceUrl != null
+                && (recipe.NormalizedSourceUrl.StartsWith(originPrefixes[0])
+                    || recipe.NormalizedSourceUrl.StartsWith(originPrefixes[1])))
+            .OrderBy(recipe => recipe.Id)
+            .Take(MaxLegacySourceUrlScan)
+            .Select(recipe => new { recipe.Id, recipe.Name, recipe.NormalizedSourceUrl })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        foreach (var candidate in candidates)
+        {
+            var stored = candidate.NormalizedSourceUrl;
+            if (stored is null
+                || !Uri.TryCreate(stored, UriKind.Absolute, out var storedUri))
+            {
+                continue;
+            }
+
+            if (RecipeService.BuildNormalizedSourceUrl(storedUri, stored) == normalized)
+            {
+                return new ImportDraftReference(candidate.Id, candidate.Name);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The <c>scheme://host</c> prefixes (http and https) used to bound the
+    /// legacy-row fallback. The host is lowercased and a default port omitted,
+    /// matching <see cref="RecipeService.BuildNormalizedSourceUrl"/>.
+    /// </summary>
+    private static string[] BuildOriginPrefixes(Uri uri)
+    {
+        var host = uri.Host.ToLowerInvariant();
+        var port = uri.IsDefaultPort
+            ? string.Empty
+            : string.Concat(":", uri.Port.ToString(CultureInfo.InvariantCulture));
+        var authority = string.Concat(host, port);
+        return
+        [
+            string.Concat("http://", authority),
+            string.Concat("https://", authority),
+        ];
     }
 
     /// <summary>Bounded normalized-name containment query (M4-12 replaces this with scoring).</summary>

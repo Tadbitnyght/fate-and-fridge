@@ -736,13 +736,20 @@ public sealed class RecipeService(
     }
 
     /// <summary>
-    /// Minimal source-URL normalization (docs/M3_PLAN.md §1.19): lowercase the
-    /// scheme and host, drop a default port, and drop the fragment. Nothing else
-    /// is rewritten, and M3 never fetches the URL. This is the canonical form
-    /// stored in <see cref="Recipe.NormalizedSourceUrl"/>; M4-04 import duplicate
-    /// detection compares against the same output, so callers must not fork the
-    /// normalization.
+    /// Canonical source-URL normalization shared by recipe save and M4 import
+    /// duplicate detection (docs/M3_PLAN.md §1.19, docs/M4_PLAN.md §1.9):
+    /// lowercase the scheme and host, drop a default port, drop the fragment,
+    /// trim a trailing slash from a non-root path, and sort query parameters.
+    /// Nothing else is rewritten and the URL is never fetched. This is the form
+    /// stored in <see cref="Recipe.NormalizedSourceUrl"/>; callers must not fork
+    /// the normalization so import detection and recipe save agree.
     /// </summary>
+    /// <remarks>
+    /// Canonicalization here is intentionally narrow and best-effort: it folds
+    /// the variants the M4 duplicate warning must tolerate (trailing slash,
+    /// query-parameter order, fragment, case, default port). It does not resolve
+    /// redirects, percent-decode, or otherwise reinterpret the path.
+    /// </remarks>
     public static string BuildNormalizedSourceUrl(Uri uri, string raw)
     {
         var normalized = raw;
@@ -793,7 +800,46 @@ public sealed class RecipeService(
                 normalized[authorityEnd..]);
         }
 
-        return normalized;
+        // Split path and query after authority normalization so the separate
+        // path/query canonicalization below cannot disturb the host handling.
+        var queryStart = normalized.IndexOf('?');
+        var path = queryStart < 0 ? normalized : normalized[..queryStart];
+        var query = queryStart < 0 ? null : normalized[queryStart..];
+
+        // A trailing slash is not meaningful for equality here: "/recipe/" and
+        // "/recipe" are the same page, and "https://example.com/" collapses to
+        // "https://example.com" so a bare origin and its root-path form agree.
+        var trimmedPath = path.TrimEnd('/');
+
+        if (query is null)
+        {
+            return trimmedPath;
+        }
+
+        // Query-parameter order is not significant for duplicate detection, so
+        // sort the pairs deterministically (stable by encoded pair). Blank
+        // parameters are preserved so two distinct query strings never collapse
+        // onto one another.
+        var sortedQuery = SortQueryParameters(query);
+        return string.Concat(trimmedPath, sortedQuery);
+    }
+
+    /// <summary>
+    /// Sorts the query portion (including the leading <c>?</c>) by ordinal pair
+    /// order so parameter order does not affect equality. The original encoding
+    /// is preserved; parameters are never decoded or rewritten.
+    /// </summary>
+    private static string SortQueryParameters(string query)
+    {
+        var body = query[1..];
+        if (body.Length == 0)
+        {
+            return "?";
+        }
+
+        var parts = body.Split('&');
+        Array.Sort(parts, StringComparer.Ordinal);
+        return string.Concat("?", string.Join('&', parts));
     }
 
     private static int? ReadMinutes(

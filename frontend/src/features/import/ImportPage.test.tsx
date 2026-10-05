@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { App } from '../../App'
@@ -83,6 +83,34 @@ const multiCandidate: ImportParseResponse = {
   recipes: [
     { ...singleCandidate.recipes[0], index: 0, name: 'Lasagna' },
     { ...singleCandidate.recipes[0], index: 1, name: 'Lasagna Bolognese' },
+  ],
+}
+
+/**
+ * A draft whose source URL already exists (M4-11 exact normalized-URL match).
+ * Its ingredients are fully resolved so the save path is reachable once the
+ * warning is acknowledged.
+ */
+const duplicateCandidate: ImportParseResponse = {
+  ...singleCandidate,
+  source_url_match: { id: 6, name: 'Lasagna Bolognese' },
+  recipes: [
+    {
+      ...singleCandidate.recipes[0],
+      ingredients: [singleCandidate.recipes[0].ingredients[0]],
+      warnings: [],
+    },
+  ],
+}
+
+/** A draft whose name resembles an existing recipe (M4-12 similar-name warning). */
+const similarNameCandidate: ImportParseResponse = {
+  ...singleCandidate,
+  recipes: [
+    {
+      ...singleCandidate.recipes[0],
+      name_matches: [{ id: 6, name: 'Lasagna Bolognese' }],
+    },
   ],
 }
 
@@ -920,5 +948,92 @@ describe('import unknown unit flow', () => {
       ingredients: Array<Record<string, unknown>>
     }
     expect(body.ingredients[0]).toMatchObject({ ingredient_id: 12, unit_id: null })
+  })
+})
+
+describe('import duplicate source URL flow', () => {
+  async function openReview(candidate: ImportParseResponse, routes: MockRoute[] = []) {
+    const mock = baseMocks([
+      { path: '/import/recipe-url', method: 'POST', body: candidate },
+      ...routes,
+    ])
+    renderWithProviders(<App />, { route: '/recipes/import' })
+    fireEvent.change(await screen.findByLabelText('Recipe URL'), {
+      target: { value: 'https://example.com/lasagna' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Import' }))
+    await screen.findByRole('heading', { level: 2, name: 'Review imported recipe' })
+    return mock
+  }
+
+  it('warns and offers open/import-anyway/cancel for an exact source URL match', async () => {
+    await openReview(duplicateCandidate)
+
+    const dialog = await screen.findByRole('dialog', {
+      name: 'This page has already been imported',
+    })
+    expect(within(dialog).getByText('Lasagna Bolognese')).toBeVisible()
+    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toBeVisible()
+    expect(within(dialog).getByRole('button', { name: 'Import anyway' })).toBeVisible()
+    expect(within(dialog).getByRole('link', { name: 'Open existing recipe' })).toHaveAttribute(
+      'href',
+      '/recipes/6/edit',
+    )
+  })
+
+  it('blocks saving until the duplicate is acknowledged, then allows it', async () => {
+    const mock = await openReview(duplicateCandidate, [
+      { path: '/recipes', method: 'POST', status: 201, body: createdRecipe },
+      { path: '/recipes/1', method: 'GET', body: createdRecipe },
+    ])
+
+    const dialog = await screen.findByRole('dialog', {
+      name: 'This page has already been imported',
+    })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Import anyway' }))
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'This page has already been imported' }),
+      ).not.toBeInTheDocument(),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save recipe' }))
+    await waitFor(() => expect(requestBodyFor(mock, '/recipes', 'POST')).toBeDefined(), {
+      timeout: 4000,
+    })
+    expect((requestBodyFor(mock, '/recipes', 'POST') as Record<string, unknown>).name).toBe(
+      'Lasagna',
+    )
+  })
+
+  it('cancels and discards the draft when the duplicate dialog is cancelled', async () => {
+    const mock = await openReview(duplicateCandidate)
+
+    const dialog = await screen.findByRole('dialog', {
+      name: 'This page has already been imported',
+    })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Import from URL' }),
+    ).toBeInTheDocument()
+    expect(mock.callsFor('/recipes')).toBe(0)
+  })
+
+  it('does not warn when the source URL is new', async () => {
+    await openReview(singleCandidate)
+    expect(
+      screen.queryByRole('dialog', { name: 'This page has already been imported' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('still shows the similar-name warning independently of the URL match', async () => {
+    await openReview(similarNameCandidate)
+    expect(screen.getByText('An existing recipe has a similar name:')).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Lasagna Bolognese' })).toHaveAttribute(
+      'href',
+      '/recipes/6/edit',
+    )
   })
 })

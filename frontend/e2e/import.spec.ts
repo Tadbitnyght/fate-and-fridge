@@ -33,6 +33,8 @@ interface ImportDraftOptions {
   unknownUnit?: boolean
   /** Report that the actor may create reference data inline. */
   canCreateReferenceData?: boolean
+  /** Report that the page's exact normalized source URL already exists (M4-11). */
+  sourceUrlMatch?: boolean
 }
 
 /**
@@ -213,7 +215,8 @@ async function mockImportApi(
             fetched_at: now,
             parse_method: 'json_ld',
           },
-          source_url_match: null,
+          source_url_match:
+            options.sourceUrlMatch === true ? { id: 6, name: 'Lasagna Bolognese' } : null,
           capabilities: {
             can_create_reference_data: options.canCreateReferenceData === true,
           },
@@ -415,6 +418,42 @@ test('import: resolve an unknown unit before saving', async ({ page }) => {
   expect(createRequest?.body).toMatchObject({
     ingredients: [{ ingredient_id: 12, unit_id: 20 }],
   })
+})
+
+test('import: warns on an exact source-URL duplicate and can import anyway', async ({ page }) => {
+  const { requests } = await mockImportApi(page, { sourceUrlMatch: true })
+
+  await page.goto('/recipes/import')
+  await page.getByLabel('Recipe URL').fill('https://example.com/lasagna')
+  await page.getByRole('button', { name: 'Import' }).click()
+
+  const dialog = page.getByRole('dialog', { name: 'This page has already been imported' })
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByRole('link', { name: 'Open existing recipe' })).toHaveAttribute(
+    'href',
+    '/recipes/6/edit',
+  )
+
+  await dialog.getByRole('button', { name: 'Import anyway' }).click()
+  await expect(dialog).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Save recipe' }).click()
+  await expect(page).toHaveURL('/recipes/1/edit')
+  expect(requests.some((entry) => entry.method === 'POST' && entry.path === '/recipes')).toBe(true)
+})
+
+test('import: cancelling the duplicate warning discards the draft', async ({ page }) => {
+  await mockImportApi(page, { sourceUrlMatch: true })
+
+  await page.goto('/recipes/import')
+  await page.getByLabel('Recipe URL').fill('https://example.com/lasagna')
+  await page.getByRole('button', { name: 'Import' }).click()
+
+  const dialog = page.getByRole('dialog', { name: 'This page has already been imported' })
+  await dialog.getByRole('button', { name: 'Cancel' }).click()
+
+  await expect(page.getByRole('heading', { level: 2, name: 'Import from URL' })).toBeVisible()
+  await expect(page.getByLabel('Recipe URL')).toHaveValue('')
 })
 
 test('import: an entry point on the recipe browser opens the import page', async ({ page }) => {

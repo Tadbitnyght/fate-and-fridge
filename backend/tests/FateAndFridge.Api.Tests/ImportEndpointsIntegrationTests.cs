@@ -580,6 +580,135 @@ public sealed class ImportEndpointsIntegrationTests(M1SetupFixture fixture) : IA
         root.GetProperty("name_matches")[0].GetProperty("id").GetInt64().Should().Be(seeded.Id);
     }
 
+    private const string StoredSourceUrl = "https://example.com/recipes/lasagna?b=2&a=1";
+
+    /// <summary>
+    /// M4-11 exact normalized-source-URL matrix (docs/M4_PLAN.md §1.9/§4). The
+    /// stored recipe is folded with <c>RecipeService.BuildNormalizedSourceUrl</c>
+    /// and the incoming URL varies by trailing slash, query order, fragment,
+    /// default port, case, and a genuine non-match.
+    /// </summary>
+    [Theory]
+    [InlineData("https://example.com/recipes/lasagna?a=1&b=2", true)]
+    [InlineData("https://example.com/recipes/lasagna/?a=1&b=2", true)]
+    [InlineData("https://example.com/recipes/lasagna?b=2&a=1", true)]
+    [InlineData("https://example.com/recipes/lasagna?b=2&a=1#directions", true)]
+    [InlineData("https://example.com:443/recipes/lasagna?b=2&a=1", true)]
+    [InlineData("HTTPS://EXAMPLE.COM/recipes/lasagna?b=2&a=1", true)]
+    [InlineData("https://example.com/recipes/other?b=2&a=1", false)]
+    public async Task Import_check_matches_the_normalized_source_url_variants(string incomingUrl, bool matches)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        await SeedUserAsync("root", AdminPassword, cancellationToken, UserRole.Admin);
+        await MarkSetupCompletedAsync(cancellationToken);
+        var seeded = await SeedRecipeAsync(
+            "Saved Lasagna",
+            RecipeService.BuildNormalizedSourceUrl(new Uri(StoredSourceUrl), StoredSourceUrl),
+            cancellationToken);
+        using var factory = CreateFactory(new FakeImportFetcher());
+        using var session = await SignInAsync(factory, "root", AdminPassword, cancellationToken);
+
+        var response = await SendJsonAsync(
+            session.Client,
+            HttpMethod.Post,
+            CheckPath,
+            JsonSerializer.Serialize(new { source_url = incomingUrl }),
+            session.CsrfToken,
+            cancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var match = (await ReadJsonAsync(response, cancellationToken)).GetProperty("source_url_match");
+        if (matches)
+        {
+            match.ValueKind.Should().Be(JsonValueKind.Object);
+            match.GetProperty("id").GetInt64().Should().Be(seeded.Id);
+        }
+        else
+        {
+            match.ValueKind.Should().Be(JsonValueKind.Null);
+        }
+    }
+
+    /// <summary>
+    /// The draft route populates <c>source_url_match</c> from the final
+    /// post-redirect URL and must tolerate the same canonicalization variants.
+    /// </summary>
+    [Theory]
+    [InlineData("https://example.com/recipes/lasagna/?b=2&a=1", true)]
+    [InlineData("https://example.com/recipes/lasagna?b=2&a=1#step", true)]
+    [InlineData("https://example.com:443/recipes/lasagna?b=2&a=1", true)]
+    [InlineData("https://example.com/recipes/other", false)]
+    public async Task Import_recipe_url_populates_the_normalized_source_url_match(string finalUrl, bool matches)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        await SeedUserAsync("root", AdminPassword, cancellationToken, UserRole.Admin);
+        await MarkSetupCompletedAsync(cancellationToken);
+        var seeded = await SeedRecipeAsync(
+            "Saved Lasagna",
+            RecipeService.BuildNormalizedSourceUrl(new Uri(StoredSourceUrl), StoredSourceUrl),
+            cancellationToken);
+        var fetcher = new FakeImportFetcher().OnPageHtml(JsonLdHtml, new Uri(finalUrl));
+        using var factory = CreateFactory(fetcher);
+        using var session = await SignInAsync(factory, "root", AdminPassword, cancellationToken);
+
+        var response = await SendJsonAsync(
+            session.Client,
+            HttpMethod.Post,
+            ImportPath,
+            JsonSerializer.Serialize(new { url = finalUrl }),
+            session.CsrfToken,
+            cancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var match = (await ReadJsonAsync(response, cancellationToken)).GetProperty("source_url_match");
+        if (matches)
+        {
+            match.ValueKind.Should().Be(JsonValueKind.Object);
+            match.GetProperty("id").GetInt64().Should().Be(seeded.Id);
+        }
+        else
+        {
+            match.ValueKind.Should().Be(JsonValueKind.Null);
+        }
+    }
+
+    /// <summary>
+    /// The duplicate lookup must not write: a successful match leaves the recipe,
+    /// audit, and image row counts unchanged (docs/M4_PLAN.md §1.2).
+    /// </summary>
+    [Fact]
+    public async Task Import_check_source_url_match_creates_no_rows()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        await SeedUserAsync("root", AdminPassword, cancellationToken, UserRole.Admin);
+        await MarkSetupCompletedAsync(cancellationToken);
+        await SeedRecipeAsync(
+            "Saved Lasagna",
+            RecipeService.BuildNormalizedSourceUrl(new Uri(StoredSourceUrl), StoredSourceUrl),
+            cancellationToken);
+        using var factory = CreateFactory(new FakeImportFetcher());
+        using var session = await SignInAsync(factory, "root", AdminPassword, cancellationToken);
+
+        await using var context = fixture.CreateContext();
+        var before = await EntityCountSnapshot.CaptureAsync(context, cancellationToken);
+
+        var response = await SendJsonAsync(
+            session.Client,
+            HttpMethod.Post,
+            CheckPath,
+            """{"source_url":"https://example.com/recipes/lasagna/","name":"Lasagna"}""",
+            session.CsrfToken,
+            cancellationToken);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var after = await EntityCountSnapshot.CaptureAsync(context, cancellationToken);
+        EntityCountSnapshot.ShouldBeUnchanged(before, after);
+    }
+
+
     [Fact]
     public async Task Import_check_is_available_to_view_only_users()
     {
