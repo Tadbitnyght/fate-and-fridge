@@ -1,6 +1,6 @@
 # M4 Execution Progress
 
-Last updated: 2026-10-05 (M4 in progress; M4-11 merged, M4-12 next)
+Last updated: 2026-10-05 (M4 in progress; M4-11 and M4-12 merged, M4-13 next)
 
 ## Completed and merged to `main`
 
@@ -18,6 +18,7 @@ Last updated: 2026-10-05 (M4 in progress; M4-11 merged, M4-12 next)
 | M4-09 (#60) | Unknown ingredient flow | 02271b9 |
 | M4-10 (#61) | Unknown custom unit flow | b0ed4ee |
 | M4-11 (#62) | Duplicate source-URL warning + canonical folding + legacy fallback | a83c749, fd4a0c0 |
+| M4-12 (#63) | Similar-name scoring + rename recheck | e7512e9, 332a64a |
 
 Notes: the Roslyn MCP workspace was refreshed and now resolves the M4 `Imports/*.cs`
 files (diagnostics clean); `dotnet build`/`dotnet test` remain the release gate.
@@ -29,18 +30,12 @@ M4-11 evidence: backend full suite 1575 passed; import suites 40 + service 15; f
 Vitest 214, build/lint/typecheck clean, Playwright `e2e/import.spec.ts` 8 passed (incl.
 mobile). Independent review: no blocker/major; minors fixed on-branch.
 
-## Next: M4-12 (#63) — Similar-name warning
+M4-12 evidence: pure scorer unit matrix (13 cases) + 3 service tests; backend full suite
+1599 passed; frontend Vitest import 39, full build/lint/typecheck/prettier clean,
+Playwright `e2e/import.spec.ts` 9 passed. Independent review: no blocker/major; minors
+(score clamping, stale-response sequencing, docs, coalescing test) fixed on-branch.
 
-- Replace the bounded `NormalizedName.Contains` query in
-  `RecipeImportService.FindNameMatchesAsync` with deterministic scoring
-  (`docs/M4_PLAN.md §1.9`): folded equality, word-boundary containment, shared-token
-  overlap, and a small edit distance on folded forms; bounded output (max 5).
-- Add a pure, ICU-independent scorer (new `Imports/RecipeNameSimilarity.cs`) + unit tests.
-- Wire a rename recheck in the review screen via `POST /import/check` (`useCheckImport`
-  already exists) so editing the name refreshes the similar-name warning.
-- Update `docs/API.md §15` and add tests for the scoring matrix and rename recheck.
-
-## Then: M4-13 (#64) — Import security tests + M4 verification
+## Next: M4-13 (#64) — Import security tests + M4 verification
 
 Full §4 battery, docs, manifest M4 `complete` with evidence, `CHANGELOG.md`,
 tag `m4-complete`, close #51.
