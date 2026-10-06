@@ -64,3 +64,22 @@ npx playwright test
 - Delete history rows store a null `calendar_entry_id` (they survive the hard
   delete); M6 undo correlates by `meal_date`/`before_json`.
 - Serving scaling by diner count is V2; V1 stores diner count as metadata only.
+
+## Live deployment verification (Milestone completion gate)
+
+Recorded retroactively after the M4/M5 milestone-completion gate was added
+(`AGENTS.md`). Rebuilt and redeployed via `docker-admin` using
+`scripts/deploy.sh up` (`docker compose up -d --build` on the NAS).
+
+- Image `fate-and-fridge:0.1.0`: before `sha256:6d155f76…` (created 2026-10-03,
+  pre-M4/M5) → after `sha256:20ba2a53…` (created 2026-10-06T18:00:10-05:00).
+- Migrations applied on startup: `Applying migration '20261006022730_M5CalendarCore'`
+  then `Database migrations applied`.
+- Health: `{"status":"ok","app":"Fate & Fridge","version":"0.1.0","environment":"production"}`.
+- Live route proof: `GET /api/v1/calendar/2026-11-15` returns `200` with a real
+  day document (route present, not 404); the served bundle contains
+  `Calendar Core` and `m5-complete`.
+- Live `/progress`: **"6 of 15 milestones complete (40%)"**, with M5 — Calendar
+  Core shown Complete.
+- The household is in **single-user** mode (`authenticated: true`, system actor
+  with all permissions), so requests without a session are authorized by design.
