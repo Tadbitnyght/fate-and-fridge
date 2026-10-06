@@ -49,10 +49,10 @@ to the Lead before implementing.
    `historical_boundary_date` is advanced to the last date that was historical
    under the old timezone, so a date that was already historical can never become
    editable again. Effective rule:
-   `is_historical(d) = d < today || (d <= historical_boundary_date && d != today)`
-   — `today` is always editable, per `docs/PRODUCT_SPEC.md §6`. The boundary is
-   applied dynamically on every read/write; no data migration is needed beyond
-   the column.
+   `is_historical(d) = d < today || d <= historical_boundary_date`. Freezing wins
+   over the "today is editable" rule for the rare date that a westward timezone
+   change turns into the current local day; the boundary is applied dynamically
+   on every read/write and needs no data migration beyond the column.
 8. **Historical immutability is server-enforced.** Normal calendar routes reject
    every write to a past date for every actor, including Admin
    (`CALENDAR_DATE_IN_PAST`). Admin may only change history through the M12

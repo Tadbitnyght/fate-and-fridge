@@ -26,7 +26,7 @@ public sealed record HouseholdSettingsResponse(
 /// Reads and updates the singleton <c>household_settings</c> row
 /// (docs/DATABASE.md §2). Every write refreshes <c>updated_at</c> in UTC.
 /// </summary>
-public sealed class HouseholdSettingsService(AppDbContext dbContext)
+public sealed class HouseholdSettingsService(AppDbContext dbContext, TimeProvider timeProvider)
 {
     /// <summary>Returns the singleton row, or null before setup created it.</summary>
     public async Task<HouseholdSettings?> GetAsync(CancellationToken cancellationToken = default) =>
@@ -47,8 +47,21 @@ public sealed class HouseholdSettingsService(AppDbContext dbContext)
             settings.HouseholdName = householdName;
         }
 
-        if (patch.Timezone is { } timezone)
+        if (patch.Timezone is { } timezone
+            && !string.Equals(timezone, settings.Timezone, StringComparison.Ordinal))
         {
+            // Freeze the historical boundary (docs/M5_PLAN.md §1.7): the last
+            // date that was historical under the old timezone must stay
+            // historical so a timezone change can never make history editable.
+            var previousToday = HouseholdClock.GetLocalDate(
+                HouseholdClock.ResolveTimeZone(settings.Timezone),
+                timeProvider.GetUtcNow());
+            var frozenThrough = previousToday.AddDays(-1);
+            if (settings.HistoricalBoundaryDate is not { } boundary || frozenThrough > boundary)
+            {
+                settings.HistoricalBoundaryDate = frozenThrough;
+            }
+
             settings.Timezone = timezone;
         }
 
