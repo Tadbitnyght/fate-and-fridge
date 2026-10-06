@@ -173,6 +173,10 @@ Issues:
 ---
 
 ## Milestone 6 — Randomization Engine
+Approved decisions (2026-10-06): see `docs/M6_PLAN.md` for the authoritative
+scoring settings, eligibility/window/protein/spacing rules, reroll/undo
+contract, operation metadata, UI scope, issue order, and verification battery.
+
 Issues:
 1. Randomizer service contract.
 2. Candidate eligibility.
