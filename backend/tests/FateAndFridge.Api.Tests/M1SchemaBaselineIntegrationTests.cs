@@ -84,6 +84,7 @@ public sealed class M1SchemaBaselineIntegrationTests(M1SchemaBaselineFixture fix
                 ["timezone"] = ("text", false),
                 ["default_diner_count"] = ("integer", false),
                 ["week_starts_on"] = ("integer", false),
+                ["historical_boundary_date"] = ("date", true),
                 ["startup_page"] = ("text", false),
                 ["auth_mode"] = ("text", false),
                 ["created_at"] = ("timestamp with time zone", false),

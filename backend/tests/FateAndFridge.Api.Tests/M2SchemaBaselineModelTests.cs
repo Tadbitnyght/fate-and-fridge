@@ -46,6 +46,8 @@ public sealed class M2SchemaBaselineModelTests
                 typeof(RecipeInstructionStep),
                 typeof(RecipeProtein),
                 typeof(RecipeTag),
+                typeof(CalendarEntry),
+                typeof(CalendarEntryHistory),
             ]);
     }
 

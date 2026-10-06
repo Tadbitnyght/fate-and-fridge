@@ -44,8 +44,8 @@ npx playwright test
 
 ## Evidence at completion
 
-- Backend tests: **PENDING**.
-- Frontend Vitest: **237 passed**.
+- Backend tests: **1642 passed**.
+- Frontend Vitest: **238 passed**.
 - Playwright (hermetic): **37 passed / 2 pre-existing stack skips**.
 - Backend gates: `dotnet format --verify-no-changes` clean, Release build clean,
   `ef migrations has-pending-model-changes` → none.
