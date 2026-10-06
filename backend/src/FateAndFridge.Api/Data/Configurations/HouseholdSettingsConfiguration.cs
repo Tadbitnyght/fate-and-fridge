@@ -20,6 +20,7 @@ public sealed class HouseholdSettingsConfiguration : IEntityTypeConfiguration<Ho
 
         builder.Property(settings => settings.HouseholdName).IsRequired();
         builder.Property(settings => settings.Timezone).IsRequired();
+        builder.Property(settings => settings.HistoricalBoundaryDate);
         builder.Property(settings => settings.StartupPage)
             .HasConversion(EnumTextConverters.StartupPageConverter)
             .IsRequired();

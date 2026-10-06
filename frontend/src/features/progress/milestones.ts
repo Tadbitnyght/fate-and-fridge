@@ -181,7 +181,7 @@ export const MILESTONES: Milestone[] = [
     id: 'M5',
     number: 5,
     name: 'Calendar Core',
-    status: 'planned',
+    status: 'in_progress',
     summary:
       'Month and agenda planning with special events, locked dates, and server-enforced historical immutability.',
     features: [
@@ -192,9 +192,9 @@ export const MILESTONES: Milestone[] = [
       'Historical date backend enforcement and visual styling',
       'Arbitrary future navigation and print skeleton',
     ],
-    issues: [],
+    issues: [65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79],
     issuesNote:
-      'Planned in docs/MILESTONES.md; GitHub issues are created when the milestone starts.',
+      'Tracking #65; M5-01…M5-14: #66, #67, #68, #69, #70, #71, #72, #73, #74, #75, #76, #77, #78, #79.',
   },
   {
     id: 'M6',

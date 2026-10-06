@@ -27,6 +27,7 @@ Suggested fields:
 - `timezone`
 - `default_diner_count`
 - `week_starts_on`
+- `historical_boundary_date` nullable — last date historical under a previous timezone (M5; freeze on timezone change)
 - `startup_page`
 - `auth_mode`
 - `created_at`
@@ -280,6 +281,7 @@ Suggested fields:
 - `is_locked`
 - `diner_count`
 - `restaurant_name` nullable
+- `location_text` nullable (M5; Go To Family Dinner host/location)
 - `custom_label` nullable
 - `notes` nullable
 - `icon_key` nullable

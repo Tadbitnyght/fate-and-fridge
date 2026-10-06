@@ -37,6 +37,11 @@ internal static class EnumTextConverters
             status => RecipeStatusToText(status),
             text => RecipeStatusFromText(text));
 
+    public static ValueConverter<CalendarEntryType, string> CalendarEntryTypeConverter { get; } =
+        new ValueConverter<CalendarEntryType, string>(
+            type => CalendarEntryTypeToText(type),
+            text => CalendarEntryTypeFromText(text));
+
     internal static string UserRoleToText(UserRole role) => role switch
     {
         UserRole.Admin => "admin",
@@ -188,4 +193,56 @@ internal static class EnumTextConverters
         TryRecipeStatusFromText(text, out var status)
             ? status
             : throw new ArgumentOutOfRangeException(nameof(text), text, "Unknown recipe status text.");
+
+    internal static string CalendarEntryTypeToText(CalendarEntryType type) => type switch
+    {
+        CalendarEntryType.Recipe => "recipe",
+        CalendarEntryType.EatOut => "eat_out",
+        CalendarEntryType.FendForYourself => "fend_for_yourself",
+        CalendarEntryType.HostFamilyDinner => "host_family_dinner",
+        CalendarEntryType.GoToFamilyDinner => "go_to_family_dinner",
+        CalendarEntryType.Holiday => "holiday",
+        CalendarEntryType.Misc => "misc",
+        CalendarEntryType.Vacation => "vacation",
+        _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown calendar entry type."),
+    };
+
+    internal static bool TryCalendarEntryTypeFromText(string? text, out CalendarEntryType type)
+    {
+        switch (text)
+        {
+            case "recipe":
+                type = CalendarEntryType.Recipe;
+                return true;
+            case "eat_out":
+                type = CalendarEntryType.EatOut;
+                return true;
+            case "fend_for_yourself":
+                type = CalendarEntryType.FendForYourself;
+                return true;
+            case "host_family_dinner":
+                type = CalendarEntryType.HostFamilyDinner;
+                return true;
+            case "go_to_family_dinner":
+                type = CalendarEntryType.GoToFamilyDinner;
+                return true;
+            case "holiday":
+                type = CalendarEntryType.Holiday;
+                return true;
+            case "misc":
+                type = CalendarEntryType.Misc;
+                return true;
+            case "vacation":
+                type = CalendarEntryType.Vacation;
+                return true;
+            default:
+                type = default;
+                return false;
+        }
+    }
+
+    private static CalendarEntryType CalendarEntryTypeFromText(string text) =>
+        TryCalendarEntryTypeFromText(text, out var type)
+            ? type
+            : throw new ArgumentOutOfRangeException(nameof(text), text, "Unknown calendar entry type text.");
 }

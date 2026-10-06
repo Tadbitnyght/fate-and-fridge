@@ -55,6 +55,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     public DbSet<RecipeTag> RecipeTags => Set<RecipeTag>();
 
+    public DbSet<CalendarEntry> CalendarEntries => Set<CalendarEntry>();
+
+    public DbSet<CalendarEntryHistory> CalendarEntryHistory => Set<CalendarEntryHistory>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -85,5 +89,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         modelBuilder.ApplyConfiguration(new RecipeInstructionStepConfiguration());
         modelBuilder.ApplyConfiguration(new RecipeProteinConfiguration());
         modelBuilder.ApplyConfiguration(new RecipeTagConfiguration());
+
+        // M5-01 calendar core schema (docs/M5_PLAN.md §2.2–§2.3).
+        modelBuilder.ApplyConfiguration(new CalendarEntryConfiguration());
+        modelBuilder.ApplyConfiguration(new CalendarEntryHistoryConfiguration());
     }
 }

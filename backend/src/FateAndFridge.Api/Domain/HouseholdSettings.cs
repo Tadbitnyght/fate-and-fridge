@@ -17,6 +17,14 @@ public sealed class HouseholdSettings
     /// <summary>Household-local day the calendar week starts on: 0 = Sunday … 6 = Saturday.</summary>
     public int WeekStartsOn { get; set; }
 
+    /// <summary>
+    /// The last household-local date that was historical under a previous
+    /// timezone (docs/M5_PLAN.md §1.7). A date at or before this boundary is
+    /// historical even if the timezone later moves, so history can never become
+    /// editable again. Null until the timezone first changes.
+    /// </summary>
+    public DateOnly? HistoricalBoundaryDate { get; set; }
+
     public StartupPage StartupPage { get; set; }
 
     public AuthMode AuthMode { get; set; }

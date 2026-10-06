@@ -161,6 +161,173 @@ namespace FateAndFridge.Api.Migrations
                     b.ToTable("auth_events", (string)null);
                 });
 
+            modelBuilder.Entity("FateAndFridge.Api.Domain.CalendarEntry", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<long?>("CreatedByUserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<string>("CustomLabel")
+                        .HasColumnType("text")
+                        .HasColumnName("custom_label");
+
+                    b.Property<int?>("DinerCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("diner_count");
+
+                    b.Property<string>("EntryType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("entry_type");
+
+                    b.Property<string>("IconKey")
+                        .HasColumnType("text")
+                        .HasColumnName("icon_key");
+
+                    b.Property<bool>("IncludeGroceries")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("include_groceries");
+
+                    b.Property<bool>("IsLocked")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_locked");
+
+                    b.Property<string>("LocationText")
+                        .HasColumnType("text")
+                        .HasColumnName("location_text");
+
+                    b.Property<DateOnly>("MealDate")
+                        .HasColumnType("date")
+                        .HasColumnName("meal_date");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text")
+                        .HasColumnName("notes");
+
+                    b.Property<long?>("RecipeId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("recipe_id");
+
+                    b.Property<string>("RestaurantName")
+                        .HasColumnType("text")
+                        .HasColumnName("restaurant_name");
+
+                    b.Property<string>("SnapshotDisplayText")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("snapshot_display_text");
+
+                    b.Property<string>("SnapshotRecipeName")
+                        .HasColumnType("text")
+                        .HasColumnName("snapshot_recipe_name");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<long?>("UpdatedByUserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("updated_by_user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_calendar_entries");
+
+                    b.HasIndex("CreatedByUserId")
+                        .HasDatabaseName("ix_calendar_entries_created_by_user_id");
+
+                    b.HasIndex("MealDate")
+                        .IsUnique()
+                        .HasDatabaseName("ix_calendar_entries_meal_date");
+
+                    b.HasIndex("RecipeId")
+                        .HasDatabaseName("ix_calendar_entries_recipe_id");
+
+                    b.HasIndex("UpdatedByUserId")
+                        .HasDatabaseName("ix_calendar_entries_updated_by_user_id");
+
+                    b.ToTable("calendar_entries", (string)null);
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.CalendarEntryHistory", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("AfterJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("after_json");
+
+                    b.Property<string>("BeforeJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("before_json");
+
+                    b.Property<long?>("CalendarEntryId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("calendar_entry_id");
+
+                    b.Property<string>("ChangeReason")
+                        .HasColumnType("text")
+                        .HasColumnName("change_reason");
+
+                    b.Property<DateTimeOffset>("ChangedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("changed_at");
+
+                    b.Property<long?>("ChangedByUserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("changed_by_user_id");
+
+                    b.Property<bool>("IsHistoricalCorrection")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_historical_correction");
+
+                    b.Property<DateOnly>("MealDate")
+                        .HasColumnType("date")
+                        .HasColumnName("meal_date");
+
+                    b.Property<Guid?>("OperationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("operation_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_calendar_entry_history");
+
+                    b.HasIndex("CalendarEntryId")
+                        .HasDatabaseName("ix_calendar_entry_history_calendar_entry_id");
+
+                    b.HasIndex("ChangedAt")
+                        .HasDatabaseName("ix_calendar_entry_history_changed_at");
+
+                    b.HasIndex("ChangedByUserId")
+                        .HasDatabaseName("ix_calendar_entry_history_changed_by_user_id");
+
+                    b.HasIndex("OperationId")
+                        .HasDatabaseName("ix_calendar_entry_history_operation_id");
+
+                    b.ToTable("calendar_entry_history", (string)null);
+                });
+
             modelBuilder.Entity("FateAndFridge.Api.Domain.GroceryDepartment", b =>
                 {
                     b.Property<long>("Id")
@@ -229,6 +396,10 @@ namespace FateAndFridge.Api.Migrations
                     b.Property<int>("DefaultDinerCount")
                         .HasColumnType("integer")
                         .HasColumnName("default_diner_count");
+
+                    b.Property<DateOnly?>("HistoricalBoundaryDate")
+                        .HasColumnType("date")
+                        .HasColumnName("historical_boundary_date");
 
                     b.Property<string>("HouseholdName")
                         .IsRequired()
@@ -1029,6 +1200,44 @@ namespace FateAndFridge.Api.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_auth_events_users_user_id");
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.CalendarEntry", b =>
+                {
+                    b.HasOne("FateAndFridge.Api.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_calendar_entries_users_created_by_user_id");
+
+                    b.HasOne("FateAndFridge.Api.Domain.Recipe", "Recipe")
+                        .WithMany()
+                        .HasForeignKey("RecipeId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_calendar_entries_recipes_recipe_id");
+
+                    b.HasOne("FateAndFridge.Api.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_calendar_entries_users_updated_by_user_id");
+
+                    b.Navigation("Recipe");
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.CalendarEntryHistory", b =>
+                {
+                    b.HasOne("FateAndFridge.Api.Domain.CalendarEntry", null)
+                        .WithMany()
+                        .HasForeignKey("CalendarEntryId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_calendar_entry_history_calendar_entries_calendar_entry_id");
+
+                    b.HasOne("FateAndFridge.Api.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("ChangedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_calendar_entry_history_users_changed_by_user_id");
                 });
 
             modelBuilder.Entity("FateAndFridge.Api.Domain.Ingredient", b =>
