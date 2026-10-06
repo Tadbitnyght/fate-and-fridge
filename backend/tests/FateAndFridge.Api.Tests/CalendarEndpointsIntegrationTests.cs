@@ -455,6 +455,37 @@ public sealed class CalendarEndpointsIntegrationTests(M1SetupFixture fixture) : 
             .Should().Be(ErrorCodes.CalendarDateInPast);
     }
 
+    [Fact]
+    public async Task A_recipe_rename_never_touches_frozen_history_after_a_timezone_change()
+    {
+        // Kiritimati "today" is the 16th; the 15th is historical. Move west so
+        // the 15th becomes the current day, then rename the recipe through the
+        // API — the frozen snapshot must not change.
+        await SeedHouseholdAsync(timezone: "Pacific/Kiritimati");
+        await SeedUserAsync("root", AdminPassword, UserRole.Admin);
+        await MarkSetupCompletedAsync();
+        var recipe = await SeedRecipeAsync("Lasagna");
+        await SeedEntryAsync(new DateOnly(2026, 11, 15), CalendarEntryType.Recipe, recipe.Id, "Lasagna");
+
+        var clock = new TestTimeProvider(new DateTimeOffset(2026, 11, 15, 12, 0, 0, TimeSpan.Zero));
+        using var factory = CreateFactory(clock);
+        using var session = await SignInAsync(factory, "root", AdminPassword);
+
+        var patchSettings = await SendJsonAsync(
+            session.Client, HttpMethod.Patch, "/api/v1/settings/household",
+            """{"timezone":"Pacific/Honolulu"}""", session.CsrfToken);
+        patchSettings.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var rename = await SendJsonAsync(
+            session.Client, HttpMethod.Patch, $"/api/v1/recipes/{recipe.Id}",
+            """{"name":"Lasagna Deluxe"}""", session.CsrfToken);
+        rename.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var day = await ReadJsonAsync(await session.Client.GetAsync($"{CalendarPath}/2026-11-15", Ct));
+        day.GetProperty("is_historical").GetBoolean().Should().BeTrue();
+        day.GetProperty("entry").GetProperty("display_text").GetString().Should().Be("Lasagna");
+    }
+
     private ApiFactory CreateFactory(TestTimeProvider clock) =>
         fixture.CreateFactory(configureServices: services =>
         {
@@ -599,7 +630,11 @@ public sealed class CalendarEndpointsIntegrationTests(M1SetupFixture fixture) : 
         await context.SaveChangesAsync(Ct);
     }
 
-    private async Task SeedEntryAsync(DateOnly date, CalendarEntryType type, long? recipeId)
+    private async Task SeedEntryAsync(
+        DateOnly date,
+        CalendarEntryType type,
+        long? recipeId,
+        string? displayText = null)
     {
         await using var context = fixture.CreateContext();
         context.CalendarEntries.Add(new CalendarEntry
@@ -607,7 +642,7 @@ public sealed class CalendarEndpointsIntegrationTests(M1SetupFixture fixture) : 
             MealDate = date,
             EntryType = type,
             RecipeId = recipeId,
-            SnapshotDisplayText = type.ToString(),
+            SnapshotDisplayText = displayText ?? type.ToString(),
             CreatedAt = SeedTimestamp,
             UpdatedAt = SeedTimestamp,
         });

@@ -1,7 +1,15 @@
 import { useMemo, useState, type JSX } from 'react'
 
 import type { CalendarEntry } from '../../api/calendar'
-import { buildMonthGrid, isoDate, monthEndIso, monthLabel, monthStartIso } from './calendarDates'
+import { useHouseholdSettings } from '../settings/useHouseholdSettings'
+import {
+  buildMonthGrid,
+  isoDate,
+  monthEndIso,
+  monthLabel,
+  monthStartIso,
+  parseIsoDate,
+} from './calendarDates'
 import { AgendaList } from './AgendaList'
 import { DateDetailDialog } from './DateDetailDialog'
 import { MonthGrid } from './MonthGrid'
@@ -23,8 +31,14 @@ export function CalendarPage(): JSX.Element {
   const [view, setView] = useState<CalendarView>('month')
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
 
+  const householdSettings = useHouseholdSettings()
+  const weekStartsOn = householdSettings.data?.week_starts_on ?? 0
+
   const today = isoDate(now)
-  const days = useMemo(() => buildMonthGrid(year, monthIndex, 0), [year, monthIndex])
+  const days = useMemo(
+    () => buildMonthGrid(year, monthIndex, weekStartsOn),
+    [year, monthIndex, weekStartsOn],
+  )
   const rangeStart = days[0]?.iso ?? monthStartIso(year, monthIndex)
   const rangeEnd = days[days.length - 1]?.iso ?? monthEndIso(year, monthIndex)
 
@@ -49,7 +63,7 @@ export function CalendarPage(): JSX.Element {
   }
 
   function goToToday(): void {
-    const current = new Date()
+    const current = parseIsoDate(householdToday)
     setYear(current.getFullYear())
     setMonthIndex(current.getMonth())
   }
@@ -128,7 +142,7 @@ export function CalendarPage(): JSX.Element {
               today={householdToday}
               selectedDate={selectedDate}
               onSelect={setSelectedDate}
-              weekStartsOn={rangeQuery.data.week_starts_on}
+              weekStartsOn={weekStartsOn}
               label={monthLabel(year, monthIndex)}
             />
           </div>

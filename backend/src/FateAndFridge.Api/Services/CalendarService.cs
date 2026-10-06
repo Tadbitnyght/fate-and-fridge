@@ -251,6 +251,16 @@ public sealed class CalendarService(AppDbContext dbContext, HouseholdClock clock
             errors["custom_label"] = ["custom_label is required for a misc entry."];
         }
 
+        if (type is { } recipeType
+            && request.RecipeId is not null
+            && recipeType is not (CalendarEntryType.Recipe
+                or CalendarEntryType.HostFamilyDinner
+                or CalendarEntryType.Holiday
+                or CalendarEntryType.Misc))
+        {
+            errors["recipe_id"] = ["This entry type does not support a recipe."];
+        }
+
         if (request.DinerCount is { } dinerCount
             && (dinerCount < MinDinerCount || dinerCount > MaxDinerCount))
         {
@@ -336,9 +346,14 @@ public sealed class CalendarService(AppDbContext dbContext, HouseholdClock clock
         entry.UpdatedAt = now;
         entry.UpdatedByUserId = actorUserId;
 
+        // Entry and history commit atomically (docs/M5_PLAN.md §4).
+        await using var transaction = await dbContext.Database
+            .BeginTransactionAsync(cancellationToken)
+            .ConfigureAwait(false);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         StageHistory(entry.Id, entry.MealDate, beforeJson, SnapshotJson(entry), actorUserId);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
         var summary = recipe is null
             ? null
@@ -450,6 +465,13 @@ public sealed class CalendarService(AppDbContext dbContext, HouseholdClock clock
 
         foreach (var entry in entries)
         {
+            // Frozen history must never be refreshed (the boundary can make a
+            // date historical even when it is not before "today").
+            if (HouseholdClock.IsHistorical(entry.MealDate, context))
+            {
+                continue;
+            }
+
             entry.SnapshotRecipeName = displayName;
             entry.SnapshotDisplayText = BuildDisplayText(
                 entry.EntryType,
@@ -736,21 +758,21 @@ public sealed class CalendarService(AppDbContext dbContext, HouseholdClock clock
         });
 
     private static string SnapshotJson(CalendarEntry entry) =>
-        JsonSerializer.Serialize(new
+        JsonSerializer.Serialize(new Dictionary<string, object?>
         {
-            entry.Id,
-            meal_date = entry.MealDate.ToString("yyyy-MM-dd"),
-            entry_type = EnumTextConverters.CalendarEntryTypeToText(entry.EntryType),
-            entry.RecipeId,
-            entry.IsLocked,
-            entry.DinerCount,
-            entry.RestaurantName,
-            entry.LocationText,
-            entry.CustomLabel,
-            entry.Notes,
-            entry.IconKey,
-            entry.IncludeGroceries,
-            entry.SnapshotRecipeName,
-            entry.SnapshotDisplayText,
+            ["id"] = entry.Id,
+            ["meal_date"] = entry.MealDate.ToString("yyyy-MM-dd"),
+            ["entry_type"] = EnumTextConverters.CalendarEntryTypeToText(entry.EntryType),
+            ["recipe_id"] = entry.RecipeId,
+            ["is_locked"] = entry.IsLocked,
+            ["diner_count"] = entry.DinerCount,
+            ["restaurant_name"] = entry.RestaurantName,
+            ["location_text"] = entry.LocationText,
+            ["custom_label"] = entry.CustomLabel,
+            ["notes"] = entry.Notes,
+            ["icon_key"] = entry.IconKey,
+            ["include_groceries"] = entry.IncludeGroceries,
+            ["snapshot_recipe_name"] = entry.SnapshotRecipeName,
+            ["snapshot_display_text"] = entry.SnapshotDisplayText,
         });
 }

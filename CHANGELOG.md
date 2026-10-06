@@ -88,6 +88,16 @@ versions follow [Semantic Versioning](https://semver.org/).
   (`/import/check` requires `recipes.view`), are per-user throttled
   (30 page fetches/hour, 60 image fetches/hour), and never write until the
   reviewed draft is saved through `POST /recipes`.
+- Milestone 5 — calendar core (2026-10-05): the `calendar_entries` /
+  `calendar_entry_history` model and the month/agenda calendar. A desktop
+  ARIA-grid month view and a mobile Month/Agenda toggle, a date-detail editor,
+  the eight meal/special-event types with a curated inline-SVG icon set, diner
+  metadata (nullable, household default), lock/unlock (`locks restrict automatic
+  changes only`), manual recipe selection with a server-computed non-blocking
+  repeat warning, and server-enforced historical immutability in the household
+  timezone. A persisted historical boundary freezes history across a timezone
+  change, recipe renames refresh future/today snapshots while historical
+  snapshots stay frozen, and a landscape print skeleton is included.
 
 ### Changed
 

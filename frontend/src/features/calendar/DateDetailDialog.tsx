@@ -83,7 +83,7 @@ export function DateDetailDialog({
     setError(null)
   }
 
-  const repeatCheck = useCalendarRepeatCheck(date, entryType === 'recipe' ? recipeId : null)
+  const repeatCheck = useCalendarRepeatCheck(date, recipeId)
   const recipeResults = useRecipeList(
     recipeSearch.trim().length >= 2 ? { search: recipeSearch, limit: 5 } : { limit: 5 },
   )
@@ -232,7 +232,20 @@ export function DateDetailDialog({
                           setRecipeSearch('')
                         }}
                       >
-                        {candidate.name}
+                        {candidate.image && (
+                          <img
+                            className="calendar-detail__thumb"
+                            src={candidate.image.url}
+                            alt=""
+                          />
+                        )}
+                        <span className="calendar-detail__result-name">{candidate.name}</span>
+                        <span className="calendar-detail__result-meta">
+                          {candidate.last_eaten
+                            ? `Last eaten ${candidate.last_eaten}`
+                            : 'Not eaten yet'}
+                          {candidate.times_eaten != null && ` · ${candidate.times_eaten}×`}
+                        </span>
                       </button>
                     </li>
                   ))}

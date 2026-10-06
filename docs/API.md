@@ -219,17 +219,86 @@ Admin only. New members default to view-only (`calendar.view`, `groceries.view`,
 
 ## 7. Calendar
 
-### Read
-- `GET /calendar?start=YYYY-MM-DD&end=YYYY-MM-DD`
-- `GET /calendar/{date}`
+M5 delivers the calendar core (docs/M5_PLAN.md §2.4). Dates are household-local
+`YYYY-MM-DD`. Reads require `calendar.view`; writes require `calendar.edit`.
+Single-user mode acts with full permissions. Past dates are read-only for every
+actor including Admin (`CALENDAR_DATE_IN_PAST`); only the M12
+historical-correction API may change history.
 
-### Mutate
-- `PUT /calendar/{date}`
-- `DELETE /calendar/{date}` only for permitted future/today entries
-- `POST /calendar/{date}/lock`
-- `POST /calendar/{date}/unlock`
+### Routes
 
-Past-date mutation must fail unless using Admin historical-correction API.
+| Route | Permission | Purpose |
+|-------|------------|---------|
+| `GET /api/v1/calendar?start&end` | `calendar.view` | Bounded range read (≤ 366 days; both ends within ±5 years of today) |
+| `GET /api/v1/calendar/{date}` | `calendar.view` | One date (blank dates return `entry: null`) |
+| `GET /api/v1/calendar/{date}/repeat-check?recipe_id` | `calendar.view` | Exact-recipe occurrences in the 7-back/14-forward window |
+| `PUT /api/v1/calendar/{date}` | `calendar.edit` | Full-replace upsert |
+| `DELETE /api/v1/calendar/{date}` | `calendar.edit` | Hard-delete a today/future entry (`204`) |
+| `POST /api/v1/calendar/{date}/lock` | `calendar.edit` | Lock |
+| `POST /api/v1/calendar/{date}/unlock` | `calendar.edit` | Unlock |
+
+### `day` document
+
+```json
+{
+  "date": "2026-11-15",
+  "is_today": true,
+  "is_historical": false,
+  "can_edit": true,
+  "entry": {
+    "id": 12,
+    "entry_type": "host_family_dinner",
+    "recipe": { "id": 5, "name": "Lasagna", "image_url": null, "status": "normal" },
+    "display_text": "Lasagna",
+    "is_locked": false,
+    "diner_count": null,
+    "effective_diner_count": 4,
+    "restaurant_name": null,
+    "location_text": null,
+    "custom_label": null,
+    "notes": null,
+    "icon_key": "star",
+    "include_groceries": true,
+    "blocks_automation": false,
+    "created_at": "2026-11-01T00:00:00+00:00",
+    "updated_at": "2026-11-01T00:00:00+00:00"
+  },
+  "repeat_warning": {
+    "recipe_id": 5,
+    "window_start": "2026-11-08",
+    "window_end": "2026-11-29",
+    "occurrences": [{ "date": "2026-11-20", "entry_type": "recipe" }]
+  }
+}
+```
+
+Range reads return `{ start, end, today, week_starts_on, entries: [day…] }` with
+only non-blank days, ascending.
+
+### Entry types and rules
+
+`entry_type` is one of `recipe`, `eat_out`, `fend_for_yourself`,
+`host_family_dinner`, `go_to_family_dinner`, `holiday`, `misc`, `vacation`.
+`recipe` requires `recipe_id`; `misc` requires `custom_label`;
+`include_groceries` is derived (recipe types and special types with a recipe);
+`blocks_automation` is true only for `vacation`; `icon_key` is accepted only for
+the special types and only from the curated catalog. `diner_count` is 1–99;
+`null` uses the household default and the response exposes the effective count.
+Text fields reuse the M3 sanitization and limits. Snapshots preserve display
+meaning: non-historical entries track recipe renames, historical entries are
+frozen. Locks restrict automatic mutation only — manual edits keep the lock;
+blank dates cannot be locked (`CALENDAR_BLANK_CANNOT_LOCK`).
+
+### Errors
+
+| Code | HTTP | Meaning |
+|------|------|---------|
+| `CALENDAR_DATE_IN_PAST` | 422 | The date is historical and read-only |
+| `CALENDAR_BLANK_CANNOT_LOCK` | 422 | Cannot lock a date with no entry |
+| `CALENDAR_ENTRY_LOCKED` | 422 | Reserved for M6/M7 automatic mutation of a locked date |
+| `CALENDAR_RECIPE_REQUIRED` | 400 | `recipe` entry without `recipe_id` |
+| `CALENDAR_MISC_LABEL_REQUIRED` | 400 | `misc` entry without `custom_label` |
+| `VALIDATION_FAILED` | 400 | Other field/range/horizon errors |
 
 ---
 

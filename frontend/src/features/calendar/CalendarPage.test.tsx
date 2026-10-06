@@ -59,6 +59,16 @@ function baseMocks(routes: MockRoute[], session: unknown = adminSession): MockFe
       path: '/health',
       body: { status: 'ok', app: 'Fate & Fridge', version: '0.1.0', environment: 'test' },
     },
+    {
+      path: '/settings/household',
+      body: {
+        household_name: 'Home',
+        timezone: 'America/Chicago',
+        week_starts_on: 0,
+        default_diner_count: 4,
+        startup_page: 'calendar',
+      },
+    },
     { path: '/recipes?', body: { items: [], total: 0, limit: 5, offset: 0 } },
     { path: '/calendar?', body: range },
     ...routes,
@@ -91,6 +101,35 @@ describe('calendar page', () => {
 
     const agenda = screen.getByRole('list', { name: 'Agenda' })
     expect(within(agenda).getByText('Lasagna')).toBeVisible()
+  })
+
+  it('starts the week on the household-configured day', async () => {
+    installMockFetch([
+      { path: '/setup/status', body: setupCompleteStatus },
+      { path: '/auth/session', body: adminSession },
+      { path: '/health/db', body: { status: 'ok', database: 'connected' } },
+      { path: '/health', body: { status: 'ok' } },
+      {
+        path: '/settings/household',
+        body: {
+          household_name: 'Home',
+          timezone: 'America/Chicago',
+          week_starts_on: 1,
+          default_diner_count: 4,
+          startup_page: 'calendar',
+        },
+      },
+      { path: '/recipes?', body: { items: [], total: 0, limit: 5, offset: 0 } },
+      { path: '/calendar?', body: range },
+    ])
+    renderWithProviders(<App />, { route: '/calendar' })
+
+    const grid = await screen.findByRole('grid')
+    const headers = within(grid)
+      .getAllByRole('columnheader')
+      .map((header) => header.textContent)
+    expect(headers[0]).toBe('Mon')
+    expect(headers[6]).toBe('Sun')
   })
 
   it('prints the calendar from the toolbar', async () => {

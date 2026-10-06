@@ -2215,3 +2215,28 @@ a.recipes__import:focus-visible {
     size: landscape;
   }
 }
+
+.calendar-detail__results button {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  gap: 0 0.5rem;
+  align-items: center;
+}
+
+.calendar-detail__thumb {
+  grid-row: span 2;
+  width: 2.5rem;
+  height: 2.5rem;
+  object-fit: cover;
+  border-radius: 0.35rem;
+}
+
+.calendar-detail__result-name {
+  font-weight: 600;
+}
+
+.calendar-detail__result-meta {
+  color: var(--muted);
+  font-size: 0.8rem;
+}

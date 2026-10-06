@@ -195,9 +195,13 @@ test('calendar: arrow keys move focus across the grid', async ({ page }) => {
   const grid = page.getByRole('grid')
   await expect(grid).toBeVisible()
 
-  await grid.getByRole('gridcell', { name: /today/i }).focus()
+  const firstCell = grid.getByRole('gridcell').first()
+  await firstCell.focus()
+  const before = await firstCell.getAttribute('aria-label')
   await page.keyboard.press('ArrowRight')
 
-  // Focus stays inside the grid after keyboard navigation.
+  // Focus moves to a different day within the grid.
+  const focusedLabel = await page.locator(':focus').getAttribute('aria-label')
+  expect(focusedLabel).not.toBe(before)
   await expect(page.locator(':focus')).toHaveAttribute('role', 'gridcell')
 })
