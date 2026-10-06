@@ -41,6 +41,12 @@ export const ErrorCodes = {
   ImportTooLarge: 'IMPORT_TOO_LARGE',
   ImportNoRecipe: 'IMPORT_NO_RECIPE',
   ImportRateLimited: 'IMPORT_RATE_LIMITED',
+  // M5 calendar codes (docs/M5_PLAN.md §1.12).
+  CalendarDateInPast: 'CALENDAR_DATE_IN_PAST',
+  CalendarBlankCannotLock: 'CALENDAR_BLANK_CANNOT_LOCK',
+  CalendarEntryLocked: 'CALENDAR_ENTRY_LOCKED',
+  CalendarRecipeRequired: 'CALENDAR_RECIPE_REQUIRED',
+  CalendarMiscLabelRequired: 'CALENDAR_MISC_LABEL_REQUIRED',
 } as const
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes]
