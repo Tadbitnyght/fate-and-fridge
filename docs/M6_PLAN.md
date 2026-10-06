@@ -269,4 +269,4 @@ verification→M6-12.
 - Statistics/history (`last_eaten`/`times_eaten`): M11.
 - Audit viewer and calendar `audit_events` (incl. rerolls): M12.
 - Advanced variety rules (cuisine/pasta caps, seasonal weighting, dietary
-  scheduling): V2 backlog.
+  scheduling): see `docs/FUTURE_FEATURES.md`.

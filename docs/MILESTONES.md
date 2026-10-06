@@ -312,5 +312,8 @@ Every new issue must identify:
 
 The Lead Developer must reject "while we're here" feature expansion unless it is necessary to satisfy an approved requirement.
 
+All V2 and future ideas are recorded in `docs/FUTURE_FEATURES.md` (the single
+registry, superseding the former `docs/V2_BACKLOG.md`).
+
 ### V1.x Enhancements (tracked)
 - Milestone progress page (issue #22) — delivered post-M1; classification stays V1.x (not part of the M0–M14 V1 plan). The Definition of Done now requires updating the progress manifest when a milestone completes.

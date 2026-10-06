@@ -63,7 +63,8 @@ npx playwright test
   protection. A concurrent create race on the same date is not specially handled.
 - Delete history rows store a null `calendar_entry_id` (they survive the hard
   delete); M6 undo correlates by `meal_date`/`before_json`.
-- Serving scaling by diner count is V2; V1 stores diner count as metadata only.
+- Serving scaling by diner count is tracked in `docs/FUTURE_FEATURES.md`; V1
+  stores diner count as metadata only.
 
 ## Live deployment verification (Milestone completion gate)
 

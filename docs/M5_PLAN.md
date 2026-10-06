@@ -350,4 +350,4 @@ permitted.
 - Audit viewer, calendar `audit_events`, historical correction, hard recipe
   deletion, and dangerous-action framework: M12.
 - Serving scaling by diner count, package intelligence, dietary scheduling:
-  V2 backlog.
+  see `docs/FUTURE_FEATURES.md`.

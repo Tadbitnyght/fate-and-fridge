@@ -118,7 +118,7 @@ Before major implementation, agents must consult:
 - `docs/SECURITY.md`
 - `docs/TESTING.md`
 - `docs/MILESTONES.md`
-- `docs/V2_BACKLOG.md`
+- `docs/FUTURE_FEATURES.md` (the consolidated V2/future registry; supersedes `docs/V2_BACKLOG.md`)
 
 ---
 
@@ -164,6 +164,11 @@ New ideas are classified as one of:
 - Rejected
 
 Do not add a new feature to V1 merely because it is easy.
+
+Every non-V1 idea raised at any time must be recorded in
+`docs/FUTURE_FEATURES.md` (with its provenance and status) at the moment it is
+discussed, so the backlog stays complete. That file is the single registry for
+V2 and future work and supersedes the former `docs/V2_BACKLOG.md`.
 
 ---
 

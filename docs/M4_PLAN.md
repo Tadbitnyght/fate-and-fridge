@@ -305,4 +305,4 @@ permitted.
 - Browser automation, JS execution, headless rendering, and CAPTCHA handling:
   never in V1.
 - Package-size conversion, nutrition parsing, and advanced duplicate detection:
-  V2 backlog.
+  see `docs/FUTURE_FEATURES.md`.

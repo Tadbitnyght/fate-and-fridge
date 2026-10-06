@@ -65,7 +65,7 @@ npx playwright test
 ## Known limitations (deferred, per `docs/M4_PLAN.md §6`)
 
 - Package-size conversion, nutrition parsing, and advanced duplicate detection
-  are V2 backlog.
+  are tracked in `docs/FUTURE_FEATURES.md`.
 - Source-URL canonicalization is deliberately narrow: an empty query, a trailing
   `&`, percent-encoding case, and repeated-key value order are not folded (these
   only ever cause a warning to be missed, never a false warning).
