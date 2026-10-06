@@ -247,11 +247,16 @@ verification→M6-12.
    UI/accessibility. Scoring tests use the injected `IRandomSource`; production
    randomness is asserted by construction, not by flaky sampling.
 6. At M6 start, set M6 `in_progress` in
-   `frontend/src/features/progress/milestones.ts` and create issues. At M6-12, set
-   M6 `complete` with evidence, update `progressSummary` and the progress tests
-   (including the Playwright progress assertion), update `CHANGELOG.md` and
-   `docs/API.md` (and `docs/DATABASE.md` for the new columns), push `main`, tag
-   `m6-complete`, and close the M6 tracking issue.
+   `frontend/src/features/progress/milestones.ts` and create issues. At M6-12,
+   `dotnet format --verify-no-changes`, Release build, Release tests, and
+   `dotnet ef migrations has-pending-model-changes` must pass, then delegate a
+   rebuild/redeploy to `docker-admin` (`scripts/deploy.sh up`) and verify the
+   live instance (healthy; at least one M6 route reachable; `/progress` shows M6
+   complete) before setting M6 `complete` with evidence, updating
+   `progressSummary` and the progress tests (including the Playwright progress
+   assertion), updating `CHANGELOG.md` and `docs/API.md` (and `docs/DATABASE.md`
+   for the new columns), pushing `main`, tagging `m6-complete`, and closing the
+   M6 tracking issue. See `AGENTS.md` → "Milestone completion gate".
 
 ---
 

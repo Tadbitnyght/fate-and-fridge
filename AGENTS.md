@@ -257,8 +257,32 @@ A task is complete only when:
 - accessibility is considered
 - docs are updated
 - the milestone progress manifest (`frontend/src/features/progress/milestones.ts`) is updated when a milestone completes
+- **the working project is rebuilt and redeployed from the completed commit and the live app is verified to reflect the milestone** (see "Milestone completion gate" below)
 - independent review is complete
 - no unrelated scope is introduced
+
+### Milestone completion gate
+A milestone must not be marked `complete` (in
+`frontend/src/features/progress/milestones.ts`), have its `m*-complete` tag cut,
+or have its tracking issue closed until the working project is updated, rebuilt,
+and verified live. In order:
+
+1. All tests, lint/type checks, builds, and migration checks pass on the completed
+   commit.
+2. The working project is rebuilt and redeployed **from that commit**. Docker
+   operations are delegated to `docker-admin` (`scripts/deploy.sh up`, i.e.
+   `docker compose up -d --build` on the deploy host), which applies pending
+   migrations.
+3. The live deployment is verified: the app is healthy, at least one new
+   feature/endpoint of the milestone is reachable on the running instance, and the
+   `/progress` page shows the milestone as complete. Evidence (image id/digest,
+   health response, and the live proof) is recorded in the milestone verification
+   document.
+4. Only after step 3 may the manifest change be committed/pushed and the tag be
+   created.
+
+If the build, deploy, or live verification fails, the milestone stays
+`in_progress`; do not mark it complete or tag it.
 
 ---
 
@@ -269,6 +293,7 @@ A task is complete only when:
 - Do not silently alter future meals outside the selected reroll range.
 - Do not hard-delete historical references without preserving snapshot integrity.
 - Do not execute third-party JavaScript during recipe import.
+- Do not mark a milestone complete or cut its `m*-complete` tag without rebuilding/redeploying and verifying the live app reflects it (see "Milestone completion gate").
 - Do not expose PostgreSQL publicly by default.
 - Do not store plaintext passwords.
 - Do not store critical persistent settings only inside the app container.

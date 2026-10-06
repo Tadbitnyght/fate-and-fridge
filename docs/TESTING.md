@@ -243,3 +243,20 @@ No issue is complete until:
 - type checking passes
 - migration tests pass if schema changed
 - reviewer independently validates acceptance criteria
+
+### Milestone completion gate
+A milestone is not complete until the working project has been rebuilt and
+redeployed from the completed commit and verified live (see `AGENTS.md` →
+"Milestone completion gate"). Concretely, before the milestone is marked
+`complete`, tagged `m*-complete`, or its tracking issue is closed:
+
+1. The completed commit passes the full backend and frontend gates (format/lint,
+   type check, Release build, full test suites, Playwright, and
+   `ef migrations has-pending-model-changes`).
+2. `docker-admin` rebuilds and redeploys the stack from that commit
+   (`scripts/deploy.sh up`, i.e. `docker compose up -d --build`), applying any
+   pending migrations.
+3. The live instance is healthy, at least one new feature/endpoint of the
+   milestone is reachable, and the `/progress` page shows the milestone complete.
+4. The image id/digest, health response, and live proof are recorded in the
+   milestone's verification document (e.g. `docs/M*_VERIFICATION.md`).
