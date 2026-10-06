@@ -89,4 +89,16 @@ public static class ErrorCodes
     public const string ImportNoRecipe = "IMPORT_NO_RECIPE";
 
     public const string ImportRateLimited = "IMPORT_RATE_LIMITED";
+
+    // M5 calendar codes (docs/M5_PLAN.md §1.12).
+    public const string CalendarDateInPast = "CALENDAR_DATE_IN_PAST";
+
+    public const string CalendarBlankCannotLock = "CALENDAR_BLANK_CANNOT_LOCK";
+
+    /// <summary>Reserved for M6/M7 automatic mutation of a locked date.</summary>
+    public const string CalendarEntryLocked = "CALENDAR_ENTRY_LOCKED";
+
+    public const string CalendarRecipeRequired = "CALENDAR_RECIPE_REQUIRED";
+
+    public const string CalendarMiscLabelRequired = "CALENDAR_MISC_LABEL_REQUIRED";
 }

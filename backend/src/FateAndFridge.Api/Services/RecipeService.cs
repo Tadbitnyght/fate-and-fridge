@@ -174,6 +174,7 @@ public abstract record RecipeMutationResult
 public sealed class RecipeService(
     AppDbContext dbContext,
     TimeProvider timeProvider,
+    HouseholdClock clock,
     IAuditService auditService,
     ILogger<RecipeService> logger)
 {
@@ -448,6 +449,8 @@ public sealed class RecipeService(
         var beforeJson = SnapshotJson(recipe, await LoadNestedAsync(recipe.Id, cancellationToken));
         var recipeId = recipe.Id;
 
+        var renamed = name is not null
+            && !string.Equals(name.Normalized, recipe.NormalizedName, StringComparison.Ordinal);
         if (name is not null)
         {
             recipe.Name = name.Display;
@@ -510,6 +513,18 @@ public sealed class RecipeService(
                     IpAddress: ipAddress,
                     ActorUserId: actorUserId),
                 cancellationToken);
+
+            if (renamed)
+            {
+                // Refresh future/today calendar snapshots; historical entries
+                // stay frozen (docs/M5_PLAN.md §1.5).
+                await CalendarService.RefreshSnapshotsAsync(
+                    dbContext,
+                    clock,
+                    recipeId,
+                    recipe.Name,
+                    cancellationToken).ConfigureAwait(false);
+            }
 
             await dbContext.SaveChangesAsync(cancellationToken);
         }

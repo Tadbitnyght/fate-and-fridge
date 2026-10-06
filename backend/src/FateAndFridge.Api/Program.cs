@@ -70,6 +70,7 @@ builder.Services.AddMemoryCache();
 builder.Services.AddScoped<SecuritySettingsService>();
 
 builder.Services.AddScoped<HouseholdSettingsService>();
+builder.Services.AddScoped<HouseholdClock>();
 
 // M1-06 session infrastructure: opaque DB-backed cookie sessions resolved by
 // the default authentication scheme, with the session-aware actor provider
@@ -112,6 +113,7 @@ builder.Services.AddScoped<IReferenceUsageChecker, ReferenceDataUsageChecker>();
 
 // M3-02…M3-09: recipe document CRUD, status lifecycle, and nested slices.
 builder.Services.AddScoped<RecipeService>();
+builder.Services.AddScoped<CalendarService>();
 
 // M3-04: local recipe image storage, content policy, and serving.
 builder.Services.AddScoped<RecipeImageService>();
@@ -250,6 +252,7 @@ app.MapProteinEndpoints();
 app.MapTagEndpoints();
 app.MapRecipeEndpoints();
 app.MapRecipeImageEndpoints();
+app.MapCalendarEndpoints();
 app.MapImportEndpoints();
 
 // Test-only permission probes (M1-09): mapped solely in the Testing
