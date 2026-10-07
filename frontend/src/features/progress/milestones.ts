@@ -211,7 +211,7 @@ export const MILESTONES: Milestone[] = [
     id: 'M6',
     number: 6,
     name: 'Randomization Engine',
-    status: 'planned',
+    status: 'in_progress',
     summary:
       'The “what’s for dinner?” engine: eligibility, repeat-window penalties, spacing, favorites as a weak tie-break, and secure randomness.',
     features: [
@@ -223,9 +223,9 @@ export const MILESTONES: Milestone[] = [
       'Single-date reroll with metadata and temporary undo',
       'Exhaustive randomizer tests',
     ],
-    issues: [],
+    issues: [80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92],
     issuesNote:
-      'Planned in docs/MILESTONES.md; GitHub issues are created when the milestone starts.',
+      'Tracking #80; M6-01…M6-12: #81, #82, #83, #84, #85, #86, #87, #88, #89, #90, #91, #92.',
   },
   {
     id: 'M7',
