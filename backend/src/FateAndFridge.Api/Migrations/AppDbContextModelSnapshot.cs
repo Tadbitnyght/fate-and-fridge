@@ -306,6 +306,10 @@ namespace FateAndFridge.Api.Migrations
                         .HasColumnType("date")
                         .HasColumnName("meal_date");
 
+                    b.Property<string>("MetadataJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("metadata_json");
+
                     b.Property<Guid?>("OperationId")
                         .HasColumnType("uuid")
                         .HasColumnName("operation_id");

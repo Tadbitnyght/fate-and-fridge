@@ -115,6 +115,9 @@ builder.Services.AddScoped<IReferenceUsageChecker, ReferenceDataUsageChecker>();
 builder.Services.AddScoped<RecipeService>();
 builder.Services.AddScoped<CalendarService>();
 
+// M6-08: the single-date reroll orchestrator (context build + atomic history).
+builder.Services.AddScoped<CalendarRandomizer>();
+
 // M6-02: the pure randomization engine and its injectable secure RNG seam. The
 // engine scores candidates and performs a weighted roulette draw; SystemRandomSource
 // is the only production source of randomness (docs/RANDOMIZER.md §7 Phase F).

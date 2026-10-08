@@ -115,6 +115,19 @@ public sealed record CalendarRepeatCheckResponse(
     string WindowEnd,
     IReadOnlyList<CalendarOccurrenceResponse> Occurrences);
 
+/// <summary>Compact operation handle (docs/M6_PLAN.md §2.2).</summary>
+public sealed record CalendarOperationResponse(string Id, DateTimeOffset? UndoExpiresAt);
+
+/// <summary>Reroll response: the M5 day document plus the operation handle.</summary>
+public sealed record CalendarRerollResponse(
+    string Date,
+    bool IsToday,
+    bool IsHistorical,
+    bool CanEdit,
+    CalendarEntryResponse? Entry,
+    CalendarRepeatWarningResponse? RepeatWarning,
+    CalendarOperationResponse Operation);
+
 /// <summary>
 /// M5 calendar routes (docs/M5_PLAN.md §2.4): reads gated by
 /// <c>calendar.view</c>, writes by <c>calendar.edit</c>, with server-enforced
@@ -134,6 +147,7 @@ public static class CalendarEndpoints
         group.MapDelete("/{date}", DeleteAsync).RequirePermission(PermissionKeys.CalendarEdit);
         group.MapPost("/{date}/lock", LockAsync).RequirePermission(PermissionKeys.CalendarEdit);
         group.MapPost("/{date}/unlock", UnlockAsync).RequirePermission(PermissionKeys.CalendarEdit);
+        group.MapPost("/{date}/reroll", RerollAsync).RequirePermission(PermissionKeys.CalendarEdit);
 
         return app;
     }
@@ -370,6 +384,53 @@ public static class CalendarEndpoints
 
         var result = await calendar.SetLockAsync(parsedDate, locked, actorUserId, cancellationToken);
         return Map(result);
+    }
+
+    private static async Task<IResult> RerollAsync(
+        string date,
+        ICurrentActorProvider actorProvider,
+        HouseholdClock clock,
+        CalendarRandomizer randomizer,
+        CancellationToken cancellationToken)
+    {
+        if (!TryReadDate(date, out var parsedDate, out var error))
+        {
+            return error!;
+        }
+
+        var household = await clock.GetContextAsync(cancellationToken);
+        var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        ValidateHorizon(parsedDate, "date", household.Today, errors);
+        if (errors.Count > 0)
+        {
+            return ApiResults.ValidationError(errors);
+        }
+
+        var (actorUserId, actorError) = await ResolveActorAsync(actorProvider, cancellationToken);
+        if (actorError is not null)
+        {
+            return actorError;
+        }
+
+        var result = await randomizer.RerollAsync(parsedDate, actorUserId, cancellationToken);
+        return result switch
+        {
+            CalendarRerollOutcome.Success success => Results.Ok(new CalendarRerollResponse(
+                CalendarDateText.Format(success.Day.Date),
+                success.Day.IsToday,
+                success.Day.IsHistorical,
+                success.Day.CanEdit,
+                success.Day.Entry is null ? null : CalendarEntryResponse.From(success.Day.Entry),
+                success.Day.RepeatWarning is null
+                    ? null
+                    : CalendarRepeatWarningResponse.From(success.Day.RepeatWarning),
+                new CalendarOperationResponse(success.OperationId.ToString(), UndoExpiresAt: null))),
+            CalendarRerollOutcome.Failure failure => ApiResults.Error(
+                failure.StatusCode,
+                failure.Code,
+                failure.Message),
+            _ => Results.StatusCode(StatusCodes.Status500InternalServerError),
+        };
     }
 
     private static CalendarWriteRequest ParseWriteRequest(

@@ -757,7 +757,7 @@ public sealed class CalendarService(AppDbContext dbContext, HouseholdClock clock
             IsHistoricalCorrection = false,
         });
 
-    private static string SnapshotJson(CalendarEntry entry) =>
+    internal static string SnapshotJson(CalendarEntry entry) =>
         JsonSerializer.Serialize(new Dictionary<string, object?>
         {
             ["id"] = entry.Id,

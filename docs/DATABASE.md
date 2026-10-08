@@ -317,8 +317,9 @@ Suggested:
 - `id`
 - `calendar_entry_id`
 - `operation_id`
-- `before_json`
-- `after_json`
+- `before_json` (jsonb)
+- `after_json` (jsonb)
+- `metadata_json` (jsonb, nullable): the M6 reroll score breakdown (docs/M6_PLAN.md §2.3); `null` for ordinary edits
 - `changed_by_user_id`
 - `changed_at`
 - `change_reason` nullable

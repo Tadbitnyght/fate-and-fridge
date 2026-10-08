@@ -21,6 +21,12 @@ public sealed class CalendarEntryHistory
 
     public string? AfterJson { get; set; }
 
+    /// <summary>
+    /// Operation metadata (docs/M6_PLAN.md §2.3): the randomizer score breakdown
+    /// for a reroll, stored as jsonb. Null for ordinary calendar edits.
+    /// </summary>
+    public string? MetadataJson { get; set; }
+
     public long? ChangedByUserId { get; set; }
 
     public DateTimeOffset ChangedAt { get; set; }

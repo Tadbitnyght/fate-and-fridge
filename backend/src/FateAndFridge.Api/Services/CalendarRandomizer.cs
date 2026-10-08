@@ -1,0 +1,303 @@
+using System.Text.Json;
+using FateAndFridge.Api.Data;
+using FateAndFridge.Api.Domain;
+using FateAndFridge.Api.Errors;
+using Microsoft.EntityFrameworkCore;
+
+namespace FateAndFridge.Api.Services;
+
+/// <summary>Outcome of a single-date reroll (docs/M6_PLAN.md §1.11).</summary>
+public abstract record CalendarRerollOutcome
+{
+    /// <summary>The reroll committed; the day reflects the stored state.</summary>
+    public sealed record Success(CalendarDayRecord Day, Guid OperationId) : CalendarRerollOutcome;
+
+    /// <summary>A non-validation failure (past date, locked, vacation, no candidates).</summary>
+    public sealed record Failure(int StatusCode, string Code, string Message) : CalendarRerollOutcome;
+}
+
+/// <summary>
+/// M6 single-date reroll (docs/M6_PLAN.md §1.11, docs/RANDOMIZER.md §13). Builds
+/// the scoring context from the stored calendar (candidates, exact-repeat
+/// occurrences, protein neighbors), calls the pure <see cref="RandomizerEngine"/>,
+/// and persists the replacement plus exactly one history row atomically. It
+/// broadcasts nothing; live sync arrives in M9.
+/// </summary>
+public sealed class CalendarRandomizer(
+    AppDbContext dbContext,
+    HouseholdClock clock,
+    CalendarService calendar,
+    RandomizerEngine engine,
+    TimeProvider timeProvider)
+{
+    /// <summary>Documented defaults used only if no household settings row exists (docs/M6_PLAN.md §1.3).</summary>
+    private static readonly RandomizerOptions DefaultOptions =
+        new(7, 14, 0.10m, 0.02m, 0.70m, 1, 1.10m, 3, 8, 90);
+
+    private static readonly IReadOnlySet<string> EmptyProteinKeys =
+        new HashSet<string>(StringComparer.Ordinal);
+
+    private static readonly JsonSerializerOptions MetadataJsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+    };
+
+    /// <summary>
+    /// Rerolls one date: fills a blank date or replaces any non-locked,
+    /// non-vacation entry with a randomly selected Normal recipe.
+    /// </summary>
+    public async Task<CalendarRerollOutcome> RerollAsync(
+        DateOnly date,
+        long? actorUserId,
+        CancellationToken cancellationToken = default)
+    {
+        var context = await clock.GetContextAsync(cancellationToken).ConfigureAwait(false);
+        if (HouseholdClock.IsHistorical(date, context))
+        {
+            return PastDate();
+        }
+
+        var existing = await dbContext.CalendarEntries
+            .FirstOrDefaultAsync(entry => entry.MealDate == date, cancellationToken)
+            .ConfigureAwait(false);
+        if (existing is not null)
+        {
+            if (existing.IsLocked)
+            {
+                return new CalendarRerollOutcome.Failure(
+                    StatusCodes.Status409Conflict,
+                    ErrorCodes.CalendarEntryLocked,
+                    "This date is locked. Unlock it before rerolling.");
+            }
+
+            if (existing.EntryType == CalendarEntryType.Vacation)
+            {
+                return new CalendarRerollOutcome.Failure(
+                    StatusCodes.Status422UnprocessableEntity,
+                    ErrorCodes.RandomizerNotApplicable,
+                    "A vacation day cannot be rerolled.");
+            }
+        }
+
+        var settings = await dbContext.HouseholdSettings
+            .AsNoTracking()
+            .SingleOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
+        var options = settings is null ? DefaultOptions : RandomizerOptions.From(settings);
+
+        var candidateRows = await dbContext.Recipes
+            .AsNoTracking()
+            .Where(recipe => recipe.Status == RecipeStatus.Normal)
+            .Select(recipe => new { recipe.Id, recipe.IsFavorite })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+        if (candidateRows.Count == 0)
+        {
+            return new CalendarRerollOutcome.Failure(
+                StatusCodes.Status422UnprocessableEntity,
+                ErrorCodes.RandomizerNoCandidates,
+                "No Normal recipes are available to select.");
+        }
+
+        var candidateIds = candidateRows.Select(row => row.Id).ToArray();
+        var candidateProteins = await LoadProteinKeysAsync(candidateIds, cancellationToken).ConfigureAwait(false);
+        var candidates = candidateRows
+            .Select(row => new RandomizerCandidate(
+                row.Id,
+                row.IsFavorite,
+                ProteinKeys(candidateProteins, row.Id)))
+            .ToArray();
+
+        // The occurrence read covers the union of the exact-repeat and spacing
+        // windows; the engine applies each window's own bounds.
+        var range = Math.Max(
+            options.RepeatLookbackDays,
+            Math.Max(options.RepeatLookaheadDays, options.SpacingSearchDays));
+        var entryRows = await dbContext.CalendarEntries
+            .AsNoTracking()
+            .Where(entry => entry.RecipeId != null
+                && entry.MealDate >= date.AddDays(-range)
+                && entry.MealDate <= date.AddDays(range)
+                && entry.MealDate != date)
+            .Select(entry => new { RecipeId = entry.RecipeId!.Value, entry.MealDate, entry.EntryType })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var occurrences = entryRows
+            .Select(row => new RandomizerOccurrence(row.RecipeId, row.MealDate, IsSpecialDay(row.EntryType)))
+            .ToArray();
+
+        var neighborRows = await dbContext.CalendarEntries
+            .AsNoTracking()
+            .Where(entry => entry.RecipeId != null
+                && entry.MealDate >= date.AddDays(-options.ProteinNeighborDistance)
+                && entry.MealDate <= date.AddDays(options.ProteinNeighborDistance)
+                && entry.MealDate != date)
+            .Select(entry => new { RecipeId = entry.RecipeId!.Value, entry.MealDate })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var neighborRecipeIds = neighborRows.Select(row => row.RecipeId).Distinct().ToArray();
+        var neighborProteins = await LoadProteinKeysAsync(neighborRecipeIds, cancellationToken).ConfigureAwait(false);
+        var neighbors = neighborRows
+            .Select(row => new RandomizerNeighbor(row.MealDate, ProteinKeys(neighborProteins, row.RecipeId)))
+            .ToArray();
+
+        var result = engine.Select(
+            options,
+            new RandomizerRequest(date, candidates, occurrences, neighbors));
+
+        var recipe = await dbContext.Recipes
+            .FirstAsync(candidate => candidate.Id == result.RecipeId, cancellationToken)
+            .ConfigureAwait(false);
+
+        var operationId = Guid.NewGuid();
+        var now = timeProvider.GetUtcNow();
+        string? beforeJson = null;
+        CalendarEntry entry;
+        if (existing is null)
+        {
+            entry = new CalendarEntry
+            {
+                MealDate = date,
+                SnapshotDisplayText = recipe.Name,
+                CreatedAt = now,
+                CreatedByUserId = actorUserId,
+            };
+            dbContext.CalendarEntries.Add(entry);
+        }
+        else
+        {
+            entry = existing;
+            beforeJson = CalendarService.SnapshotJson(entry);
+        }
+
+        // The replacement resets entry metadata (docs/M6_PLAN.md §1.11).
+        entry.EntryType = CalendarEntryType.Recipe;
+        entry.RecipeId = recipe.Id;
+        entry.IsLocked = false;
+        entry.DinerCount = null;
+        entry.RestaurantName = null;
+        entry.LocationText = null;
+        entry.CustomLabel = null;
+        entry.Notes = null;
+        entry.IconKey = null;
+        entry.IncludeGroceries = true;
+        entry.SnapshotRecipeName = recipe.Name;
+        entry.SnapshotDisplayText = recipe.Name;
+        entry.UpdatedAt = now;
+        entry.UpdatedByUserId = actorUserId;
+
+        // Entry + exactly one history row commit atomically. The second
+        // SaveChanges makes a freshly created entry's id available to history
+        // (same pattern as CalendarService.UpsertAsync).
+        await using var transaction = await dbContext.Database
+            .BeginTransactionAsync(cancellationToken)
+            .ConfigureAwait(false);
+        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        dbContext.CalendarEntryHistory.Add(new CalendarEntryHistory
+        {
+            CalendarEntryId = entry.Id,
+            MealDate = date,
+            OperationId = operationId,
+            BeforeJson = beforeJson,
+            AfterJson = CalendarService.SnapshotJson(entry),
+            MetadataJson = SerializeMetadata(result.Metadata),
+            ChangedByUserId = actorUserId,
+            ChangedAt = now,
+            IsHistoricalCorrection = false,
+        });
+        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+
+        var day = await calendar.GetDayAsync(date, cancellationToken).ConfigureAwait(false);
+        return new CalendarRerollOutcome.Success(day, operationId);
+    }
+
+    /// <summary>
+    /// Serializes the score breakdown to the documented snake_case shape
+    /// (docs/M6_PLAN.md §2.3), including <c>"kind":"reroll"</c>.
+    /// </summary>
+    public static string SerializeMetadata(RandomizerMetadata metadata) =>
+        JsonSerializer.Serialize(
+            new RerollMetadataDocument(
+                "reroll",
+                metadata.CandidateCount,
+                metadata.ChosenRecipeId,
+                metadata.BaseWeight,
+                metadata.RepeatMultiplier,
+                metadata.RepeatOccurrences,
+                metadata.ProteinMultiplier,
+                metadata.SharedProteins,
+                metadata.SpacingDays,
+                metadata.SpacingMultiplier,
+                metadata.FavoriteMultiplier,
+                metadata.FinalWeight),
+            MetadataJsonOptions);
+
+    private static bool IsSpecialDay(CalendarEntryType type) =>
+        type is CalendarEntryType.Holiday
+            or CalendarEntryType.HostFamilyDinner
+            or CalendarEntryType.Misc;
+
+    private static IReadOnlySet<string> ProteinKeys(
+        IReadOnlyDictionary<long, HashSet<string>> proteinKeys,
+        long recipeId) =>
+        proteinKeys.TryGetValue(recipeId, out var keys) ? keys : EmptyProteinKeys;
+
+    private static CalendarRerollOutcome.Failure PastDate() =>
+        new(
+            StatusCodes.Status422UnprocessableEntity,
+            ErrorCodes.CalendarDateInPast,
+            "Dates in the past are read-only. Use the admin historical correction workflow.");
+
+    private async Task<IReadOnlyDictionary<long, HashSet<string>>> LoadProteinKeysAsync(
+        long[] recipeIds,
+        CancellationToken cancellationToken)
+    {
+        if (recipeIds.Length == 0)
+        {
+            return new Dictionary<long, HashSet<string>>();
+        }
+
+        var rows = await dbContext.RecipeProteins
+            .AsNoTracking()
+            .Where(link => recipeIds.Contains(link.RecipeId))
+            .Join(
+                dbContext.Proteins.AsNoTracking(),
+                link => link.ProteinId,
+                protein => protein.Id,
+                (link, protein) => new { link.RecipeId, protein.NormalizedName })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var result = new Dictionary<long, HashSet<string>>();
+        foreach (var row in rows)
+        {
+            if (!result.TryGetValue(row.RecipeId, out var keys))
+            {
+                keys = new HashSet<string>(StringComparer.Ordinal);
+                result[row.RecipeId] = keys;
+            }
+
+            keys.Add(row.NormalizedName);
+        }
+
+        return result;
+    }
+
+    /// <summary>Snake_case serialization shape for <c>metadata_json</c> (docs/M6_PLAN.md §2.3).</summary>
+    private sealed record RerollMetadataDocument(
+        string Kind,
+        int CandidateCount,
+        long ChosenRecipeId,
+        decimal BaseWeight,
+        decimal RepeatMultiplier,
+        int RepeatOccurrences,
+        decimal ProteinMultiplier,
+        IReadOnlyList<string> SharedProteins,
+        int? SpacingDays,
+        decimal SpacingMultiplier,
+        decimal FavoriteMultiplier,
+        decimal FinalWeight);
+}

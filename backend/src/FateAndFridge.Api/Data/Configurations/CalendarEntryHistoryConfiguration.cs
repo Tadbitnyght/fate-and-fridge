@@ -13,6 +13,7 @@ public sealed class CalendarEntryHistoryConfiguration : IEntityTypeConfiguration
 
         builder.Property(history => history.BeforeJson).HasColumnType("jsonb");
         builder.Property(history => history.AfterJson).HasColumnType("jsonb");
+        builder.Property(history => history.MetadataJson).HasColumnType("jsonb");
         builder.Property(history => history.IsHistoricalCorrection).HasDefaultValue(false);
 
         builder.HasIndex(history => history.CalendarEntryId);

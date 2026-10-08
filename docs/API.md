@@ -236,6 +236,7 @@ historical-correction API may change history.
 | `DELETE /api/v1/calendar/{date}` | `calendar.edit` | Hard-delete a today/future entry (`204`) |
 | `POST /api/v1/calendar/{date}/lock` | `calendar.edit` | Lock |
 | `POST /api/v1/calendar/{date}/unlock` | `calendar.edit` | Unlock |
+| `POST /api/v1/calendar/{date}/reroll` | `calendar.edit` | Reroll one date to a random `Normal` recipe (M6) |
 
 ### `day` document
 
@@ -289,13 +290,50 @@ meaning: non-historical entries track recipe renames, historical entries are
 frozen. Locks restrict automatic mutation only — manual edits keep the lock;
 blank dates cannot be locked (`CALENDAR_BLANK_CANNOT_LOCK`).
 
+### Reroll (M6)
+
+`POST /api/v1/calendar/{date}/reroll` requires `calendar.edit`, takes no body,
+and replaces the date with a randomly selected `Normal` recipe entry. It
+immediately commits and returns the M5 `day` document plus a compact operation
+handle:
+
+```json
+{
+  "date": "2026-11-15",
+  "is_today": true,
+  "is_historical": false,
+  "can_edit": true,
+  "entry": { "…": "the day document entry" },
+  "repeat_warning": { "…": "the day document repeat warning or null" },
+  "operation": { "id": "3f1c…", "undo_expires_at": null }
+}
+```
+
+Behavior (docs/M6_PLAN.md §1.11):
+
+- A blank date is filled; any non-locked, non-vacation entry is replaced.
+- Only `status = Normal` recipes are candidates (`manual_only`/`retired` never).
+  With no candidate the route fails `RANDOMIZER_NO_CANDIDATES`.
+- The replacement resets entry metadata: `is_locked = false`,
+  `diner_count = null`, `notes = null`, `include_groceries = true`, cleared
+  restaurant/location/custom/icon fields, and the snapshot from the chosen
+  recipe.
+- Exactly one `calendar_entry_history` row is written atomically (entry +
+  history) with a fresh `operation_id`, `before_json`, `after_json`, and
+  `metadata_json` (docs/M6_PLAN.md §2.3). `undo_expires_at` is currently
+  `null`; the operation stays undoable until the entry is next modified.
+- Reroll broadcasts nothing (live sync is M9); it emits the operation id that
+  M9 will use.
+
 ### Errors
 
 | Code | HTTP | Meaning |
 |------|------|---------|
 | `CALENDAR_DATE_IN_PAST` | 422 | The date is historical and read-only |
 | `CALENDAR_BLANK_CANNOT_LOCK` | 422 | Cannot lock a date with no entry |
-| `CALENDAR_ENTRY_LOCKED` | 422 | Reserved for M6/M7 automatic mutation of a locked date |
+| `CALENDAR_ENTRY_LOCKED` | 409 | Automatic mutation (reroll) of a locked date |
+| `RANDOMIZER_NOT_APPLICABLE` | 422 | Reroll of a vacation date |
+| `RANDOMIZER_NO_CANDIDATES` | 422 | Reroll with no `Normal` recipe available |
 | `CALENDAR_RECIPE_REQUIRED` | 400 | `recipe` entry without `recipe_id` |
 | `CALENDAR_MISC_LABEL_REQUIRED` | 400 | `misc` entry without `custom_label` |
 | `VALIDATION_FAILED` | 400 | Other field/range/horizon errors |

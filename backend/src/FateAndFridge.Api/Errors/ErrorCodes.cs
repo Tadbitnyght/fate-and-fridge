@@ -101,4 +101,17 @@ public static class ErrorCodes
     public const string CalendarRecipeRequired = "CALENDAR_RECIPE_REQUIRED";
 
     public const string CalendarMiscLabelRequired = "CALENDAR_MISC_LABEL_REQUIRED";
+
+    // M6 randomizer codes (docs/M6_PLAN.md §2.2).
+    /// <summary>No <c>Normal</c> recipe exists to auto-select.</summary>
+    public const string RandomizerNoCandidates = "RANDOMIZER_NO_CANDIDATES";
+
+    /// <summary>The entry type cannot be rerolled (vacation).</summary>
+    public const string RandomizerNotApplicable = "RANDOMIZER_NOT_APPLICABLE";
+
+    /// <summary>Reserved for M6-09 undo: the operation is missing or already undone.</summary>
+    public const string UndoExpired = "UNDO_EXPIRED";
+
+    /// <summary>Reserved for M6-09 undo: a later change invalidated the undo.</summary>
+    public const string UndoConflict = "UNDO_CONFLICT";
 }
