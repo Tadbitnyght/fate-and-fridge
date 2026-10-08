@@ -115,6 +115,12 @@ builder.Services.AddScoped<IReferenceUsageChecker, ReferenceDataUsageChecker>();
 builder.Services.AddScoped<RecipeService>();
 builder.Services.AddScoped<CalendarService>();
 
+// M6-02: the pure randomization engine and its injectable secure RNG seam. The
+// engine scores candidates and performs a weighted roulette draw; SystemRandomSource
+// is the only production source of randomness (docs/RANDOMIZER.md §7 Phase F).
+builder.Services.AddSingleton<IRandomSource, SystemRandomSource>();
+builder.Services.AddSingleton<RandomizerEngine>();
+
 // M3-04: local recipe image storage, content policy, and serving.
 builder.Services.AddScoped<RecipeImageService>();
 
