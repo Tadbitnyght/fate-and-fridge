@@ -1,7 +1,7 @@
 ---
 description: Implements one approved Fate & Fridge issue at a time and validates the result.
 mode: subagent
-steps: 40
+steps: 80
 permissions:
   - action: subagent
     resource: "*"
