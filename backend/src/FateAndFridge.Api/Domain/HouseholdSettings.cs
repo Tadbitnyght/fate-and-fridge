@@ -25,6 +25,31 @@ public sealed class HouseholdSettings
     /// </summary>
     public DateOnly? HistoricalBoundaryDate { get; set; }
 
+    /// <summary>
+    /// Randomizer scoring weights and search windows (docs/M6_PLAN.md §1.3).
+    /// Defaults are provided by the database so existing and freshly set-up
+    /// rows start on the documented values.
+    /// </summary>
+    public int RandomizerRepeatLookbackDays { get; set; }
+
+    public int RandomizerRepeatLookaheadDays { get; set; }
+
+    public decimal RandomizerRepeatMultiplier { get; set; }
+
+    public decimal RandomizerSpecialDayMultiplier { get; set; }
+
+    public decimal RandomizerProteinMultiplier { get; set; }
+
+    public int RandomizerProteinNeighborDistance { get; set; }
+
+    public decimal RandomizerFavoriteMultiplier { get; set; }
+
+    public int RandomizerSpacingNearDays { get; set; }
+
+    public int RandomizerSpacingFarDays { get; set; }
+
+    public int RandomizerSpacingSearchDays { get; set; }
+
     public StartupPage StartupPage { get; set; }
 
     public AuthMode AuthMode { get; set; }

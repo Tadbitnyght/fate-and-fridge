@@ -406,6 +406,70 @@ namespace FateAndFridge.Api.Migrations
                         .HasColumnType("text")
                         .HasColumnName("household_name");
 
+                    b.Property<decimal>("RandomizerFavoriteMultiplier")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(4, 2)
+                        .HasColumnType("numeric(4,2)")
+                        .HasDefaultValue(1.10m)
+                        .HasColumnName("randomizer_favorite_multiplier");
+
+                    b.Property<decimal>("RandomizerProteinMultiplier")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(4, 2)
+                        .HasColumnType("numeric(4,2)")
+                        .HasDefaultValue(0.70m)
+                        .HasColumnName("randomizer_protein_multiplier");
+
+                    b.Property<int>("RandomizerProteinNeighborDistance")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("randomizer_protein_neighbor_distance");
+
+                    b.Property<int>("RandomizerRepeatLookaheadDays")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(14)
+                        .HasColumnName("randomizer_repeat_lookahead_days");
+
+                    b.Property<int>("RandomizerRepeatLookbackDays")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(7)
+                        .HasColumnName("randomizer_repeat_lookback_days");
+
+                    b.Property<decimal>("RandomizerRepeatMultiplier")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(4, 2)
+                        .HasColumnType("numeric(4,2)")
+                        .HasDefaultValue(0.10m)
+                        .HasColumnName("randomizer_repeat_multiplier");
+
+                    b.Property<int>("RandomizerSpacingFarDays")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(8)
+                        .HasColumnName("randomizer_spacing_far_days");
+
+                    b.Property<int>("RandomizerSpacingNearDays")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(3)
+                        .HasColumnName("randomizer_spacing_near_days");
+
+                    b.Property<int>("RandomizerSpacingSearchDays")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(90)
+                        .HasColumnName("randomizer_spacing_search_days");
+
+                    b.Property<decimal>("RandomizerSpecialDayMultiplier")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(4, 2)
+                        .HasColumnType("numeric(4,2)")
+                        .HasDefaultValue(0.02m)
+                        .HasColumnName("randomizer_special_day_multiplier");
+
                     b.Property<string>("StartupPage")
                         .IsRequired()
                         .HasColumnType("text")

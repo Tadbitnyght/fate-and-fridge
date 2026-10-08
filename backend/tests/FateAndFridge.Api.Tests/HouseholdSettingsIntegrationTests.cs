@@ -52,12 +52,35 @@ public sealed class HouseholdSettingsIntegrationTests(M1SetupFixture fixture) : 
             "timezone",
             "week_starts_on",
             "default_diner_count",
-            "startup_page");
+            "startup_page",
+            "randomizer_repeat_lookback_days",
+            "randomizer_repeat_lookahead_days",
+            "randomizer_repeat_multiplier",
+            "randomizer_special_day_multiplier",
+            "randomizer_protein_multiplier",
+            "randomizer_protein_neighbor_distance",
+            "randomizer_favorite_multiplier",
+            "randomizer_spacing_near_days",
+            "randomizer_spacing_far_days",
+            "randomizer_spacing_search_days");
         payload.RootElement.GetProperty("household_name").GetString().Should().Be("Test Household");
         payload.RootElement.GetProperty("timezone").GetString().Should().Be("America/Chicago");
         payload.RootElement.GetProperty("week_starts_on").GetInt32().Should().Be(0);
         payload.RootElement.GetProperty("default_diner_count").GetInt32().Should().Be(4);
         payload.RootElement.GetProperty("startup_page").GetString().Should().Be("calendar");
+
+        // The seeded row omits the randomizer columns, so the database defaults
+        // (docs/M6_PLAN.md §1.3) must come back on the GET payload.
+        payload.RootElement.GetProperty("randomizer_repeat_lookback_days").GetInt32().Should().Be(7);
+        payload.RootElement.GetProperty("randomizer_repeat_lookahead_days").GetInt32().Should().Be(14);
+        payload.RootElement.GetProperty("randomizer_repeat_multiplier").GetDecimal().Should().Be(0.10m);
+        payload.RootElement.GetProperty("randomizer_special_day_multiplier").GetDecimal().Should().Be(0.02m);
+        payload.RootElement.GetProperty("randomizer_protein_multiplier").GetDecimal().Should().Be(0.70m);
+        payload.RootElement.GetProperty("randomizer_protein_neighbor_distance").GetInt32().Should().Be(1);
+        payload.RootElement.GetProperty("randomizer_favorite_multiplier").GetDecimal().Should().Be(1.10m);
+        payload.RootElement.GetProperty("randomizer_spacing_near_days").GetInt32().Should().Be(3);
+        payload.RootElement.GetProperty("randomizer_spacing_far_days").GetInt32().Should().Be(8);
+        payload.RootElement.GetProperty("randomizer_spacing_search_days").GetInt32().Should().Be(90);
     }
 
     [Fact]
@@ -350,6 +373,254 @@ public sealed class HouseholdSettingsIntegrationTests(M1SetupFixture fixture) : 
 
         await AssertPersistedAsync(
             settings => settings.HouseholdName.Should().Be("Admin"),
+            cancellationToken);
+    }
+
+    [Fact]
+    public async Task Patch_round_trips_every_randomizer_field_at_its_minimum()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var factory = fixture.CreateFactory();
+        var client = await CreateConfiguredClientAsync(factory, AuthMode.SingleUser, cancellationToken);
+
+        var response = await PatchAsync(
+            client,
+            """
+            {
+              "randomizer_repeat_lookback_days": 0,
+              "randomizer_repeat_lookahead_days": 0,
+              "randomizer_repeat_multiplier": 0.01,
+              "randomizer_special_day_multiplier": 0.00,
+              "randomizer_protein_multiplier": 0.10,
+              "randomizer_protein_neighbor_distance": 1,
+              "randomizer_favorite_multiplier": 1.00,
+              "randomizer_spacing_near_days": 1,
+              "randomizer_spacing_far_days": 1,
+              "randomizer_spacing_search_days": 7
+            }
+            """,
+            cancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using (var payload = JsonDocument.Parse(
+            await response.Content.ReadAsStringAsync(cancellationToken)))
+        {
+            payload.RootElement.GetProperty("randomizer_repeat_lookback_days").GetInt32().Should().Be(0);
+            payload.RootElement.GetProperty("randomizer_repeat_lookahead_days").GetInt32().Should().Be(0);
+            payload.RootElement.GetProperty("randomizer_repeat_multiplier").GetDecimal().Should().Be(0.01m);
+            payload.RootElement.GetProperty("randomizer_special_day_multiplier").GetDecimal().Should().Be(0.00m);
+            payload.RootElement.GetProperty("randomizer_protein_multiplier").GetDecimal().Should().Be(0.10m);
+            payload.RootElement.GetProperty("randomizer_protein_neighbor_distance").GetInt32().Should().Be(1);
+            payload.RootElement.GetProperty("randomizer_favorite_multiplier").GetDecimal().Should().Be(1.00m);
+            payload.RootElement.GetProperty("randomizer_spacing_near_days").GetInt32().Should().Be(1);
+            payload.RootElement.GetProperty("randomizer_spacing_far_days").GetInt32().Should().Be(1);
+            payload.RootElement.GetProperty("randomizer_spacing_search_days").GetInt32().Should().Be(7);
+        }
+
+        await AssertPersistedAsync(
+            settings =>
+            {
+                settings.RandomizerRepeatLookbackDays.Should().Be(0);
+                settings.RandomizerRepeatLookaheadDays.Should().Be(0);
+                settings.RandomizerRepeatMultiplier.Should().Be(0.01m);
+                settings.RandomizerSpecialDayMultiplier.Should().Be(0.00m);
+                settings.RandomizerProteinMultiplier.Should().Be(0.10m);
+                settings.RandomizerProteinNeighborDistance.Should().Be(1);
+                settings.RandomizerFavoriteMultiplier.Should().Be(1.00m);
+                settings.RandomizerSpacingNearDays.Should().Be(1);
+                settings.RandomizerSpacingFarDays.Should().Be(1);
+                settings.RandomizerSpacingSearchDays.Should().Be(7);
+            },
+            cancellationToken);
+    }
+
+    [Fact]
+    public async Task Patch_round_trips_every_randomizer_field_at_its_maximum()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var factory = fixture.CreateFactory();
+        var client = await CreateConfiguredClientAsync(factory, AuthMode.SingleUser, cancellationToken);
+
+        var response = await PatchAsync(
+            client,
+            """
+            {
+              "randomizer_repeat_lookback_days": 60,
+              "randomizer_repeat_lookahead_days": 60,
+              "randomizer_repeat_multiplier": 1.00,
+              "randomizer_special_day_multiplier": 1.00,
+              "randomizer_protein_multiplier": 1.00,
+              "randomizer_protein_neighbor_distance": 7,
+              "randomizer_favorite_multiplier": 2.00,
+              "randomizer_spacing_near_days": 30,
+              "randomizer_spacing_far_days": 60,
+              "randomizer_spacing_search_days": 365
+            }
+            """,
+            cancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using (var payload = JsonDocument.Parse(
+            await response.Content.ReadAsStringAsync(cancellationToken)))
+        {
+            payload.RootElement.GetProperty("randomizer_repeat_lookback_days").GetInt32().Should().Be(60);
+            payload.RootElement.GetProperty("randomizer_repeat_lookahead_days").GetInt32().Should().Be(60);
+            payload.RootElement.GetProperty("randomizer_repeat_multiplier").GetDecimal().Should().Be(1.00m);
+            payload.RootElement.GetProperty("randomizer_special_day_multiplier").GetDecimal().Should().Be(1.00m);
+            payload.RootElement.GetProperty("randomizer_protein_multiplier").GetDecimal().Should().Be(1.00m);
+            payload.RootElement.GetProperty("randomizer_protein_neighbor_distance").GetInt32().Should().Be(7);
+            payload.RootElement.GetProperty("randomizer_favorite_multiplier").GetDecimal().Should().Be(2.00m);
+            payload.RootElement.GetProperty("randomizer_spacing_near_days").GetInt32().Should().Be(30);
+            payload.RootElement.GetProperty("randomizer_spacing_far_days").GetInt32().Should().Be(60);
+            payload.RootElement.GetProperty("randomizer_spacing_search_days").GetInt32().Should().Be(365);
+        }
+
+        await AssertPersistedAsync(
+            settings =>
+            {
+                settings.RandomizerRepeatLookbackDays.Should().Be(60);
+                settings.RandomizerRepeatLookaheadDays.Should().Be(60);
+                settings.RandomizerRepeatMultiplier.Should().Be(1.00m);
+                settings.RandomizerSpecialDayMultiplier.Should().Be(1.00m);
+                settings.RandomizerProteinMultiplier.Should().Be(1.00m);
+                settings.RandomizerProteinNeighborDistance.Should().Be(7);
+                settings.RandomizerFavoriteMultiplier.Should().Be(2.00m);
+                settings.RandomizerSpacingNearDays.Should().Be(30);
+                settings.RandomizerSpacingFarDays.Should().Be(60);
+                settings.RandomizerSpacingSearchDays.Should().Be(365);
+            },
+            cancellationToken);
+    }
+
+    [Theory]
+    [InlineData("""{"randomizer_repeat_lookback_days": -1}""", "randomizer_repeat_lookback_days")]
+    [InlineData("""{"randomizer_repeat_lookback_days": 61}""", "randomizer_repeat_lookback_days")]
+    [InlineData("""{"randomizer_repeat_lookahead_days": -1}""", "randomizer_repeat_lookahead_days")]
+    [InlineData("""{"randomizer_repeat_lookahead_days": 61}""", "randomizer_repeat_lookahead_days")]
+    [InlineData("""{"randomizer_repeat_multiplier": 0.00}""", "randomizer_repeat_multiplier")]
+    [InlineData("""{"randomizer_repeat_multiplier": 1.01}""", "randomizer_repeat_multiplier")]
+    [InlineData("""{"randomizer_special_day_multiplier": -0.01}""", "randomizer_special_day_multiplier")]
+    [InlineData("""{"randomizer_special_day_multiplier": 1.01}""", "randomizer_special_day_multiplier")]
+    [InlineData("""{"randomizer_protein_multiplier": 0.09}""", "randomizer_protein_multiplier")]
+    [InlineData("""{"randomizer_protein_multiplier": 1.01}""", "randomizer_protein_multiplier")]
+    [InlineData("""{"randomizer_protein_neighbor_distance": 0}""", "randomizer_protein_neighbor_distance")]
+    [InlineData("""{"randomizer_protein_neighbor_distance": 8}""", "randomizer_protein_neighbor_distance")]
+    [InlineData("""{"randomizer_favorite_multiplier": 0.99}""", "randomizer_favorite_multiplier")]
+    [InlineData("""{"randomizer_favorite_multiplier": 2.01}""", "randomizer_favorite_multiplier")]
+    [InlineData("""{"randomizer_spacing_near_days": 0}""", "randomizer_spacing_near_days")]
+    [InlineData("""{"randomizer_spacing_near_days": 31}""", "randomizer_spacing_near_days")]
+    [InlineData("""{"randomizer_spacing_far_days": 0}""", "randomizer_spacing_far_days")]
+    [InlineData("""{"randomizer_spacing_far_days": 61}""", "randomizer_spacing_far_days")]
+    [InlineData("""{"randomizer_spacing_search_days": 6}""", "randomizer_spacing_search_days")]
+    [InlineData("""{"randomizer_spacing_search_days": 366}""", "randomizer_spacing_search_days")]
+    public async Task Patch_rejects_randomizer_fields_just_outside_their_range(
+        string json,
+        string expectedField)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var factory = fixture.CreateFactory();
+        var client = await CreateConfiguredClientAsync(factory, AuthMode.SingleUser, cancellationToken);
+
+        var response = await PatchAsync(client, json, cancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        using var payload = JsonDocument.Parse(
+            await response.Content.ReadAsStringAsync(cancellationToken));
+        var error = payload.RootElement.GetProperty("error");
+        error.GetProperty("code").GetString().Should().Be(ErrorCodes.ValidationFailed);
+
+        var fieldErrors = error.GetProperty("details").GetProperty("field_errors");
+        fieldErrors.TryGetProperty(expectedField, out var messages).Should().BeTrue();
+        messages.GetArrayLength().Should().BeGreaterThan(0);
+
+        await AssertPersistedAsync(
+            settings =>
+            {
+                settings.RandomizerRepeatLookbackDays.Should().Be(7);
+                settings.RandomizerRepeatLookaheadDays.Should().Be(14);
+                settings.RandomizerRepeatMultiplier.Should().Be(0.10m);
+                settings.RandomizerSpecialDayMultiplier.Should().Be(0.02m);
+                settings.RandomizerProteinMultiplier.Should().Be(0.70m);
+                settings.RandomizerProteinNeighborDistance.Should().Be(1);
+                settings.RandomizerFavoriteMultiplier.Should().Be(1.10m);
+                settings.RandomizerSpacingNearDays.Should().Be(3);
+                settings.RandomizerSpacingFarDays.Should().Be(8);
+                settings.RandomizerSpacingSearchDays.Should().Be(90);
+            },
+            cancellationToken);
+    }
+
+    [Fact]
+    public async Task Patch_rejects_spacing_far_below_near_and_accepts_equal_values()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var factory = fixture.CreateFactory();
+        var client = await CreateConfiguredClientAsync(factory, AuthMode.SingleUser, cancellationToken);
+
+        var rejected = await PatchAsync(
+            client,
+            """{"randomizer_spacing_near_days": 10, "randomizer_spacing_far_days": 5}""",
+            cancellationToken);
+
+        rejected.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        using (var payload = JsonDocument.Parse(
+            await rejected.Content.ReadAsStringAsync(cancellationToken)))
+        {
+            var fieldErrors = payload.RootElement
+                .GetProperty("error")
+                .GetProperty("details")
+                .GetProperty("field_errors");
+            fieldErrors.TryGetProperty("randomizer_spacing_far_days", out var messages).Should().BeTrue();
+            messages.GetArrayLength().Should().BeGreaterThan(0);
+        }
+
+        await AssertPersistedAsync(
+            settings =>
+            {
+                settings.RandomizerSpacingNearDays.Should().Be(3);
+                settings.RandomizerSpacingFarDays.Should().Be(8);
+            },
+            cancellationToken);
+
+        var accepted = await PatchAsync(
+            client,
+            """{"randomizer_spacing_near_days": 10, "randomizer_spacing_far_days": 10}""",
+            cancellationToken);
+
+        accepted.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Patch_rejects_spacing_near_raised_above_the_stored_far()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var factory = fixture.CreateFactory();
+        var client = await CreateConfiguredClientAsync(factory, AuthMode.SingleUser, cancellationToken);
+
+        // The stored far is 8, so raising near to 12 alone must fail even though
+        // the patch never mentions the far field.
+        var response = await PatchAsync(
+            client,
+            """{"randomizer_spacing_near_days": 12}""",
+            cancellationToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        using var payload = JsonDocument.Parse(
+            await response.Content.ReadAsStringAsync(cancellationToken));
+        var fieldErrors = payload.RootElement
+            .GetProperty("error")
+            .GetProperty("details")
+            .GetProperty("field_errors");
+        fieldErrors.TryGetProperty("randomizer_spacing_far_days", out var messages).Should().BeTrue();
+        messages.GetArrayLength().Should().BeGreaterThan(0);
+
+        await AssertPersistedAsync(
+            settings => settings.RandomizerSpacingNearDays.Should().Be(3),
             cancellationToken);
     }
 

@@ -98,6 +98,162 @@ public sealed class HouseholdSettingsPatchValidatorTests
     }
 
     [Fact]
+    public void Randomizer_patch_accepts_every_field_at_its_minimum()
+    {
+        var result = Validate(
+            """
+            {
+              "randomizer_repeat_lookback_days": 0,
+              "randomizer_repeat_lookahead_days": 0,
+              "randomizer_repeat_multiplier": 0.01,
+              "randomizer_special_day_multiplier": 0.00,
+              "randomizer_protein_multiplier": 0.10,
+              "randomizer_protein_neighbor_distance": 1,
+              "randomizer_favorite_multiplier": 1.00,
+              "randomizer_spacing_near_days": 1,
+              "randomizer_spacing_far_days": 1,
+              "randomizer_spacing_search_days": 7
+            }
+            """);
+
+        result.FieldErrors.Should().BeEmpty();
+        result.Patch.Should().Be(new HouseholdSettingsPatch(
+            null,
+            null,
+            null,
+            null,
+            null,
+            0,
+            0,
+            0.01m,
+            0.00m,
+            0.10m,
+            1,
+            1.00m,
+            1,
+            1,
+            7));
+    }
+
+    [Fact]
+    public void Randomizer_patch_accepts_every_field_at_its_maximum()
+    {
+        var result = Validate(
+            """
+            {
+              "randomizer_repeat_lookback_days": 60,
+              "randomizer_repeat_lookahead_days": 60,
+              "randomizer_repeat_multiplier": 1.00,
+              "randomizer_special_day_multiplier": 1.00,
+              "randomizer_protein_multiplier": 1.00,
+              "randomizer_protein_neighbor_distance": 7,
+              "randomizer_favorite_multiplier": 2.00,
+              "randomizer_spacing_near_days": 30,
+              "randomizer_spacing_far_days": 60,
+              "randomizer_spacing_search_days": 365
+            }
+            """);
+
+        result.FieldErrors.Should().BeEmpty();
+        result.Patch.Should().Be(new HouseholdSettingsPatch(
+            null,
+            null,
+            null,
+            null,
+            null,
+            60,
+            60,
+            1.00m,
+            1.00m,
+            1.00m,
+            7,
+            2.00m,
+            30,
+            60,
+            365));
+    }
+
+    [Fact]
+    public void Randomizer_only_patch_is_not_treated_as_empty()
+    {
+        var result = Validate("""{"randomizer_repeat_lookback_days": 7}""");
+
+        result.FieldErrors.Should().BeEmpty();
+        result.Patch!.RandomizerRepeatLookbackDays.Should().Be(7);
+    }
+
+    [Fact]
+    public void Spacing_far_below_near_in_the_same_patch_is_rejected()
+    {
+        var patch = new HouseholdSettingsPatch(
+            null,
+            null,
+            null,
+            null,
+            null,
+            RandomizerSpacingNearDays: 10,
+            RandomizerSpacingFarDays: 5);
+
+        var errors = HouseholdSettingsPatchValidator.ValidateAgainstCurrent(patch, CurrentSettings());
+
+        errors.Should().ContainKey("randomizer_spacing_far_days");
+        errors["randomizer_spacing_far_days"].Should().ContainSingle();
+    }
+
+    [Fact]
+    public void Spacing_far_equal_to_near_is_accepted()
+    {
+        var patch = new HouseholdSettingsPatch(
+            null,
+            null,
+            null,
+            null,
+            null,
+            RandomizerSpacingNearDays: 8,
+            RandomizerSpacingFarDays: 8);
+
+        HouseholdSettingsPatchValidator.ValidateAgainstCurrent(patch, CurrentSettings())
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Spacing_cross_field_check_uses_the_current_row_for_omitted_fields()
+    {
+        // Raising near above the stored far violates the coupling.
+        var nearOnly = new HouseholdSettingsPatch(
+            null,
+            null,
+            null,
+            null,
+            null,
+            RandomizerSpacingNearDays: 12);
+        HouseholdSettingsPatchValidator.ValidateAgainstCurrent(nearOnly, CurrentSettings(near: 3, far: 8))
+            .Should().ContainKey("randomizer_spacing_far_days");
+
+        // Lowering far below the stored near violates the coupling.
+        var farOnly = new HouseholdSettingsPatch(
+            null,
+            null,
+            null,
+            null,
+            null,
+            RandomizerSpacingFarDays: 2);
+        HouseholdSettingsPatchValidator.ValidateAgainstCurrent(farOnly, CurrentSettings(near: 3, far: 8))
+            .Should().ContainKey("randomizer_spacing_far_days");
+
+        // A change that keeps far >= near passes.
+        var compatible = new HouseholdSettingsPatch(
+            null,
+            null,
+            null,
+            null,
+            null,
+            RandomizerSpacingFarDays: 20);
+        HouseholdSettingsPatchValidator.ValidateAgainstCurrent(compatible, CurrentSettings(near: 3, far: 8))
+            .Should().BeEmpty();
+    }
+
+    [Fact]
     public void Household_name_lengths_one_and_one_hundred_are_accepted()
     {
         foreach (var name in new[] { "x", new string('x', 100) })
@@ -177,6 +333,31 @@ public sealed class HouseholdSettingsPatchValidatorTests
     [InlineData("""{"startup_page": "CALENDAR"}""", "startup_page")]
     [InlineData("""{"startup_page": "dashboard "}""", "startup_page")]
     [InlineData("""{"startup_page": "home"}""", "startup_page")]
+    [InlineData("""{"randomizer_repeat_lookback_days": -1}""", "randomizer_repeat_lookback_days")]
+    [InlineData("""{"randomizer_repeat_lookback_days": 61}""", "randomizer_repeat_lookback_days")]
+    [InlineData("""{"randomizer_repeat_lookahead_days": -1}""", "randomizer_repeat_lookahead_days")]
+    [InlineData("""{"randomizer_repeat_lookahead_days": 61}""", "randomizer_repeat_lookahead_days")]
+    [InlineData("""{"randomizer_repeat_multiplier": 0.00}""", "randomizer_repeat_multiplier")]
+    [InlineData("""{"randomizer_repeat_multiplier": 1.01}""", "randomizer_repeat_multiplier")]
+    [InlineData("""{"randomizer_repeat_multiplier": "0.10"}""", "randomizer_repeat_multiplier")]
+    [InlineData("""{"randomizer_repeat_multiplier": 1e400}""", "randomizer_repeat_multiplier")]
+    [InlineData("""{"randomizer_special_day_multiplier": -0.01}""", "randomizer_special_day_multiplier")]
+    [InlineData("""{"randomizer_special_day_multiplier": 1.01}""", "randomizer_special_day_multiplier")]
+    [InlineData("""{"randomizer_special_day_multiplier": null}""", "randomizer_special_day_multiplier")]
+    [InlineData("""{"randomizer_protein_multiplier": 0.09}""", "randomizer_protein_multiplier")]
+    [InlineData("""{"randomizer_protein_multiplier": 1.01}""", "randomizer_protein_multiplier")]
+    [InlineData("""{"randomizer_protein_neighbor_distance": 0}""", "randomizer_protein_neighbor_distance")]
+    [InlineData("""{"randomizer_protein_neighbor_distance": 8}""", "randomizer_protein_neighbor_distance")]
+    [InlineData("""{"randomizer_favorite_multiplier": 0.99}""", "randomizer_favorite_multiplier")]
+    [InlineData("""{"randomizer_favorite_multiplier": 2.01}""", "randomizer_favorite_multiplier")]
+    [InlineData("""{"randomizer_spacing_near_days": 0}""", "randomizer_spacing_near_days")]
+    [InlineData("""{"randomizer_spacing_near_days": 31}""", "randomizer_spacing_near_days")]
+    [InlineData("""{"randomizer_spacing_far_days": 0}""", "randomizer_spacing_far_days")]
+    [InlineData("""{"randomizer_spacing_far_days": 61}""", "randomizer_spacing_far_days")]
+    [InlineData("""{"randomizer_spacing_search_days": 6}""", "randomizer_spacing_search_days")]
+    [InlineData("""{"randomizer_spacing_search_days": 366}""", "randomizer_spacing_search_days")]
+    [InlineData("""{"randomizer_spacing_search_days": "90"}""", "randomizer_spacing_search_days")]
+    [InlineData("""{"randomizer_spacing_search_days": null}""", "randomizer_spacing_search_days")]
     [InlineData("""{"startup_page": null}""", "startup_page")]
     public void Invalid_field_values_are_rejected_with_a_single_field_error(string json, string expectedField)
     {
@@ -238,6 +419,15 @@ public sealed class HouseholdSettingsPatchValidatorTests
         result.Patch.Should().BeNull();
         result.FieldErrors.Should().ContainKey("body");
     }
+
+    private static HouseholdSettings CurrentSettings(int near = 3, int far = 8) => new()
+    {
+        Id = 1,
+        HouseholdName = "Test Household",
+        Timezone = "America/Chicago",
+        RandomizerSpacingNearDays = near,
+        RandomizerSpacingFarDays = far,
+    };
 
     private static HouseholdSettingsPatchValidation Validate(string json)
     {

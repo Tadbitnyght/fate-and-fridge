@@ -11,7 +11,17 @@ public sealed record HouseholdSettingsResponse(
     string Timezone,
     int WeekStartsOn,
     int DefaultDinerCount,
-    string StartupPage)
+    string StartupPage,
+    int RandomizerRepeatLookbackDays,
+    int RandomizerRepeatLookaheadDays,
+    decimal RandomizerRepeatMultiplier,
+    decimal RandomizerSpecialDayMultiplier,
+    decimal RandomizerProteinMultiplier,
+    int RandomizerProteinNeighborDistance,
+    decimal RandomizerFavoriteMultiplier,
+    int RandomizerSpacingNearDays,
+    int RandomizerSpacingFarDays,
+    int RandomizerSpacingSearchDays)
 {
     /// <summary>Projects the stored row onto the public snake_case payload.</summary>
     public static HouseholdSettingsResponse From(HouseholdSettings settings) => new(
@@ -19,7 +29,17 @@ public sealed record HouseholdSettingsResponse(
         settings.Timezone,
         settings.WeekStartsOn,
         settings.DefaultDinerCount,
-        EnumTextConverters.StartupPageToText(settings.StartupPage));
+        EnumTextConverters.StartupPageToText(settings.StartupPage),
+        settings.RandomizerRepeatLookbackDays,
+        settings.RandomizerRepeatLookaheadDays,
+        settings.RandomizerRepeatMultiplier,
+        settings.RandomizerSpecialDayMultiplier,
+        settings.RandomizerProteinMultiplier,
+        settings.RandomizerProteinNeighborDistance,
+        settings.RandomizerFavoriteMultiplier,
+        settings.RandomizerSpacingNearDays,
+        settings.RandomizerSpacingFarDays,
+        settings.RandomizerSpacingSearchDays);
 }
 
 /// <summary>
@@ -78,6 +98,56 @@ public sealed class HouseholdSettingsService(AppDbContext dbContext, TimeProvide
         if (patch.StartupPage is { } startupPage)
         {
             settings.StartupPage = startupPage;
+        }
+
+        if (patch.RandomizerRepeatLookbackDays is { } repeatLookbackDays)
+        {
+            settings.RandomizerRepeatLookbackDays = repeatLookbackDays;
+        }
+
+        if (patch.RandomizerRepeatLookaheadDays is { } repeatLookaheadDays)
+        {
+            settings.RandomizerRepeatLookaheadDays = repeatLookaheadDays;
+        }
+
+        if (patch.RandomizerRepeatMultiplier is { } repeatMultiplier)
+        {
+            settings.RandomizerRepeatMultiplier = repeatMultiplier;
+        }
+
+        if (patch.RandomizerSpecialDayMultiplier is { } specialDayMultiplier)
+        {
+            settings.RandomizerSpecialDayMultiplier = specialDayMultiplier;
+        }
+
+        if (patch.RandomizerProteinMultiplier is { } proteinMultiplier)
+        {
+            settings.RandomizerProteinMultiplier = proteinMultiplier;
+        }
+
+        if (patch.RandomizerProteinNeighborDistance is { } proteinNeighborDistance)
+        {
+            settings.RandomizerProteinNeighborDistance = proteinNeighborDistance;
+        }
+
+        if (patch.RandomizerFavoriteMultiplier is { } favoriteMultiplier)
+        {
+            settings.RandomizerFavoriteMultiplier = favoriteMultiplier;
+        }
+
+        if (patch.RandomizerSpacingNearDays is { } spacingNearDays)
+        {
+            settings.RandomizerSpacingNearDays = spacingNearDays;
+        }
+
+        if (patch.RandomizerSpacingFarDays is { } spacingFarDays)
+        {
+            settings.RandomizerSpacingFarDays = spacingFarDays;
+        }
+
+        if (patch.RandomizerSpacingSearchDays is { } spacingSearchDays)
+        {
+            settings.RandomizerSpacingSearchDays = spacingSearchDays;
         }
 
         settings.UpdatedAt = DateTimeOffset.UtcNow;

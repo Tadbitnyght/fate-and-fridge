@@ -235,6 +235,19 @@ public static class SettingsEndpoints
             return ApiResults.ValidationError(validation.FieldErrors);
         }
 
+        // The spacing fields are coupled (far >= near in docs/M6_PLAN.md §1.3),
+        // so the cross-field check needs the row the patch is applied to.
+        var current = await settingsService.GetAsync(cancellationToken)
+            ?? throw new InvalidOperationException(
+                "The household settings row is missing although setup is complete.");
+        var crossFieldErrors = HouseholdSettingsPatchValidator.ValidateAgainstCurrent(
+            validation.Patch,
+            current);
+        if (crossFieldErrors.Count > 0)
+        {
+            return ApiResults.ValidationError(crossFieldErrors);
+        }
+
         var settings = await settingsService.ApplyPatchAsync(validation.Patch, cancellationToken);
         return Results.Ok(HouseholdSettingsResponse.From(settings));
     }

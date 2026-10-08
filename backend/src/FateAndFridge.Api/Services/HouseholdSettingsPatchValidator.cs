@@ -15,7 +15,17 @@ public sealed record HouseholdSettingsPatch(
     string? Timezone,
     int? WeekStartsOn,
     int? DefaultDinerCount,
-    StartupPage? StartupPage);
+    StartupPage? StartupPage,
+    int? RandomizerRepeatLookbackDays = null,
+    int? RandomizerRepeatLookaheadDays = null,
+    decimal? RandomizerRepeatMultiplier = null,
+    decimal? RandomizerSpecialDayMultiplier = null,
+    decimal? RandomizerProteinMultiplier = null,
+    int? RandomizerProteinNeighborDistance = null,
+    decimal? RandomizerFavoriteMultiplier = null,
+    int? RandomizerSpacingNearDays = null,
+    int? RandomizerSpacingFarDays = null,
+    int? RandomizerSpacingSearchDays = null);
 
 /// <summary>
 /// Outcome of validating a household settings PATCH body. <see cref="Patch"/>
@@ -37,6 +47,27 @@ public static class HouseholdSettingsPatchValidator
     public const int MaxDinerCount = 20;
     public const int MinWeekStartsOn = 0;
     public const int MaxWeekStartsOn = 6;
+
+    public const int MinRandomizerRepeatLookbackDays = 0;
+    public const int MaxRandomizerRepeatLookbackDays = 60;
+    public const int MinRandomizerRepeatLookaheadDays = 0;
+    public const int MaxRandomizerRepeatLookaheadDays = 60;
+    public const decimal MinRandomizerRepeatMultiplier = 0.01m;
+    public const decimal MaxRandomizerRepeatMultiplier = 1.00m;
+    public const decimal MinRandomizerSpecialDayMultiplier = 0.00m;
+    public const decimal MaxRandomizerSpecialDayMultiplier = 1.00m;
+    public const decimal MinRandomizerProteinMultiplier = 0.10m;
+    public const decimal MaxRandomizerProteinMultiplier = 1.00m;
+    public const int MinRandomizerProteinNeighborDistance = 1;
+    public const int MaxRandomizerProteinNeighborDistance = 7;
+    public const decimal MinRandomizerFavoriteMultiplier = 1.00m;
+    public const decimal MaxRandomizerFavoriteMultiplier = 2.00m;
+    public const int MinRandomizerSpacingNearDays = 1;
+    public const int MaxRandomizerSpacingNearDays = 30;
+    public const int MinRandomizerSpacingFarDays = 1;
+    public const int MaxRandomizerSpacingFarDays = 60;
+    public const int MinRandomizerSpacingSearchDays = 7;
+    public const int MaxRandomizerSpacingSearchDays = 365;
 
     /// <summary>
     /// Names under the tzdata directory that resolve as time zones but are not
@@ -74,20 +105,134 @@ public static class HouseholdSettingsPatchValidator
         var hasWeekStartsOn = body.TryGetProperty("week_starts_on", out var weekStartsOn);
         var hasDinerCount = body.TryGetProperty("default_diner_count", out var dinerCount);
         var hasStartupPage = body.TryGetProperty("startup_page", out var startupPage);
+        var hasRepeatLookback = body.TryGetProperty(
+            "randomizer_repeat_lookback_days", out var repeatLookback);
+        var hasRepeatLookahead = body.TryGetProperty(
+            "randomizer_repeat_lookahead_days", out var repeatLookahead);
+        var hasRepeatMultiplier = body.TryGetProperty(
+            "randomizer_repeat_multiplier", out var repeatMultiplier);
+        var hasSpecialDayMultiplier = body.TryGetProperty(
+            "randomizer_special_day_multiplier", out var specialDayMultiplier);
+        var hasProteinMultiplier = body.TryGetProperty(
+            "randomizer_protein_multiplier", out var proteinMultiplier);
+        var hasProteinNeighborDistance = body.TryGetProperty(
+            "randomizer_protein_neighbor_distance", out var proteinNeighborDistance);
+        var hasFavoriteMultiplier = body.TryGetProperty(
+            "randomizer_favorite_multiplier", out var favoriteMultiplier);
+        var hasSpacingNearDays = body.TryGetProperty(
+            "randomizer_spacing_near_days", out var spacingNearDays);
+        var hasSpacingFarDays = body.TryGetProperty(
+            "randomizer_spacing_far_days", out var spacingFarDays);
+        var hasSpacingSearchDays = body.TryGetProperty(
+            "randomizer_spacing_search_days", out var spacingSearchDays);
 
         var patch = new HouseholdSettingsPatch(
             hasHouseholdName ? ReadHouseholdName(householdName, errors) : null,
             hasTimezone ? ReadTimezone(timezone, errors) : null,
             hasWeekStartsOn ? ReadWeekStartsOn(weekStartsOn, errors) : null,
             hasDinerCount ? ReadDinerCount(dinerCount, errors) : null,
-            hasStartupPage ? ReadStartupPage(startupPage, errors) : null);
+            hasStartupPage ? ReadStartupPage(startupPage, errors) : null,
+            hasRepeatLookback
+                ? ReadIntegerInRange(
+                    repeatLookback,
+                    "randomizer_repeat_lookback_days",
+                    MinRandomizerRepeatLookbackDays,
+                    MaxRandomizerRepeatLookbackDays,
+                    errors)
+                : null,
+            hasRepeatLookahead
+                ? ReadIntegerInRange(
+                    repeatLookahead,
+                    "randomizer_repeat_lookahead_days",
+                    MinRandomizerRepeatLookaheadDays,
+                    MaxRandomizerRepeatLookaheadDays,
+                    errors)
+                : null,
+            hasRepeatMultiplier
+                ? ReadDecimalInRange(
+                    repeatMultiplier,
+                    "randomizer_repeat_multiplier",
+                    MinRandomizerRepeatMultiplier,
+                    MaxRandomizerRepeatMultiplier,
+                    errors)
+                : null,
+            hasSpecialDayMultiplier
+                ? ReadDecimalInRange(
+                    specialDayMultiplier,
+                    "randomizer_special_day_multiplier",
+                    MinRandomizerSpecialDayMultiplier,
+                    MaxRandomizerSpecialDayMultiplier,
+                    errors)
+                : null,
+            hasProteinMultiplier
+                ? ReadDecimalInRange(
+                    proteinMultiplier,
+                    "randomizer_protein_multiplier",
+                    MinRandomizerProteinMultiplier,
+                    MaxRandomizerProteinMultiplier,
+                    errors)
+                : null,
+            hasProteinNeighborDistance
+                ? ReadIntegerInRange(
+                    proteinNeighborDistance,
+                    "randomizer_protein_neighbor_distance",
+                    MinRandomizerProteinNeighborDistance,
+                    MaxRandomizerProteinNeighborDistance,
+                    errors)
+                : null,
+            hasFavoriteMultiplier
+                ? ReadDecimalInRange(
+                    favoriteMultiplier,
+                    "randomizer_favorite_multiplier",
+                    MinRandomizerFavoriteMultiplier,
+                    MaxRandomizerFavoriteMultiplier,
+                    errors)
+                : null,
+            hasSpacingNearDays
+                ? ReadIntegerInRange(
+                    spacingNearDays,
+                    "randomizer_spacing_near_days",
+                    MinRandomizerSpacingNearDays,
+                    MaxRandomizerSpacingNearDays,
+                    errors)
+                : null,
+            hasSpacingFarDays
+                ? ReadIntegerInRange(
+                    spacingFarDays,
+                    "randomizer_spacing_far_days",
+                    MinRandomizerSpacingFarDays,
+                    MaxRandomizerSpacingFarDays,
+                    errors)
+                : null,
+            hasSpacingSearchDays
+                ? ReadIntegerInRange(
+                    spacingSearchDays,
+                    "randomizer_spacing_search_days",
+                    MinRandomizerSpacingSearchDays,
+                    MaxRandomizerSpacingSearchDays,
+                    errors)
+                : null);
 
         if (errors.Count > 0)
         {
             return new HouseholdSettingsPatchValidation(null, errors);
         }
 
-        if (!hasHouseholdName && !hasTimezone && !hasWeekStartsOn && !hasDinerCount && !hasStartupPage)
+        if (!hasHouseholdName
+            && !hasTimezone
+            && !hasWeekStartsOn
+            && !hasDinerCount
+            && !hasStartupPage
+            && !hasRepeatLookback
+            && !hasRepeatLookahead
+            && !hasRepeatMultiplier
+            && !hasSpecialDayMultiplier
+            && !hasProteinMultiplier
+            && !hasProteinNeighborDistance
+            && !hasFavoriteMultiplier
+            && !hasSpacingNearDays
+            && !hasSpacingFarDays
+            && !hasSpacingSearchDays)
         {
             return Invalid("body", "At least one household settings field must be provided.");
         }
@@ -213,6 +358,73 @@ public static class HouseholdSettingsPatchValidator
 
         AddError(errors, "startup_page", "startup_page must be \"calendar\" or \"dashboard\".");
         return null;
+    }
+
+    /// <summary>
+    /// Enforces the cross-field randomizer constraints that require the current
+    /// row: <c>randomizer_spacing_far_days</c> must be at least
+    /// <c>randomizer_spacing_near_days</c>. Effective values combine the patch
+    /// with the fields the patch leaves untouched.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string[]> ValidateAgainstCurrent(
+        HouseholdSettingsPatch patch,
+        HouseholdSettings current)
+    {
+        var effectiveNearDays = patch.RandomizerSpacingNearDays ?? current.RandomizerSpacingNearDays;
+        var effectiveFarDays = patch.RandomizerSpacingFarDays ?? current.RandomizerSpacingFarDays;
+
+        if (effectiveFarDays < effectiveNearDays)
+        {
+            return new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                ["randomizer_spacing_far_days"] =
+                    [$"randomizer_spacing_far_days must be greater than or equal to randomizer_spacing_near_days ({effectiveNearDays})."],
+            };
+        }
+
+        return NoFieldErrors;
+    }
+
+    private static int? ReadIntegerInRange(
+        JsonElement element,
+        string field,
+        int min,
+        int max,
+        Dictionary<string, string[]> errors)
+    {
+        if (element.ValueKind != JsonValueKind.Number
+            || !element.TryGetInt32(out var value)
+            || value < min
+            || value > max)
+        {
+            AddError(errors, field, $"{field} must be an integer between {min} and {max}.");
+            return null;
+        }
+
+        return value;
+    }
+
+    private static decimal? ReadDecimalInRange(
+        JsonElement element,
+        string field,
+        decimal min,
+        decimal max,
+        Dictionary<string, string[]> errors)
+    {
+        if (element.ValueKind != JsonValueKind.Number
+            || !element.TryGetDecimal(out var value)
+            || value < min
+            || value > max)
+        {
+            AddError(
+                errors,
+                field,
+                FormattableString.Invariant(
+                    $"{field} must be a number between {min:0.00} and {max:0.00}."));
+            return null;
+        }
+
+        return value;
     }
 
     internal static bool ContainsControlCharacters(string value)
