@@ -1,8 +1,7 @@
 # M6 Verification — Randomization Engine
 
-Status: **in progress** (this document is finalized by M6-12, which adds the
-independent §4 battery run, live-deployment evidence, and the manifest/tag
-completion gate). Tracking issue: #91 (M6-11 exhaustive randomizer tests).
+Status: **complete** (2026-10-08, tag `m6-complete`). Tracking issue: #91
+(M6-11 exhaustive randomizer tests); the M6-12 sweep is issue #92.
 
 M6 adds the ten `household_settings` randomizer columns and the
 `calendar_entry_history.metadata_json` column (migration `M6Randomizer`), the
@@ -49,6 +48,34 @@ persisted `metadata_json` becomes a stable assertion of the service-built contex
 
 - `docs/RANDOMIZER.md §15` "Batch" (preview persistence, Try Another, atomic
   Apply) is M7 and is intentionally not covered here.
-- M6-12 must add the independent battery run, live-deployment evidence
-  (image digest, health, live route proof, `/progress` M6 complete), and the
-  milestone-completion gate before this document moves to **complete**.
+
+## Evidence at completion
+
+Recorded on the M6-12 commit (branch `feature/m6-randomization-engine`).
+
+| Gate | Result |
+|------|--------|
+| Backend Release build (`FateAndFridge.Api`, `FateAndFridge.Api.Tests`) | 0 warnings / 0 errors |
+| Backend full suite (`FateAndFridge.Api.Tests`) | 1771 passed, 0 failed |
+| Frontend lint / format / typecheck (local mirror) | clean |
+| Vitest | 252 passed |
+| Playwright (hermetic) | 37 passed / 2 pre-existing stack skips |
+| `dotnet format --verify-no-changes --no-restore` | clean |
+| `dotnet ef migrations has-pending-model-changes` | no pending model changes |
+
+Independent review outcome: three MEDIUM findings were raised and fixed on the
+same branch — (1) Undo must be scoped to reroll operations only, (2) Undo must
+honour past-date immutability, and (3) concurrent per-date mutations must
+serialize via a per-date advisory lock. The fixes are in commit `b63efe3`
+(`fix(randomizer): scope undo to rerolls, enforce past-date immutability,
+serialize per-date mutations (#89)`).
+
+## Live deployment verification
+
+_Filled in by the Lead after rebuild/redeploy on the deploy host (Milestone
+completion gate, `AGENTS.md`). Not recorded here yet._
+
+- Image id / digest: _pending_
+- Health response: _pending_
+- Live M6 route proof (e.g. `POST /api/v1/calendar/{date}/reroll`): _pending_
+- `/progress` shows M6 complete: _pending_

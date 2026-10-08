@@ -89,6 +89,16 @@ public sealed class M1SchemaBaselineIntegrationTests(M1SchemaBaselineFixture fix
                 ["auth_mode"] = ("text", false),
                 ["created_at"] = ("timestamp with time zone", false),
                 ["updated_at"] = ("timestamp with time zone", false),
+                ["randomizer_repeat_lookback_days"] = ("integer", false),
+                ["randomizer_repeat_lookahead_days"] = ("integer", false),
+                ["randomizer_repeat_multiplier"] = ("numeric", false),
+                ["randomizer_special_day_multiplier"] = ("numeric", false),
+                ["randomizer_protein_multiplier"] = ("numeric", false),
+                ["randomizer_protein_neighbor_distance"] = ("integer", false),
+                ["randomizer_favorite_multiplier"] = ("numeric", false),
+                ["randomizer_spacing_near_days"] = ("integer", false),
+                ["randomizer_spacing_far_days"] = ("integer", false),
+                ["randomizer_spacing_search_days"] = ("integer", false),
             },
             ["application_settings"] = new()
             {

@@ -211,7 +211,7 @@ export const MILESTONES: Milestone[] = [
     id: 'M6',
     number: 6,
     name: 'Randomization Engine',
-    status: 'in_progress',
+    status: 'complete',
     summary:
       'The “what’s for dinner?” engine: eligibility, repeat-window penalties, spacing, favorites as a weak tie-break, and secure randomness.',
     features: [
@@ -223,9 +223,21 @@ export const MILESTONES: Milestone[] = [
       'Single-date reroll with metadata and temporary undo',
       'Exhaustive randomizer tests',
     ],
+    completedOn: '2026-10-08',
+    tag: 'm6-complete',
+    commit: 'f9599c2',
+    evidence: [
+      { label: 'Backend tests', value: '1771' },
+      { label: 'Vitest', value: '252' },
+      {
+        label: 'Playwright (hermetic)',
+        value: '37 passed / 2 pre-existing stack skips',
+      },
+      { label: 'M6 verification', value: 'independent review + full §4 battery' },
+      { label: 'Backend gates', value: 'format/build/EF clean' },
+    ],
     issues: [80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92],
-    issuesNote:
-      'Tracking #80; M6-01…M6-12: #81, #82, #83, #84, #85, #86, #87, #88, #89, #90, #91, #92.',
+    issuesNote: 'Tracking #80; M6-01…M6-12: #81–#92.',
   },
   {
     id: 'M7',

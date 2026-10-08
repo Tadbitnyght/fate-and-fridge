@@ -98,6 +98,32 @@ versions follow [Semantic Versioning](https://semver.org/).
   timezone. A persisted historical boundary freezes history across a timezone
   change, recipe renames refresh future/today snapshots while historical
   snapshots stay frozen, and a landscape print skeleton is included.
+- Milestone 6 — randomization engine (2026-10-08): the “what’s for dinner?”
+  engine. Ten validated `household_settings.randomizer_*` fields (7-back /
+  14-forward exact-repeat window, 0.10 repeat and 0.02 special-day
+  multipliers, 0.70 direct-neighbour protein penalty over a configurable
+  neighbour distance, 1.10 favorite tie-breaker, and spacing near/far/search
+  days) are exposed through `GET/PATCH /settings/household` and a Household
+  settings “Randomization” fieldset. A secure weighted-selection engine
+  (`RandomizerEngine`/`CalendarRandomizer`) draws with
+  `System.Security.Cryptography.RandomNumberGenerator` behind an injectable
+  `IRandomSource`, counting exact-recipe occurrences across historical, today,
+  and future household-local dates, applying a near-zero special-day
+  contribution, a once-only shared-primary-protein penalty against
+  recipe-bearing neighbours, a nearest-occurrence spacing step, and the
+  favorite multiplier to the final
+  `base × repeat × protein × spacing × favorite` weight.
+  `POST /calendar/{date}/reroll` (`calendar.edit`) replaces any non-locked,
+  non-historical, non-vacation entry or fills a blank date and stages one
+  `calendar_entry_history` row with a fresh `operation_id` and a server-side
+  `metadata_json` score breakdown, returning the compact
+  `operation: { id, undo_expires_at }`; `POST /operations/{operation_id}/undo`
+  restores the exact pre-reroll entry (or blank) until the date is next
+  modified (`UNDO_CONFLICT`/`UNDO_EXPIRED`). The frontend adds the Reroll
+  action and a dismissible Undo banner with disabled-state messaging. Schema:
+  `household_settings.randomizer_*` and
+  `calendar_entry_history.metadata_json` (migrations `M6Randomizer`,
+  `M6OperationMetadata`).
 
 ### Changed
 

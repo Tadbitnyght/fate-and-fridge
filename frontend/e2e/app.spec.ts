@@ -8,6 +8,16 @@ const calendarSettings = {
   week_starts_on: 0,
   default_diner_count: 4,
   startup_page: 'calendar',
+  randomizer_repeat_lookback_days: 7,
+  randomizer_repeat_lookahead_days: 14,
+  randomizer_repeat_multiplier: 0.1,
+  randomizer_special_day_multiplier: 0.02,
+  randomizer_protein_multiplier: 0.7,
+  randomizer_protein_neighbor_distance: 1,
+  randomizer_favorite_multiplier: 1.1,
+  randomizer_spacing_near_days: 3,
+  randomizer_spacing_far_days: 8,
+  randomizer_spacing_search_days: 90,
 }
 
 const dashboardSettings = { ...calendarSettings, startup_page: 'dashboard' }
@@ -186,7 +196,7 @@ test('progress roadmap is reachable from the dashboard card and the footer', asy
   await page.getByRole('link', { name: 'Open the milestone roadmap' }).click()
   await expect(page).toHaveURL(/\/progress$/)
   await expect(page.getByRole('heading', { level: 2, name: 'Progress' })).toBeVisible()
-  await expect(page.getByText('6 of 15 milestones complete (40%).')).toBeVisible()
+  await expect(page.getByText('7 of 15 milestones complete (47%).')).toBeVisible()
   await expect(
     page.getByRole('heading', { level: 3, name: 'M1 — Setup and Authentication' }),
   ).toBeVisible()
