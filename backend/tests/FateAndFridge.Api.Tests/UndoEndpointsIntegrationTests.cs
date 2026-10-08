@@ -61,10 +61,12 @@ public sealed class UndoEndpointsIntegrationTests(M1SetupFixture fixture) : IAsy
         var chosen = await SeedRecipeAsync("Lasagna");
         await SeedEntryAsync(
             Today,
-            CalendarEntryType.EatOut,
+            CalendarEntryType.Misc,
             recipeId: null,
             restaurantName: "Cafe",
             locationText: "Downtown",
+            customLabel: "Leftovers",
+            iconKey: "star",
             dinerCount: 3,
             notes: "keep me",
             includeGroceries: false);
@@ -74,7 +76,7 @@ public sealed class UndoEndpointsIntegrationTests(M1SetupFixture fixture) : IAsy
 
         var operationId = await RerollAndCaptureAsync(session, Today);
 
-        // The reroll replaced the EatOut entry with the only Normal recipe.
+        // The reroll replaced the Misc entry with the only Normal recipe.
         var rerolled = await ReadDayAsync(session, Today);
         rerolled.GetProperty("entry").GetProperty("entry_type").GetString().Should().Be("recipe");
         rerolled.GetProperty("entry").GetProperty("recipe").GetProperty("id").GetInt64()
@@ -87,10 +89,12 @@ public sealed class UndoEndpointsIntegrationTests(M1SetupFixture fixture) : IAsy
         day.GetProperty("date").GetString().Should().Be(Today.ToString("yyyy-MM-dd"));
 
         var entry = day.GetProperty("entry");
-        entry.GetProperty("entry_type").GetString().Should().Be("eat_out");
+        entry.GetProperty("entry_type").GetString().Should().Be("misc");
         entry.GetProperty("recipe").ValueKind.Should().Be(JsonValueKind.Null);
         entry.GetProperty("restaurant_name").GetString().Should().Be("Cafe");
         entry.GetProperty("location_text").GetString().Should().Be("Downtown");
+        entry.GetProperty("custom_label").GetString().Should().Be("Leftovers");
+        entry.GetProperty("icon_key").GetString().Should().Be("star");
         entry.GetProperty("diner_count").GetInt32().Should().Be(3);
         entry.GetProperty("notes").GetString().Should().Be("keep me");
         entry.GetProperty("include_groceries").GetBoolean().Should().BeFalse();
@@ -294,6 +298,86 @@ public sealed class UndoEndpointsIntegrationTests(M1SetupFixture fixture) : IAsy
         (await context.AuditEvents.CountAsync(Ct)).Should().Be(0);
     }
 
+    [Fact]
+    public async Task Undo_of_a_non_reroll_operation_returns_expired()
+    {
+        await SeedAdminHouseholdAsync();
+        using var factory = CreateFactory(new TestTimeProvider(Now));
+        using var session = await SignInAsync(factory, "root", AdminPassword);
+
+        var operationId = Guid.NewGuid();
+        await SeedHistoryAsync(Today, operationId, """{"kind":"upsert"}""");
+
+        var response = await UndoAsync(session, operationId);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Gone);
+        (await ReadErrorAsync(response)).GetProperty("code").GetString()
+            .Should().Be(ErrorCodes.UndoExpired);
+    }
+
+    [Fact]
+    public async Task Undo_of_a_reroll_that_is_now_historical_returns_date_in_past()
+    {
+        await SeedAdminHouseholdAsync();
+        await SeedRecipeAsync("Lasagna");
+        var clock = new TestTimeProvider(Now);
+        using var factory = CreateFactory(clock);
+        using var session = await SignInAsync(factory, "root", AdminPassword);
+
+        var future = Today.AddDays(3);
+        var operationId = await RerollAndCaptureAsync(session, future);
+
+        // Move the household clock past the rerolled date so it is now historical.
+        clock.UtcNow = Now.AddDays(5);
+
+        var response = await UndoAsync(session, operationId);
+
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+        (await ReadErrorAsync(response)).GetProperty("code").GetString()
+            .Should().Be(ErrorCodes.CalendarDateInPast);
+    }
+
+    [Fact]
+    public async Task Concurrent_undoes_of_the_same_operation_apply_once()
+    {
+        await SeedAdminHouseholdAsync();
+        await SeedRecipeAsync("Lasagna");
+        using var factory = CreateFactory(new TestTimeProvider(Now));
+        using var session = await SignInAsync(factory, "root", AdminPassword);
+
+        var operationId = await RerollAndCaptureAsync(session, Today);
+
+        var responses = await Task.WhenAll(
+            UndoAsync(session, operationId),
+            UndoAsync(session, operationId));
+
+        responses.Count(response => response.StatusCode == HttpStatusCode.OK).Should().Be(1);
+        responses.Should().OnlyContain(response =>
+            response.StatusCode == HttpStatusCode.OK
+                || response.StatusCode == HttpStatusCode.Gone
+                || response.StatusCode == HttpStatusCode.Conflict);
+        responses.Should().NotContain(response =>
+            response.StatusCode == HttpStatusCode.InternalServerError);
+
+        await using var context = fixture.CreateContext();
+        (await context.CalendarEntryHistory.CountAsync(
+            row => row.ChangeReason == $"undo:{operationId:D}", Ct)).Should().Be(1);
+    }
+
+    private async Task SeedHistoryAsync(DateOnly date, Guid operationId, string metadataJson)
+    {
+        await using var context = fixture.CreateContext();
+        context.CalendarEntryHistory.Add(new CalendarEntryHistory
+        {
+            MealDate = date,
+            OperationId = operationId,
+            MetadataJson = metadataJson,
+            ChangedAt = SeedTimestamp,
+            IsHistoricalCorrection = false,
+        });
+        await context.SaveChangesAsync(Ct);
+    }
+
     private ApiFactory CreateFactory(TestTimeProvider clock) =>
         fixture.CreateFactory(configureServices: services =>
         {
@@ -483,7 +567,9 @@ public sealed class UndoEndpointsIntegrationTests(M1SetupFixture fixture) : IAsy
         string? notes = null,
         bool includeGroceries = false,
         string? restaurantName = null,
-        string? locationText = null)
+        string? locationText = null,
+        string? customLabel = null,
+        string? iconKey = null)
     {
         await using var context = fixture.CreateContext();
         context.CalendarEntries.Add(new CalendarEntry
@@ -497,6 +583,8 @@ public sealed class UndoEndpointsIntegrationTests(M1SetupFixture fixture) : IAsy
             IncludeGroceries = includeGroceries,
             RestaurantName = restaurantName,
             LocationText = locationText,
+            CustomLabel = customLabel,
+            IconKey = iconKey,
             SnapshotDisplayText = type.ToString(),
             CreatedAt = SeedTimestamp,
             UpdatedAt = SeedTimestamp,

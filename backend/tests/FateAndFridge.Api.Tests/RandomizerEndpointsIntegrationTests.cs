@@ -253,6 +253,65 @@ public sealed class RandomizerEndpointsIntegrationTests(M1SetupFixture fixture) 
             .Should().Be(HttpStatusCode.Unauthorized);
     }
 
+    [Fact]
+    public async Task Reroll_clears_restaurant_location_custom_label_and_icon()
+    {
+        await SeedAdminHouseholdAsync();
+        var recipe = await SeedRecipeAsync("Lasagna");
+        await SeedEntryAsync(
+            Today,
+            CalendarEntryType.Misc,
+            recipeId: null,
+            restaurantName: "Cafe",
+            locationText: "Downtown",
+            customLabel: "Leftovers",
+            iconKey: "star");
+
+        using var factory = CreateFactory(new TestTimeProvider(Now));
+        using var session = await SignInAsync(factory, "root", AdminPassword);
+
+        var response = await RerollAsync(session, Today);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var entry = (await ReadJsonAsync(response)).GetProperty("entry");
+        entry.GetProperty("entry_type").GetString().Should().Be("recipe");
+        entry.GetProperty("recipe").GetProperty("id").GetInt64().Should().Be(recipe.Id);
+        entry.GetProperty("restaurant_name").ValueKind.Should().Be(JsonValueKind.Null);
+        entry.GetProperty("location_text").ValueKind.Should().Be(JsonValueKind.Null);
+        entry.GetProperty("custom_label").ValueKind.Should().Be(JsonValueKind.Null);
+        entry.GetProperty("icon_key").ValueKind.Should().Be(JsonValueKind.Null);
+
+        await using var context = fixture.CreateContext();
+        var stored = await context.CalendarEntries
+            .SingleAsync(candidate => candidate.MealDate == Today, Ct);
+        stored.RestaurantName.Should().BeNull();
+        stored.LocationText.Should().BeNull();
+        stored.CustomLabel.Should().BeNull();
+        stored.IconKey.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Concurrent_rerolls_of_the_same_blank_date_serialize_without_error()
+    {
+        await SeedAdminHouseholdAsync();
+        await SeedRecipeAsync("Lasagna");
+        await SeedRecipeAsync("Tacos");
+        using var factory = CreateFactory(new TestTimeProvider(Now));
+        using var session = await SignInAsync(factory, "root", AdminPassword);
+
+        var responses = await Task.WhenAll(
+            RerollAsync(session, Today),
+            RerollAsync(session, Today));
+
+        responses.Should().OnlyContain(response => response.StatusCode == HttpStatusCode.OK);
+
+        await using var context = fixture.CreateContext();
+        (await context.CalendarEntries.CountAsync(entry => entry.MealDate == Today, Ct))
+            .Should().Be(1, "the per-date advisory lock serializes the two rerolls");
+        (await context.CalendarEntryHistory.CountAsync(row => row.MealDate == Today, Ct))
+            .Should().Be(2);
+    }
+
     private ApiFactory CreateFactory(TestTimeProvider clock) =>
         fixture.CreateFactory(configureServices: services =>
         {
@@ -419,7 +478,11 @@ public sealed class RandomizerEndpointsIntegrationTests(M1SetupFixture fixture) 
         bool isLocked = false,
         int? dinerCount = null,
         string? notes = null,
-        bool includeGroceries = false)
+        bool includeGroceries = false,
+        string? restaurantName = null,
+        string? locationText = null,
+        string? customLabel = null,
+        string? iconKey = null)
     {
         await using var context = fixture.CreateContext();
         context.CalendarEntries.Add(new CalendarEntry
@@ -431,6 +494,10 @@ public sealed class RandomizerEndpointsIntegrationTests(M1SetupFixture fixture) 
             DinerCount = dinerCount,
             Notes = notes,
             IncludeGroceries = includeGroceries,
+            RestaurantName = restaurantName,
+            LocationText = locationText,
+            CustomLabel = customLabel,
+            IconKey = iconKey,
             SnapshotDisplayText = type.ToString(),
             CreatedAt = SeedTimestamp,
             UpdatedAt = SeedTimestamp,

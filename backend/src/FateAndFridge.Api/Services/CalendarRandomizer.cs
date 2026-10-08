@@ -68,6 +68,16 @@ public sealed class CalendarRandomizer(
             return PastDate();
         }
 
+        // Serialize concurrent mutations of the same date (docs/M6_PLAN.md
+        // §1.11): the transaction-scoped advisory lock is released on
+        // commit/rollback, so a second concurrent reroll waits here and then
+        // re-reads the committed entry instead of racing it (blank-date
+        // double-insert, lost updates).
+        await using var transaction = await dbContext.Database
+            .BeginTransactionAsync(cancellationToken)
+            .ConfigureAwait(false);
+        await LockDateAsync(date, cancellationToken).ConfigureAwait(false);
+
         var existing = await dbContext.CalendarEntries
             .FirstOrDefaultAsync(entry => entry.MealDate == date, cancellationToken)
             .ConfigureAwait(false);
@@ -199,12 +209,10 @@ public sealed class CalendarRandomizer(
         entry.UpdatedAt = now;
         entry.UpdatedByUserId = actorUserId;
 
-        // Entry + exactly one history row commit atomically. The second
-        // SaveChanges makes a freshly created entry's id available to history
-        // (same pattern as CalendarService.UpsertAsync).
-        await using var transaction = await dbContext.Database
-            .BeginTransactionAsync(cancellationToken)
-            .ConfigureAwait(false);
+        // Entry + exactly one history row commit atomically inside the same
+        // transaction that holds the per-date lock. The second SaveChanges makes
+        // a freshly created entry's id available to history (same pattern as
+        // CalendarService.UpsertAsync).
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         dbContext.CalendarEntryHistory.Add(new CalendarEntryHistory
         {
@@ -262,6 +270,49 @@ public sealed class CalendarRandomizer(
             ErrorCodes.CalendarDateInPast,
             "Dates in the past are read-only. Use the admin historical correction workflow.");
 
+    private static CalendarUndoOutcome.Failure UndoPastDate() =>
+        new(
+            StatusCodes.Status422UnprocessableEntity,
+            ErrorCodes.CalendarDateInPast,
+            "Dates in the past are read-only. Use the admin historical correction workflow.");
+
+    /// <summary>
+    /// Takes the per-date transaction-scoped PostgreSQL advisory lock so
+    /// concurrent reroll/undo of the same date serialize. The lock is released
+    /// automatically when the caller's transaction commits or rolls back.
+    /// </summary>
+    private Task LockDateAsync(DateOnly date, CancellationToken cancellationToken) =>
+        dbContext.Database.ExecuteSqlRawAsync(
+            "SELECT pg_advisory_xact_lock({0})",
+            new object[] { (long)date.DayNumber },
+            cancellationToken);
+
+    /// <summary>
+    /// True when a history row's <c>metadata_json</c> is a reroll document
+    /// (<c>{"kind":"reroll",…}</c>, docs/M6_PLAN.md §2.3). Missing or malformed
+    /// metadata is not an undoable reroll.
+    /// </summary>
+    private static bool IsRerollMetadata(string? metadataJson)
+    {
+        if (string.IsNullOrWhiteSpace(metadataJson))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(metadataJson);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("kind", out var kind)
+                && kind.ValueKind == JsonValueKind.String
+                && string.Equals(kind.GetString(), "reroll", StringComparison.Ordinal);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
     private async Task<IReadOnlyDictionary<long, HashSet<string>>> LoadProteinKeysAsync(
         long[] recipeIds,
         CancellationToken cancellationToken)
@@ -300,11 +351,10 @@ public sealed class CalendarRandomizer(
     /// <summary>
     /// Undoes one reroll operation (docs/M6_PLAN.md §1.13): restores the exact
     /// pre-reroll state (the prior entry, or blank if the date was empty) and
-    /// stages exactly one history row. A missing or already-undone operation
-    /// fails <c>UNDO_EXPIRED</c>; a later change to the date fails
-    /// <c>UNDO_CONFLICT</c>. Undo restores prior state rather than creating new
-    /// future data, so it is allowed even if the date has since become
-    /// historical.
+    /// stages exactly one history row. A missing, non-reroll, or already-undone
+    /// operation fails <c>UNDO_EXPIRED</c>; a later change to the date fails
+    /// <c>UNDO_CONFLICT</c>; a date that has since become historical fails
+    /// <c>CALENDAR_DATE_IN_PAST</c> (past dates are immutable in normal use).
     /// </summary>
     public async Task<CalendarUndoOutcome> UndoAsync(
         Guid operationId,
@@ -315,10 +365,31 @@ public sealed class CalendarRandomizer(
             .AsNoTracking()
             .FirstOrDefaultAsync(row => row.OperationId == operationId, cancellationToken)
             .ConfigureAwait(false);
-        if (reroll is null)
+
+        // Only a reroll operation is undoable; a missing row or any other kind
+        // of history entry (e.g. a later upsert) is not a reroll to restore.
+        if (reroll is null || !IsRerollMetadata(reroll.MetadataJson))
         {
             return Expired();
         }
+
+        // Past dates are immutable in normal use (AGENTS.md): undo restores
+        // prior state, but it may not rewrite a date that has since become
+        // historical.
+        var context = await clock.GetContextAsync(cancellationToken).ConfigureAwait(false);
+        if (HouseholdClock.IsHistorical(reroll.MealDate, context))
+        {
+            return UndoPastDate();
+        }
+
+        // Serialize concurrent mutations of the same date (docs/M6_PLAN.md
+        // §1.11): the transaction-scoped advisory lock is released on
+        // commit/rollback, so a concurrent second undo re-checks "already
+        // undone" after the first commits instead of double-applying.
+        await using var transaction = await dbContext.Database
+            .BeginTransactionAsync(cancellationToken)
+            .ConfigureAwait(false);
+        await LockDateAsync(reroll.MealDate, cancellationToken).ConfigureAwait(false);
 
         // The undo row carries this reason; its presence means the operation was
         // already undone, making a second call UNDO_EXPIRED (idempotent-safe).
@@ -355,10 +426,6 @@ public sealed class CalendarRandomizer(
 
         var now = timeProvider.GetUtcNow();
         var undoBeforeJson = entry is null ? null : CalendarService.SnapshotJson(entry);
-
-        await using var transaction = await dbContext.Database
-            .BeginTransactionAsync(cancellationToken)
-            .ConfigureAwait(false);
 
         long? restoredEntryId;
         string? restoredAfterJson;

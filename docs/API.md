@@ -322,7 +322,9 @@ Behavior (docs/M6_PLAN.md §1.11):
 - Exactly one `calendar_entry_history` row is written atomically (entry +
   history) with a fresh `operation_id`, `before_json`, `after_json`, and
   `metadata_json` (docs/M6_PLAN.md §2.3). `undo_expires_at` is currently
-  `null`; the operation stays undoable until the entry is next modified.
+  `null`; the operation stays undoable until the entry is next modified and
+  only while the date is still today or future (a past date fails
+  `CALENDAR_DATE_IN_PAST`).
 - Reroll broadcasts nothing (live sync is M9); it emits the operation id that
   M9 will use.
 
@@ -341,11 +343,16 @@ Behavior (docs/M6_PLAN.md §1.13):
   history) with a fresh `operation_id`, `before_json`, `after_json`, a
   `metadata_json` of `{"kind":"undo","undone_operation_id":"…"}`, and
   `change_reason` `undo:<operation_id>`.
+- Only a `reroll` operation is undoable. An operation that is missing, whose
+  history row is not a reroll (`metadata_json` lacks `"kind":"reroll"`), or that
+  has already been undone fails `UNDO_EXPIRED` (410), so repeating an undo is
+  safe.
 - Undo is offered until the entry is next modified. A later lock/upsert/delete
-  makes it fail `UNDO_CONFLICT` (409). An operation that is missing or already
-  undone fails `UNDO_EXPIRED` (410), so repeating an undo is safe.
-- Undo restores prior state rather than creating new future data, so it is
-  allowed even if the date has meanwhile become historical.
+  makes it fail `UNDO_CONFLICT` (409).
+- Undo is only available while the date is still today or future. A date that
+  has since become historical fails `CALENDAR_DATE_IN_PAST` (422), consistent
+  with past-date immutability; undo does not rewrite history even though it
+  restores prior state.
 - Undo broadcasts nothing (live sync is M9) and writes no `audit_events` rows.
 
 ### Errors
