@@ -225,7 +225,7 @@ export const MILESTONES: Milestone[] = [
     ],
     completedOn: '2026-10-08',
     tag: 'm6-complete',
-    commit: 'f9599c2',
+    commit: '9b83d05',
     evidence: [
       { label: 'Backend tests', value: '1771' },
       { label: 'Vitest', value: '252' },

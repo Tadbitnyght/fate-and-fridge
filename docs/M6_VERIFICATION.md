@@ -72,10 +72,26 @@ serialize per-date mutations (#89)`).
 
 ## Live deployment verification
 
-_Filled in by the Lead after rebuild/redeploy on the deploy host (Milestone
-completion gate, `AGENTS.md`). Not recorded here yet._
+Rebuilt and redeployed via `docker-admin` using `scripts/deploy.sh up`
+(`docker compose up -d --build` on the NAS) from commit `9b83d05`, then verified
+live.
 
-- Image id / digest: _pending_
-- Health response: _pending_
-- Live M6 route proof (e.g. `POST /api/v1/calendar/{date}/reroll`): _pending_
-- `/progress` shows M6 complete: _pending_
+- Deploy-host checkout: `git rev-parse --short HEAD` → `9b83d05`, tree clean.
+- Image `fate-and-fridge:0.1.0`: before `sha256:20ba2a53…` → after
+  `sha256:500d520d78f4531eeb7fbd7f51325927bdea759ba318162610acd1dae95524fb`
+  (created 2026-10-08T05:16:33-05:00). Local-only build, so no registry
+  `RepoDigests`; the image id is the identity.
+- Migrations applied on startup: `Applying migration '20261007055546_M6Randomizer'`
+  then `Applying migration '20261008054900_M6OperationMetadata'`, then
+  `Database migrations applied`.
+- Health: `GET /api/v1/health` → `200`
+  `{"status":"ok","app":"Fate & Fridge","version":"0.1.0","environment":"production"}`;
+  the app container reports `healthy`.
+- Live route proof (unauthenticated probes, no mutation): `POST /api/v1/calendar/2026-10-15/reroll`
+  → `422` and `POST /api/v1/operations/{uuid}/undo` → `410` (both routes present,
+  not `404`/`405`; an unknown route returns `404` as a baseline).
+- Live `/progress`: the served bundle `/assets/index-DOfsZ8JZ.js` contains
+  `m6-complete` and `Randomization Engine`, so the milestone manifest is shipped
+  and M6 renders Complete (summary 7 of 15, computed client-side).
+- PostgreSQL remains unpublished (no host port); no volumes/datasets were
+  deleted during the deploy.
