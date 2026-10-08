@@ -242,6 +242,18 @@ Recommended branches:
 
 Each substantive change should map to an issue.
 
+**Execution cadence (added 2026-10-07).** Work in **deliverable-sized units,
+not issue-sized ones**, and **commit at every verified checkpoint**:
+- A unit is one authorable *and* independently verifiable deliverable (e.g.
+  "settings backend + migration + tests", then "settings UI + docs").
+- Commit as soon as a unit's gates pass, before starting the next unit. Never
+  leave more than one unverified unit uncommitted — an agent session that hits
+  its step cap must leave the branch compiling with its finished units
+  committed. This is the recovery contract after a capped/ interrupted run.
+- Agent `steps:` bounds a single turn (on the final step the agent loses its
+  tools and can only summarize; new user input resets it). If a deliverable does
+  not fit the cap, split the deliverable rather than raising the cap.
+
 Pull requests should include:
 - linked requirement/issue
 - implementation summary

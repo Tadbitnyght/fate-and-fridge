@@ -264,6 +264,33 @@ verification→M6-12.
    for the new columns), pushing `main`, tagging `m6-complete`, and closing the
    M6 tracking issue. See `AGENTS.md` → "Milestone completion gate".
 
+### 5.1 Execution cadence (added 2026-10-07)
+
+M6 is executed in **deliverable-sized sessions, not issue-sized ones**, with a
+**checkpoint commit after every verified deliverable**:
+
+1. **Decompose by deliverable.** One session owns one authorable *and*
+   independently verifiable unit — for example "M6-01 backend (model, migration,
+   API, validator, tests)" then "M6-01 frontend + docs", or "M6-02…M6-04 engine
+   scoring". A session must not start a second unit until the first is committed.
+2. **Commit at each checkpoint.** As soon as a unit's gates pass, commit it
+   (message references the issue) before starting the next unit. Never leave
+   more than one unverified unit in the working tree: an interrupted session
+   must leave the branch compiling with its finished units committed. This is
+   the recovery contract after an agent hits its step cap.
+3. **Mind the step caps.** `steps:` bounds a single turn (on the final step the
+   agent loses its tools and must summarize); a new user message resets it. The
+   implementer runs at `steps: 80`; reviewer `28`; docker-admin `16`. If a
+   deliverable does not fit, split it — do not raise the cap again.
+4. **Lead orchestrates, does not implement.** The Lead sizes the units, delegates
+   to `implementer`, sends completed units to `reviewer`, and does not author
+   milestone code itself.
+5. **Frontend mirror.** A ready local mirror with real dependencies lives at
+   `/tmp/opencode/frontend` (`npm ci` already run; `rsync -a --delete --exclude
+   node_modules --exclude dist /mnt/y/frontend/ /tmp/opencode/frontend/` before
+   each run). Do not read or write a symlinked `node_modules` over 9p — worker
+   startup times out.
+
 ---
 
 ## 6. Explicitly deferred from M6
