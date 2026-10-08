@@ -121,6 +121,17 @@ export interface CalendarRange {
   entries: CalendarDay[]
 }
 
+/** Compact reroll handle returned by the M6 reroll route (docs/API.md "Reroll (M6)"). */
+export interface CalendarOperation {
+  id: string
+  undo_expires_at: string | null
+}
+
+/** A reroll response is the M5 day document plus the undo handle. */
+export interface CalendarRerollResponse extends CalendarDay {
+  operation: CalendarOperation
+}
+
 export interface CalendarRepeatCheck {
   is_repeat: boolean
   window_start: string
@@ -165,4 +176,14 @@ export function lockCalendarDay(date: string): Promise<CalendarDay> {
 
 export function unlockCalendarDay(date: string): Promise<CalendarDay> {
   return apiRequest<CalendarDay>(`/calendar/${date}/unlock`, { method: 'POST' })
+}
+
+/** Replaces a date with a randomly selected Normal recipe (M6, `calendar.edit`). */
+export function rerollCalendarDay(date: string): Promise<CalendarRerollResponse> {
+  return apiRequest<CalendarRerollResponse>(`/calendar/${date}/reroll`, { method: 'POST' })
+}
+
+/** Restores the pre-reroll state of an operation (M6, `calendar.edit`). */
+export function undoCalendarOperation(operationId: string): Promise<CalendarDay> {
+  return apiRequest<CalendarDay>(`/operations/${operationId}/undo`, { method: 'POST' })
 }

@@ -6,6 +6,7 @@ import {
   CALENDAR_ICONS,
   ICON_ENTRY_TYPES,
   type CalendarEntryType,
+  type CalendarOperation,
   type CalendarWriteRequest,
 } from '../../api/calendar'
 import { isApiError } from '../../api/client'
@@ -14,6 +15,7 @@ import { Modal } from '../../components/Modal'
 import { useRecipeList } from '../recipes/useRecipes'
 import { fullDateLabel } from './calendarDates'
 import { EventIcon } from './icons'
+import { RerollControl } from './RerollControl'
 import {
   useCalendarDay,
   useCalendarRepeatCheck,
@@ -36,10 +38,12 @@ export function DateDetailDialog({
   date,
   canEdit,
   onClose,
+  onRerolled,
 }: {
   date: string
   canEdit: boolean
   onClose: () => void
+  onRerolled: (operation: CalendarOperation) => void
 }) {
   const dayQuery = useCalendarDay(date)
   const day = dayQuery.data
@@ -129,6 +133,13 @@ export function DateDetailDialog({
     } catch (caught) {
       setError(isApiError(caught) ? caught.message : 'Changing the lock failed. Try again.')
     }
+  }
+
+  function handleRerolled(operation: CalendarOperation): void {
+    onRerolled(operation)
+    // Close so the page-level Undo banner is visible and focusable (the modal
+    // marks the rest of the page inert while open).
+    onClose()
   }
 
   const pending = saveMutation.isPending || deleteMutation.isPending || lockMutation.isPending
@@ -377,6 +388,8 @@ export function DateDetailDialog({
           </div>
         </form>
       )}
+
+      {day && <RerollControl day={day} canEdit={canEdit} onRerolled={handleRerolled} />}
     </Modal>
   )
 }

@@ -1,6 +1,6 @@
 import { useMemo, useState, type JSX } from 'react'
 
-import type { CalendarEntry } from '../../api/calendar'
+import type { CalendarDay, CalendarEntry, CalendarOperation } from '../../api/calendar'
 import { useHouseholdSettings } from '../settings/useHouseholdSettings'
 import {
   buildMonthGrid,
@@ -13,8 +13,10 @@ import {
 import { AgendaList } from './AgendaList'
 import { DateDetailDialog } from './DateDetailDialog'
 import { MonthGrid } from './MonthGrid'
+import { UndoBanner } from './UndoBanner'
 import { useCalendarAccess } from './access'
-import { useCalendarRange } from './useCalendar'
+import { describeRerollError } from './calendarErrors'
+import { useCalendarRange, useRerollCalendarDay } from './useCalendar'
 
 type CalendarView = 'month' | 'agenda'
 
@@ -30,6 +32,9 @@ export function CalendarPage(): JSX.Element {
   const [monthIndex, setMonthIndex] = useState(now.getMonth())
   const [view, setView] = useState<CalendarView>('month')
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [operation, setOperation] = useState<CalendarOperation | null>(null)
+  const [rerollError, setRerollError] = useState<string | null>(null)
+  const [undoError, setUndoError] = useState<string | null>(null)
 
   const householdSettings = useHouseholdSettings()
   const weekStartsOn = householdSettings.data?.week_starts_on ?? 0
@@ -54,7 +59,35 @@ export function CalendarPage(): JSX.Element {
     return map
   }, [rangeQuery.data])
 
+  const dayDataByDate = useMemo(() => {
+    const map = new Map<string, CalendarDay>()
+    for (const day of rangeQuery.data?.entries ?? []) {
+      map.set(day.date, day)
+    }
+    return map
+  }, [rangeQuery.data])
+
+  const rerollMutation = useRerollCalendarDay()
+
   const householdToday = rangeQuery.data?.today ?? today
+
+  function handleReroll(date: string): void {
+    setRerollError(null)
+    setUndoError(null)
+    rerollMutation.mutate(date, {
+      onSuccess: (result) => {
+        setRerollError(null)
+        setOperation(result.operation)
+      },
+      onError: (caught) => setRerollError(describeRerollError(caught)),
+    })
+  }
+
+  function handleRerolled(nextOperation: CalendarOperation): void {
+    setRerollError(null)
+    setUndoError(null)
+    setOperation(nextOperation)
+  }
 
   function goToMonth(delta: number): void {
     const next = new Date(year, monthIndex + delta, 1)
@@ -126,6 +159,24 @@ export function CalendarPage(): JSX.Element {
         </button>
       </div>
 
+      {operation && (
+        <UndoBanner
+          operation={operation}
+          onDismiss={() => setOperation(null)}
+          onError={(message) => setUndoError(message)}
+        />
+      )}
+      {undoError !== null && (
+        <p className="form__error" role="alert">
+          {undoError}
+        </p>
+      )}
+      {rerollError !== null && (
+        <p className="form__error" role="alert">
+          {rerollError}
+        </p>
+      )}
+
       {rangeQuery.isLoading && <p className="page-note">Loading the calendar…</p>}
       {rangeQuery.isError && (
         <p className="form__error" role="alert">
@@ -139,6 +190,9 @@ export function CalendarPage(): JSX.Element {
             <MonthGrid
               days={days}
               entriesByDate={entriesByDate}
+              dayDataByDate={dayDataByDate}
+              canEdit={canEdit}
+              onReroll={handleReroll}
               today={householdToday}
               selectedDate={selectedDate}
               onSelect={setSelectedDate}
@@ -157,6 +211,7 @@ export function CalendarPage(): JSX.Element {
           date={selectedDate}
           canEdit={canEdit}
           onClose={() => setSelectedDate(null)}
+          onRerolled={handleRerolled}
         />
       )}
     </section>

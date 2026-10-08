@@ -1,17 +1,28 @@
 import { useRef, useState, type KeyboardEvent } from 'react'
 
-import type { CalendarEntry } from '../../api/calendar'
+import type { CalendarDay, CalendarEntry } from '../../api/calendar'
 import { fullDateLabel, weekdayHeaders, type MonthGridDay } from './calendarDates'
+import { DayActionMenu } from './DayActionMenu'
 import { EventIcon } from './icons'
+import { rerollAvailability } from './rerollAvailability'
 
 /**
  * Accessible month grid (M5-09). An ARIA grid of day buttons with
  * roving-tabindex arrow-key navigation; today is highlighted, historical days
  * are dimmed, and locked entries show a lock marker.
+ *
+ * M6-10 adds a compact Reroll affordance as a context menu (right-click,
+ * `ContextMenu` key, or `Shift+F10`) opened from the focused cell. It is not an
+ * inline button because a `gridcell` is itself a button here; nesting another
+ * interactive element would be invalid HTML and break the grid's ARIA and
+ * roving-tabindex semantics.
  */
 export function MonthGrid({
   days,
   entriesByDate,
+  dayDataByDate,
+  canEdit,
+  onReroll,
   today,
   selectedDate,
   onSelect,
@@ -20,6 +31,9 @@ export function MonthGrid({
 }: {
   days: MonthGridDay[]
   entriesByDate: Map<string, CalendarEntry>
+  dayDataByDate: Map<string, CalendarDay>
+  canEdit: boolean
+  onReroll: (iso: string) => void
   today: string
   selectedDate: string | null
   onSelect: (iso: string) => void
@@ -27,6 +41,7 @@ export function MonthGrid({
   label: string
 }) {
   const [focusedIso, setFocusedIso] = useState(selectedDate ?? today)
+  const [menu, setMenu] = useState<{ iso: string; rect: DOMRect } | null>(null)
   const buttonRefs = useRef(new Map<string, HTMLButtonElement>())
 
   // Derive the effective roving-tabindex date during render so month
@@ -41,9 +56,23 @@ export function MonthGrid({
     buttonRefs.current.get(target.iso)?.focus()
   }
 
+  function openMenu(iso: string): void {
+    const node = buttonRefs.current.get(iso)
+    if (!node) {
+      return
+    }
+    setMenu({ iso, rect: node.getBoundingClientRect() })
+  }
+
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
     const index = days.findIndex((day) => day.iso === effectiveFocusedIso)
     if (index < 0) {
+      return
+    }
+
+    if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+      event.preventDefault()
+      openMenu(effectiveFocusedIso)
       return
     }
 
@@ -114,6 +143,10 @@ export function MonthGrid({
                 aria-selected={day.iso === selectedDate}
                 aria-label={cellLabel(day, entry, today)}
                 onClick={() => onSelect(day.iso)}
+                onContextMenu={(event) => {
+                  event.preventDefault()
+                  openMenu(day.iso)
+                }}
               >
                 <span className="calendar-grid__daynumber">{day.dayOfMonth}</span>
                 {entry && (
@@ -134,6 +167,21 @@ export function MonthGrid({
           })}
         </div>
       ))}
+      {menu && (
+        <DayActionMenu
+          dateLabel={fullDateLabel(menu.iso)}
+          rect={menu.rect}
+          disabled={rerollAvailability(dayDataByDate.get(menu.iso) ?? null, canEdit).disabled}
+          reason={rerollAvailability(dayDataByDate.get(menu.iso) ?? null, canEdit).reason}
+          onReroll={() => {
+            const iso = menu.iso
+            setMenu(null)
+            onReroll(iso)
+          }}
+          onClose={() => setMenu(null)}
+          onRestoreFocus={() => buttonRefs.current.get(menu.iso)?.focus()}
+        />
+      )}
     </div>
   )
 }

@@ -47,6 +47,11 @@ export const ErrorCodes = {
   CalendarEntryLocked: 'CALENDAR_ENTRY_LOCKED',
   CalendarRecipeRequired: 'CALENDAR_RECIPE_REQUIRED',
   CalendarMiscLabelRequired: 'CALENDAR_MISC_LABEL_REQUIRED',
+  // M6 randomizer/undo codes (docs/API.md §7).
+  RandomizerNotApplicable: 'RANDOMIZER_NOT_APPLICABLE',
+  RandomizerNoCandidates: 'RANDOMIZER_NO_CANDIDATES',
+  UndoConflict: 'UNDO_CONFLICT',
+  UndoExpired: 'UNDO_EXPIRED',
 } as const
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes]

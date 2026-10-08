@@ -2165,6 +2165,116 @@ a.recipes__import:focus-visible {
   justify-content: flex-end;
 }
 
+.calendar-reroll {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+}
+
+.calendar-reroll button {
+  align-self: flex-start;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.calendar-reroll button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.undo-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0.5rem 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--ok-bg);
+  color: var(--ok-text);
+}
+
+.undo-banner__message {
+  margin: 0;
+  font-weight: 600;
+}
+
+.undo-banner__actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.undo-banner__actions button {
+  padding: 0.4rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 0.45rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.undo-banner__actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.day-action-menu {
+  z-index: 40;
+  min-width: 12rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 25%);
+}
+
+.day-action-menu button {
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 0.45rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.day-action-menu button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.day-action-menu__reason {
+  margin: 0;
+  padding: 0 0.6rem 0.2rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+@media print {
+  .undo-banner,
+  .day-action-menu {
+    display: none !important;
+  }
+}
+
 .calendar-detail__summary {
   font-size: 1.1rem;
 }

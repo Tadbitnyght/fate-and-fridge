@@ -7,6 +7,8 @@ import {
   getCalendarRange,
   lockCalendarDay,
   putCalendarDay,
+  rerollCalendarDay,
+  undoCalendarOperation,
   unlockCalendarDay,
   type CalendarWriteRequest,
 } from '../../api/calendar'
@@ -66,6 +68,24 @@ export function useSetCalendarLock() {
   return useMutation({
     mutationFn: ({ date, locked }: { date: string; locked: boolean }) =>
       locked ? lockCalendarDay(date) : unlockCalendarDay(date),
+    onSuccess: invalidate,
+  })
+}
+
+/** Rerolls a single date with a random Normal recipe (M6). */
+export function useRerollCalendarDay() {
+  const invalidate = useInvalidateCalendar()
+  return useMutation({
+    mutationFn: (date: string) => rerollCalendarDay(date),
+    onSuccess: invalidate,
+  })
+}
+
+/** Undoes a reroll operation, restoring the prior day state (M6). */
+export function useUndoCalendarOperation() {
+  const invalidate = useInvalidateCalendar()
+  return useMutation({
+    mutationFn: (operationId: string) => undoCalendarOperation(operationId),
     onSuccess: invalidate,
   })
 }

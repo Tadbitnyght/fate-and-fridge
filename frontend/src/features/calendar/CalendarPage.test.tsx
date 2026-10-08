@@ -165,7 +165,12 @@ describe('calendar date detail dialog', () => {
 
   function renderDialog(canEdit = true) {
     return renderWithProviders(
-      <DateDetailDialog date={todayIso} canEdit={canEdit} onClose={() => {}} />,
+      <DateDetailDialog
+        date={todayIso}
+        canEdit={canEdit}
+        onClose={() => {}}
+        onRerolled={() => {}}
+      />,
     )
   }
 
