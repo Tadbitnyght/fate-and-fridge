@@ -312,8 +312,13 @@ permitted.
 1. Read `AGENTS.md`, this file, the M5 sections of `docs/MILESTONES.md`, and the
    issue before each issue. Decisions in §1 are final; contradictions stop
    execution and escalate to the Lead.
-2. Use Roslyn MCP first for every C# inspection/edit/diagnostic (pass the
-   `.csproj` directly; backend workspace root is `/mnt/y/backend`). Never use
+2. Use Roslyn MCP first for every C# inspection/edit/diagnostic. Pass the
+   **absolute** `.csproj` to `projectPath`
+   (`/mnt/y/backend/src/FateAndFridge.Api/FateAndFridge.Api.csproj`): `projectPath`
+   resolves against the MCP server working directory `/mnt/y`, so
+   `src/FateAndFridge.Api/...` silently loads an AdhocWorkspace (false CS0234
+   storm); `filePath` instead resolves against the workspace root
+   `/mnt/y/backend`. Never use
    `String.Normalize`; this workstation runs invariant globalization, so any
    folding/casing logic must be explicit and table-driven.
 3. Frontend gates: Vitest and Playwright workers time out on the 9p share
