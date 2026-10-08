@@ -24,6 +24,16 @@ function formValuesFrom(settings: HouseholdSettings): HouseholdFormValues {
     weekStartsOn: settings.week_starts_on,
     defaultDinerCount: String(settings.default_diner_count),
     startupPage: settings.startup_page,
+    randomizerRepeatLookbackDays: String(settings.randomizer_repeat_lookback_days),
+    randomizerRepeatLookaheadDays: String(settings.randomizer_repeat_lookahead_days),
+    randomizerRepeatMultiplier: String(settings.randomizer_repeat_multiplier),
+    randomizerSpecialDayMultiplier: String(settings.randomizer_special_day_multiplier),
+    randomizerProteinMultiplier: String(settings.randomizer_protein_multiplier),
+    randomizerProteinNeighborDistance: String(settings.randomizer_protein_neighbor_distance),
+    randomizerFavoriteMultiplier: String(settings.randomizer_favorite_multiplier),
+    randomizerSpacingNearDays: String(settings.randomizer_spacing_near_days),
+    randomizerSpacingFarDays: String(settings.randomizer_spacing_far_days),
+    randomizerSpacingSearchDays: String(settings.randomizer_spacing_search_days),
   }
 }
 
@@ -88,6 +98,16 @@ function HouseholdForm({
         week_starts_on: values.weekStartsOn,
         default_diner_count: Number(values.defaultDinerCount),
         startup_page: values.startupPage,
+        randomizer_repeat_lookback_days: Number(values.randomizerRepeatLookbackDays),
+        randomizer_repeat_lookahead_days: Number(values.randomizerRepeatLookaheadDays),
+        randomizer_repeat_multiplier: Number(values.randomizerRepeatMultiplier),
+        randomizer_special_day_multiplier: Number(values.randomizerSpecialDayMultiplier),
+        randomizer_protein_multiplier: Number(values.randomizerProteinMultiplier),
+        randomizer_protein_neighbor_distance: Number(values.randomizerProteinNeighborDistance),
+        randomizer_favorite_multiplier: Number(values.randomizerFavoriteMultiplier),
+        randomizer_spacing_near_days: Number(values.randomizerSpacingNearDays),
+        randomizer_spacing_far_days: Number(values.randomizerSpacingFarDays),
+        randomizer_spacing_search_days: Number(values.randomizerSpacingSearchDays),
       })
       setErrors({})
       setSaved(true)
@@ -237,6 +257,234 @@ function HouseholdForm({
                 {errors['startup_page']}
               </p>
             )}
+          </fieldset>
+
+          <fieldset className="form__fieldset">
+            <legend>Randomization</legend>
+
+            <Field
+              id="settings-randomizer-repeat-lookback-days"
+              label="Repeat lookback (days)"
+              error={errors['randomizer_repeat_lookback_days']}
+              hint="Days before the date to check for the same recipe (0–60)."
+            >
+              <input
+                type="number"
+                min={0}
+                max={60}
+                step={1}
+                inputMode="numeric"
+                {...fieldProps('settings-randomizer-repeat-lookback-days', {
+                  error: errors['randomizer_repeat_lookback_days'],
+                  hint: true,
+                })}
+                value={values.randomizerRepeatLookbackDays}
+                onChange={(event) =>
+                  handleChange('randomizerRepeatLookbackDays', event.target.value)
+                }
+              />
+            </Field>
+
+            <Field
+              id="settings-randomizer-repeat-lookahead-days"
+              label="Repeat lookahead (days)"
+              error={errors['randomizer_repeat_lookahead_days']}
+              hint="Days after the date to check for the same recipe (0–60)."
+            >
+              <input
+                type="number"
+                min={0}
+                max={60}
+                step={1}
+                inputMode="numeric"
+                {...fieldProps('settings-randomizer-repeat-lookahead-days', {
+                  error: errors['randomizer_repeat_lookahead_days'],
+                  hint: true,
+                })}
+                value={values.randomizerRepeatLookaheadDays}
+                onChange={(event) =>
+                  handleChange('randomizerRepeatLookaheadDays', event.target.value)
+                }
+              />
+            </Field>
+
+            <Field
+              id="settings-randomizer-repeat-multiplier"
+              label="Repeat multiplier"
+              error={errors['randomizer_repeat_multiplier']}
+              hint="Weight for a recipe already planned in the window (0.01–1.00)."
+            >
+              <input
+                type="number"
+                min={0.01}
+                max={1}
+                step={0.01}
+                inputMode="decimal"
+                {...fieldProps('settings-randomizer-repeat-multiplier', {
+                  error: errors['randomizer_repeat_multiplier'],
+                  hint: true,
+                })}
+                value={values.randomizerRepeatMultiplier}
+                onChange={(event) => handleChange('randomizerRepeatMultiplier', event.target.value)}
+              />
+            </Field>
+
+            <Field
+              id="settings-randomizer-special-day-multiplier"
+              label="Special-day multiplier"
+              error={errors['randomizer_special_day_multiplier']}
+              hint="Weight when the repeat lands on a special day (0.00–1.00)."
+            >
+              <input
+                type="number"
+                min={0}
+                max={1}
+                step={0.01}
+                inputMode="decimal"
+                {...fieldProps('settings-randomizer-special-day-multiplier', {
+                  error: errors['randomizer_special_day_multiplier'],
+                  hint: true,
+                })}
+                value={values.randomizerSpecialDayMultiplier}
+                onChange={(event) =>
+                  handleChange('randomizerSpecialDayMultiplier', event.target.value)
+                }
+              />
+            </Field>
+
+            <Field
+              id="settings-randomizer-protein-multiplier"
+              label="Protein multiplier"
+              error={errors['randomizer_protein_multiplier']}
+              hint="Weight when a neighboring day shares a primary protein (0.10–1.00)."
+            >
+              <input
+                type="number"
+                min={0.1}
+                max={1}
+                step={0.01}
+                inputMode="decimal"
+                {...fieldProps('settings-randomizer-protein-multiplier', {
+                  error: errors['randomizer_protein_multiplier'],
+                  hint: true,
+                })}
+                value={values.randomizerProteinMultiplier}
+                onChange={(event) =>
+                  handleChange('randomizerProteinMultiplier', event.target.value)
+                }
+              />
+            </Field>
+
+            <Field
+              id="settings-randomizer-protein-neighbor-distance"
+              label="Protein neighbor distance"
+              error={errors['randomizer_protein_neighbor_distance']}
+              hint="How many days away a protein match still counts (1–7)."
+            >
+              <input
+                type="number"
+                min={1}
+                max={7}
+                step={1}
+                inputMode="numeric"
+                {...fieldProps('settings-randomizer-protein-neighbor-distance', {
+                  error: errors['randomizer_protein_neighbor_distance'],
+                  hint: true,
+                })}
+                value={values.randomizerProteinNeighborDistance}
+                onChange={(event) =>
+                  handleChange('randomizerProteinNeighborDistance', event.target.value)
+                }
+              />
+            </Field>
+
+            <Field
+              id="settings-randomizer-favorite-multiplier"
+              label="Favorite multiplier"
+              error={errors['randomizer_favorite_multiplier']}
+              hint="Tie-breaker boost for favorite recipes (1.00–2.00)."
+            >
+              <input
+                type="number"
+                min={1}
+                max={2}
+                step={0.01}
+                inputMode="decimal"
+                {...fieldProps('settings-randomizer-favorite-multiplier', {
+                  error: errors['randomizer_favorite_multiplier'],
+                  hint: true,
+                })}
+                value={values.randomizerFavoriteMultiplier}
+                onChange={(event) =>
+                  handleChange('randomizerFavoriteMultiplier', event.target.value)
+                }
+              />
+            </Field>
+
+            <Field
+              id="settings-randomizer-spacing-near-days"
+              label="Spacing near (days)"
+              error={errors['randomizer_spacing_near_days']}
+              hint="Shorter gaps that count as near and penalize a repeat (1–30)."
+            >
+              <input
+                type="number"
+                min={1}
+                max={30}
+                step={1}
+                inputMode="numeric"
+                {...fieldProps('settings-randomizer-spacing-near-days', {
+                  error: errors['randomizer_spacing_near_days'],
+                  hint: true,
+                })}
+                value={values.randomizerSpacingNearDays}
+                onChange={(event) => handleChange('randomizerSpacingNearDays', event.target.value)}
+              />
+            </Field>
+
+            <Field
+              id="settings-randomizer-spacing-far-days"
+              label="Spacing far (days)"
+              error={errors['randomizer_spacing_far_days']}
+              hint="Gap where spacing stops penalizing a repeat (1–60; at least the near value)."
+            >
+              <input
+                type="number"
+                min={1}
+                max={60}
+                step={1}
+                inputMode="numeric"
+                {...fieldProps('settings-randomizer-spacing-far-days', {
+                  error: errors['randomizer_spacing_far_days'],
+                  hint: true,
+                })}
+                value={values.randomizerSpacingFarDays}
+                onChange={(event) => handleChange('randomizerSpacingFarDays', event.target.value)}
+              />
+            </Field>
+
+            <Field
+              id="settings-randomizer-spacing-search-days"
+              label="Spacing search (days)"
+              error={errors['randomizer_spacing_search_days']}
+              hint="How far to look for a nearby repeat (7–365)."
+            >
+              <input
+                type="number"
+                min={7}
+                max={365}
+                step={1}
+                inputMode="numeric"
+                {...fieldProps('settings-randomizer-spacing-search-days', {
+                  error: errors['randomizer_spacing_search_days'],
+                  hint: true,
+                })}
+                value={values.randomizerSpacingSearchDays}
+                onChange={(event) =>
+                  handleChange('randomizerSpacingSearchDays', event.target.value)
+                }
+              />
+            </Field>
           </fieldset>
         </fieldset>
 

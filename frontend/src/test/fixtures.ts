@@ -52,6 +52,16 @@ export const householdSettings = {
   week_starts_on: 0,
   default_diner_count: 4,
   startup_page: 'calendar',
+  randomizer_repeat_lookback_days: 7,
+  randomizer_repeat_lookahead_days: 14,
+  randomizer_repeat_multiplier: 0.1,
+  randomizer_special_day_multiplier: 0.02,
+  randomizer_protein_multiplier: 0.7,
+  randomizer_protein_neighbor_distance: 1,
+  randomizer_favorite_multiplier: 1.1,
+  randomizer_spacing_near_days: 3,
+  randomizer_spacing_far_days: 8,
+  randomizer_spacing_search_days: 90,
 }
 
 export const securitySettings = {
