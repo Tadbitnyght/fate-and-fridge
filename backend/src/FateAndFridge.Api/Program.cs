@@ -262,6 +262,7 @@ app.MapTagEndpoints();
 app.MapRecipeEndpoints();
 app.MapRecipeImageEndpoints();
 app.MapCalendarEndpoints();
+app.MapOperationEndpoints();
 app.MapImportEndpoints();
 
 // Test-only permission probes (M1-09): mapped solely in the Testing

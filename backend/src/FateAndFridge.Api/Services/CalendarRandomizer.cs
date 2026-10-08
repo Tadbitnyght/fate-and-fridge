@@ -1,5 +1,6 @@
 using System.Text.Json;
 using FateAndFridge.Api.Data;
+using FateAndFridge.Api.Data.Configurations;
 using FateAndFridge.Api.Domain;
 using FateAndFridge.Api.Errors;
 using Microsoft.EntityFrameworkCore;
@@ -14,6 +15,16 @@ public abstract record CalendarRerollOutcome
 
     /// <summary>A non-validation failure (past date, locked, vacation, no candidates).</summary>
     public sealed record Failure(int StatusCode, string Code, string Message) : CalendarRerollOutcome;
+}
+
+/// <summary>Outcome of a single-date undo (docs/M6_PLAN.md §1.13).</summary>
+public abstract record CalendarUndoOutcome
+{
+    /// <summary>The undo committed; the day reflects the restored state.</summary>
+    public sealed record Success(CalendarDayRecord Day) : CalendarUndoOutcome;
+
+    /// <summary>A non-validation failure (missing/already undone, or a conflicting later change).</summary>
+    public sealed record Failure(int StatusCode, string Code, string Message) : CalendarUndoOutcome;
 }
 
 /// <summary>
@@ -285,6 +296,194 @@ public sealed class CalendarRandomizer(
 
         return result;
     }
+
+    /// <summary>
+    /// Undoes one reroll operation (docs/M6_PLAN.md §1.13): restores the exact
+    /// pre-reroll state (the prior entry, or blank if the date was empty) and
+    /// stages exactly one history row. A missing or already-undone operation
+    /// fails <c>UNDO_EXPIRED</c>; a later change to the date fails
+    /// <c>UNDO_CONFLICT</c>. Undo restores prior state rather than creating new
+    /// future data, so it is allowed even if the date has since become
+    /// historical.
+    /// </summary>
+    public async Task<CalendarUndoOutcome> UndoAsync(
+        Guid operationId,
+        long? actorUserId,
+        CancellationToken cancellationToken = default)
+    {
+        var reroll = await dbContext.CalendarEntryHistory
+            .AsNoTracking()
+            .FirstOrDefaultAsync(row => row.OperationId == operationId, cancellationToken)
+            .ConfigureAwait(false);
+        if (reroll is null)
+        {
+            return Expired();
+        }
+
+        // The undo row carries this reason; its presence means the operation was
+        // already undone, making a second call UNDO_EXPIRED (idempotent-safe).
+        var undoReason = UndoChangeReason(operationId);
+        var alreadyUndone = await dbContext.CalendarEntryHistory
+            .AsNoTracking()
+            .AnyAsync(row => row.ChangeReason == undoReason, cancellationToken)
+            .ConfigureAwait(false);
+        if (alreadyUndone)
+        {
+            return Expired();
+        }
+
+        // The reroll must still be the latest change for the meal date; any
+        // later lock/upsert/delete makes the undo ambiguous.
+        var latest = await dbContext.CalendarEntryHistory
+            .AsNoTracking()
+            .Where(row => row.MealDate == reroll.MealDate)
+            .OrderByDescending(row => row.ChangedAt)
+            .ThenByDescending(row => row.Id)
+            .FirstAsync(cancellationToken)
+            .ConfigureAwait(false);
+        if (latest.Id != reroll.Id)
+        {
+            return new CalendarUndoOutcome.Failure(
+                StatusCodes.Status409Conflict,
+                ErrorCodes.UndoConflict,
+                "This date has changed since the reroll. Undo is no longer available.");
+        }
+
+        var entry = await dbContext.CalendarEntries
+            .FirstOrDefaultAsync(candidate => candidate.MealDate == reroll.MealDate, cancellationToken)
+            .ConfigureAwait(false);
+
+        var now = timeProvider.GetUtcNow();
+        var undoBeforeJson = entry is null ? null : CalendarService.SnapshotJson(entry);
+
+        await using var transaction = await dbContext.Database
+            .BeginTransactionAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        long? restoredEntryId;
+        string? restoredAfterJson;
+        if (reroll.BeforeJson is null)
+        {
+            // The date was blank before the reroll: restoring means deleting the
+            // entry the reroll created.
+            if (entry is not null)
+            {
+                dbContext.CalendarEntries.Remove(entry);
+            }
+
+            restoredEntryId = null;
+            restoredAfterJson = null;
+            await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            if (entry is null)
+            {
+                // Defensive: the reroll's snapshot proves an entry existed.
+                entry = new CalendarEntry
+                {
+                    MealDate = reroll.MealDate,
+                    SnapshotDisplayText = string.Empty,
+                    CreatedAt = now,
+                    CreatedByUserId = actorUserId,
+                };
+                dbContext.CalendarEntries.Add(entry);
+            }
+
+            ApplySnapshot(entry, reroll.BeforeJson);
+            entry.UpdatedAt = now;
+            entry.UpdatedByUserId = actorUserId;
+            await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            restoredEntryId = entry.Id;
+            restoredAfterJson = CalendarService.SnapshotJson(entry);
+        }
+
+        dbContext.CalendarEntryHistory.Add(new CalendarEntryHistory
+        {
+            CalendarEntryId = restoredEntryId,
+            MealDate = reroll.MealDate,
+            OperationId = Guid.NewGuid(),
+            BeforeJson = undoBeforeJson,
+            AfterJson = restoredAfterJson,
+            MetadataJson = SerializeUndoMetadata(operationId),
+            ChangedByUserId = actorUserId,
+            ChangedAt = now,
+            ChangeReason = undoReason,
+            IsHistoricalCorrection = false,
+        });
+        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+
+        var day = await calendar.GetDayAsync(reroll.MealDate, cancellationToken).ConfigureAwait(false);
+        return new CalendarUndoOutcome.Success(day);
+    }
+
+    /// <summary>
+    /// Serializes undo metadata in the documented snake_case shape:
+    /// <c>{"kind":"undo","undone_operation_id":"..."}</c>.
+    /// </summary>
+    public static string SerializeUndoMetadata(Guid undoneOperationId) =>
+        JsonSerializer.Serialize(
+            new UndoMetadataDocument("undo", undoneOperationId),
+            MetadataJsonOptions);
+
+    private static string UndoChangeReason(Guid operationId) => $"undo:{operationId:D}";
+
+    private static CalendarUndoOutcome.Failure Expired() =>
+        new(
+            StatusCodes.Status410Gone,
+            ErrorCodes.UndoExpired,
+            "This operation is missing or has already been undone.");
+
+    /// <summary>Applies every restorable field from a stored snapshot document.</summary>
+    private static void ApplySnapshot(CalendarEntry entry, string snapshotJson)
+    {
+        using var document = JsonDocument.Parse(snapshotJson);
+        var root = document.RootElement;
+        if (root.TryGetProperty("entry_type", out var typeElement)
+            && typeElement.ValueKind == JsonValueKind.String
+            && EnumTextConverters.TryCalendarEntryTypeFromText(typeElement.GetString(), out var entryType))
+        {
+            entry.EntryType = entryType;
+        }
+
+        entry.RecipeId = ReadLong(root, "recipe_id");
+        entry.IsLocked = ReadBool(root, "is_locked");
+        entry.DinerCount = ReadInt(root, "diner_count");
+        entry.RestaurantName = ReadString(root, "restaurant_name");
+        entry.LocationText = ReadString(root, "location_text");
+        entry.CustomLabel = ReadString(root, "custom_label");
+        entry.Notes = ReadString(root, "notes");
+        entry.IconKey = ReadString(root, "icon_key");
+        entry.IncludeGroceries = ReadBool(root, "include_groceries");
+        entry.SnapshotRecipeName = ReadString(root, "snapshot_recipe_name");
+        entry.SnapshotDisplayText = ReadString(root, "snapshot_display_text") ?? string.Empty;
+    }
+
+    private static string? ReadString(JsonElement root, string name) =>
+        root.TryGetProperty(name, out var element) && element.ValueKind == JsonValueKind.String
+            ? element.GetString()
+            : null;
+
+    private static long? ReadLong(JsonElement root, string name) =>
+        root.TryGetProperty(name, out var element)
+            && element.ValueKind == JsonValueKind.Number
+            && element.TryGetInt64(out var value)
+            ? value
+            : null;
+
+    private static int? ReadInt(JsonElement root, string name) =>
+        root.TryGetProperty(name, out var element)
+            && element.ValueKind == JsonValueKind.Number
+            && element.TryGetInt32(out var value)
+            ? value
+            : null;
+
+    private static bool ReadBool(JsonElement root, string name) =>
+        root.TryGetProperty(name, out var element) && element.ValueKind == JsonValueKind.True;
+
+    /// <summary>Snake_case serialization shape for undo metadata (docs/M6_PLAN.md §2.3).</summary>
+    private sealed record UndoMetadataDocument(string Kind, Guid UndoneOperationId);
 
     /// <summary>Snake_case serialization shape for <c>metadata_json</c> (docs/M6_PLAN.md §2.3).</summary>
     private sealed record RerollMetadataDocument(

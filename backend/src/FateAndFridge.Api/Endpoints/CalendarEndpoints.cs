@@ -549,7 +549,7 @@ public static class CalendarEndpoints
         _ => Results.StatusCode(StatusCodes.Status500InternalServerError),
     };
 
-    private static async Task<(long? ActorUserId, IResult? Error)> ResolveActorAsync(
+    internal static async Task<(long? ActorUserId, IResult? Error)> ResolveActorAsync(
         ICurrentActorProvider actorProvider,
         CancellationToken cancellationToken)
     {

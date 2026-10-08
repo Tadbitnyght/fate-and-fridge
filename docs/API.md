@@ -237,6 +237,7 @@ historical-correction API may change history.
 | `POST /api/v1/calendar/{date}/lock` | `calendar.edit` | Lock |
 | `POST /api/v1/calendar/{date}/unlock` | `calendar.edit` | Unlock |
 | `POST /api/v1/calendar/{date}/reroll` | `calendar.edit` | Reroll one date to a random `Normal` recipe (M6) |
+| `POST /api/v1/operations/{operation_id}/undo` | `calendar.edit` | Undo a reroll operation (M6) |
 
 ### `day` document
 
@@ -325,6 +326,28 @@ Behavior (docs/M6_PLAN.md §1.11):
 - Reroll broadcasts nothing (live sync is M9); it emits the operation id that
   M9 will use.
 
+### Undo (M6)
+
+`POST /api/v1/operations/{operation_id}/undo` requires `calendar.edit`, takes
+no body, and returns the restored M5 `day` document (docs/M6_PLAN.md §2.2). A
+malformed `{operation_id}` fails `400 VALIDATION_FAILED` with a field error on
+`operation_id`.
+
+Behavior (docs/M6_PLAN.md §1.13):
+
+- Restores the exact pre-reroll state: the previous entry (every field the
+  reroll reset), or a blank date if the date was empty before the reroll.
+- Exactly one `calendar_entry_history` row is written atomically (entry +
+  history) with a fresh `operation_id`, `before_json`, `after_json`, a
+  `metadata_json` of `{"kind":"undo","undone_operation_id":"…"}`, and
+  `change_reason` `undo:<operation_id>`.
+- Undo is offered until the entry is next modified. A later lock/upsert/delete
+  makes it fail `UNDO_CONFLICT` (409). An operation that is missing or already
+  undone fails `UNDO_EXPIRED` (410), so repeating an undo is safe.
+- Undo restores prior state rather than creating new future data, so it is
+  allowed even if the date has meanwhile become historical.
+- Undo broadcasts nothing (live sync is M9) and writes no `audit_events` rows.
+
 ### Errors
 
 | Code | HTTP | Meaning |
@@ -336,6 +359,10 @@ Behavior (docs/M6_PLAN.md §1.11):
 | `RANDOMIZER_NO_CANDIDATES` | 422 | Reroll with no `Normal` recipe available |
 | `CALENDAR_RECIPE_REQUIRED` | 400 | `recipe` entry without `recipe_id` |
 | `CALENDAR_MISC_LABEL_REQUIRED` | 400 | `misc` entry without `custom_label` |
+| `UNDO_EXPIRED` | 410 | Undo of an operation that is missing or already undone |
+| `UNDO_CONFLICT` | 409 | Undo of an operation whose date changed afterwards |
+| `NOT_FOUND` | 404 | Unknown resource (shared envelope) |
+| `FORBIDDEN` | 403 | Authenticated actor lacks the required permission |
 | `VALIDATION_FAILED` | 400 | Other field/range/horizon errors |
 
 ---
