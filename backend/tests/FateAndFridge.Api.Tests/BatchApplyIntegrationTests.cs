@@ -278,6 +278,39 @@ public sealed class BatchApplyIntegrationTests(M1SetupFixture fixture) : IAsyncL
     }
 
     [Fact]
+    public async Task Apply_rejects_a_target_date_that_became_historical_after_the_preview()
+    {
+        await SeedAdminHouseholdAsync();
+        await SeedRecipeAsync("Lasagna");
+        await SeedRecipeAsync("Tacos");
+
+        using var factory = CreateFactory(new TestTimeProvider(Now));
+        using var session = await SignInAsync(factory, "root", AdminPassword);
+
+        // A valid preview is created while the whole range is editable.
+        var preview = await ReadJsonAsync(await PreviewAsync(session, Today, "seven_days"));
+        var token = TokenOf(preview);
+
+        // The household boundary advances past the previewed start date (e.g.
+        // the household crossed local midnight), without aging the 15-minute
+        // draft out. Apply must refuse to commit a now-past entry that could
+        // never be undone.
+        await SetHistoricalBoundaryAsync(Today);
+
+        var response = await ApplyAsync(session, token);
+
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+        (await ReadErrorAsync(response)).GetProperty("code").GetString()
+            .Should().Be(ErrorCodes.CalendarDateInPast);
+
+        await using var context = fixture.CreateContext();
+        (await context.CalendarEntries.CountAsync(Ct)).Should().Be(0, "a now-past apply writes nothing");
+        (await context.CalendarEntryHistory.CountAsync(Ct)).Should().Be(0);
+        var draft = await context.CalendarRerollDrafts.AsNoTracking().SingleAsync(Ct);
+        draft.AppliedAt.Should().BeNull("a rejected apply does not consume the draft");
+    }
+
+    [Fact]
     public async Task Apply_hides_another_actors_draft()
     {
         await SeedHouseholdAsync();
@@ -600,6 +633,15 @@ public sealed class BatchApplyIntegrationTests(M1SetupFixture fixture) : IAsyncL
             SET value_json = 'true'::jsonb, updated_at = EXCLUDED.updated_at
             """,
             Ct);
+    }
+
+    private async Task SetHistoricalBoundaryAsync(DateOnly boundary)
+    {
+        await using var context = fixture.CreateContext();
+        var settings = await context.HouseholdSettings.SingleAsync(Ct);
+        settings.HistoricalBoundaryDate = boundary;
+        settings.UpdatedAt = SeedTimestamp;
+        await context.SaveChangesAsync(Ct);
     }
 
     private async Task<User> SeedUserAsync(string username, string password, UserRole role)

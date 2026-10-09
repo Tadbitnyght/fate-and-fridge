@@ -246,10 +246,14 @@ public sealed class BatchRerollService(
             AppliedAt = null,
         };
 
-        // Try Another supersedes the actor's previous unapplied draft(s); the
-        // delete + insert commit atomically. No calendar state is touched.
+        // Try Another supersedes the actor's previous unapplied draft(s); any
+        // draft past its TTL (any actor, applied or not) is swept too so expired
+        // rows never accumulate. The delete + insert commit atomically and no
+        // calendar state is touched.
         var staleDrafts = await db.CalendarRerollDrafts
-            .Where(candidate => candidate.ActorUserId == actorUserId && candidate.AppliedAt == null)
+            .Where(candidate =>
+                (candidate.ActorUserId == actorUserId && candidate.AppliedAt == null)
+                || candidate.ExpiresAt < now)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
         db.CalendarRerollDrafts.RemoveRange(staleDrafts);
@@ -266,7 +270,9 @@ public sealed class BatchRerollService(
     /// writes the previewed recipes plus exactly one history row per changed date
     /// sharing a single batch operation id. A missing/expired/consumed draft fails
     /// <c>BATCH_DRAFT_EXPIRED</c>; a changed target date fails <c>BATCH_CONFLICT</c>
-    /// and writes nothing; another actor's draft is reported as <c>NOT_FOUND</c>.
+    /// and writes nothing; a target date that has since become historical fails
+    /// <c>CALENDAR_DATE_IN_PAST</c> and writes nothing; another actor's draft is
+    /// reported as <c>NOT_FOUND</c>.
     /// No live-sync broadcast and no audit rows are written (M9/M12).
     /// </summary>
     public async Task<BatchApplyOutcome> ApplyAsync(
@@ -322,6 +328,17 @@ public sealed class BatchRerollService(
         foreach (var day in proposed)
         {
             await LockDateAsync(day.Date, cancellationToken).ConfigureAwait(false);
+        }
+
+        // Re-check the household boundary under the CURRENT context inside the
+        // lock: a preview created before household midnight must not commit a
+        // target date that is now historical, since such an entry could never be
+        // undone (docs/M7_PLAN.md §1.10). Any now-past target aborts the whole
+        // apply with nothing written.
+        var context = await clock.GetContextAsync(cancellationToken).ConfigureAwait(false);
+        if (proposed.Any(day => HouseholdClock.IsHistorical(day.Date, context)))
+        {
+            return BatchApplyPastDate();
         }
 
         // Re-check every target date against the before-state captured at preview
@@ -470,18 +487,6 @@ public sealed class BatchRerollService(
             return BatchUndoExpired();
         }
 
-        // A prior undo of this batch wrote rows whose change_reason names the
-        // original batch id, so a second call is safely reported as expired.
-        var undoReason = BatchUndoChangeReason(batchOperationId);
-        var alreadyUndone = await db.CalendarEntryHistory
-            .AsNoTracking()
-            .AnyAsync(row => row.ChangeReason == undoReason, cancellationToken)
-            .ConfigureAwait(false);
-        if (alreadyUndone)
-        {
-            return BatchUndoExpired();
-        }
-
         // One transaction owns every lock, restore, and history write; any early
         // return disposes it and rolls the whole undo back.
         await using var transaction = await db.Database
@@ -493,6 +498,21 @@ public sealed class BatchRerollService(
         foreach (var row in applyRows)
         {
             await LockDateAsync(row.MealDate, cancellationToken).ConfigureAwait(false);
+        }
+
+        // A prior undo of this batch wrote rows whose change_reason names the
+        // original batch id. Re-checked inside the lock (mirrors
+        // CalendarRandomizer.UndoAsync) so a concurrent double-undo loser, which
+        // only reaches this point after the winner commits, is reported as
+        // expired (410) rather than as a conflicting later change (409).
+        var undoReason = BatchUndoChangeReason(batchOperationId);
+        var alreadyUndone = await db.CalendarEntryHistory
+            .AsNoTracking()
+            .AnyAsync(row => row.ChangeReason == undoReason, cancellationToken)
+            .ConfigureAwait(false);
+        if (alreadyUndone)
+        {
+            return BatchUndoExpired();
         }
 
         // Every apply row must still be the latest change for its meal date; a
@@ -722,6 +742,17 @@ public sealed class BatchRerollService(
             StatusCodes.Status409Conflict,
             ErrorCodes.BatchConflict,
             "A date in this batch changed since the preview. Preview again and re-apply.");
+
+    /// <summary>
+    /// The apply's target range now includes a historical date (the household
+    /// crossed midnight since the preview). Mirrors the undo/preview past-date
+    /// failure so the caller gets the same 422 <c>CALENDAR_DATE_IN_PAST</c>.
+    /// </summary>
+    private static BatchApplyOutcome.Failure BatchApplyPastDate() =>
+        new(
+            StatusCodes.Status422UnprocessableEntity,
+            ErrorCodes.CalendarDateInPast,
+            "Dates in the past are read-only. Use the admin historical correction workflow.");
 
     /// <summary>True when a history row's metadata is a batch apply document.</summary>
     private static bool IsBatchApplyMetadata(string? metadataJson)

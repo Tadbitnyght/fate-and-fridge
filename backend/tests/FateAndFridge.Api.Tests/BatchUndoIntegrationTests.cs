@@ -250,6 +250,41 @@ public sealed class BatchUndoIntegrationTests(M1SetupFixture fixture) : IAsyncLi
     }
 
     [Fact]
+    public async Task Concurrent_undoes_of_the_same_batch_apply_once_and_the_loser_is_expired()
+    {
+        await SeedAdminHouseholdAsync();
+        await SeedRecipeAsync("Lasagna");
+        await SeedRecipeAsync("Tacos");
+
+        using var factory = CreateFactory(new TestTimeProvider(Now));
+        using var session = await SignInAsync(factory, "root", AdminPassword);
+
+        var preview = await ReadJsonAsync(await PreviewAsync(session, Today, "seven_days"));
+        var changedDates = ProposedByDate(preview).Keys.ToArray();
+        var batchOperationId = BatchIdOf(await ReadJsonAsync(await ApplyAsync(session, TokenOf(preview))));
+
+        // Two simultaneous undos serialize on the per-date advisory lock; the
+        // winner reverts the batch, the loser re-checks "already undone" inside
+        // its transaction and is reported as expired (410), never as a 409
+        // conflict or an unhandled 500.
+        var responses = await Task.WhenAll(
+            UndoAsync(session, batchOperationId),
+            UndoAsync(session, batchOperationId));
+
+        responses.Count(response => response.StatusCode == HttpStatusCode.OK).Should().Be(1);
+        responses.Count(response => response.StatusCode == HttpStatusCode.Gone).Should().Be(
+            1,
+            "the double-undo loser is expired, not a conflict");
+        responses.Should().NotContain(response =>
+            response.StatusCode == HttpStatusCode.InternalServerError);
+
+        await using var context = fixture.CreateContext();
+        (await context.CalendarEntryHistory.CountAsync(
+            row => row.ChangeReason == $"undo:{batchOperationId:D}", Ct))
+            .Should().Be(changedDates.Length, "only the winner's undo rows are written");
+    }
+
+    [Fact]
     public async Task Undo_of_an_unknown_batch_returns_expired()
     {
         await SeedAdminHouseholdAsync();

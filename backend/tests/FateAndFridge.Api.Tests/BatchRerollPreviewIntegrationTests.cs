@@ -257,6 +257,52 @@ public sealed class BatchRerollPreviewIntegrationTests(M1SetupFixture fixture) :
     }
 
     [Fact]
+    public async Task Preview_rejects_a_start_date_beyond_the_horizon()
+    {
+        await SeedAdminHouseholdAsync();
+        await SeedRecipeAsync("Lasagna");
+        using var factory = CreateFactory(new TestTimeProvider(Now));
+        using var session = await SignInAsync(factory, "root", AdminPassword);
+
+        // One year past the ±5-year planning horizon.
+        var start = Today.AddYears(HouseholdClock.HorizonYears + 1);
+        var response = await PreviewAsync(session, start, "seven_days");
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var error = await ReadErrorAsync(response);
+        error.GetProperty("code").GetString().Should().Be(ErrorCodes.ValidationFailed);
+        error.GetProperty("details").GetProperty("field_errors")
+            .TryGetProperty("start_date", out _).Should().BeTrue("the horizon cap flags the start date");
+    }
+
+    [Fact]
+    public async Task Preview_sweeps_expired_drafts_of_any_actor_but_keeps_valid_ones()
+    {
+        await SeedAdminHouseholdAsync();
+        await SeedRecipeAsync("Lasagna");
+        using var factory = CreateFactory(new TestTimeProvider(Now));
+        using var session = await SignInAsync(factory, "root", AdminPassword);
+
+        var expiredToken = Guid.NewGuid();
+        var validToken = Guid.NewGuid();
+        await SeedDraftAsync(expiredToken, Now.AddMinutes(-1));
+        await SeedDraftAsync(validToken, Now.AddMinutes(10));
+
+        var response = await PreviewAsync(session, Today, "seven_days");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        await using var context = fixture.CreateContext();
+        var drafts = await context.CalendarRerollDrafts.AsNoTracking().ToListAsync(Ct);
+        drafts.Select(draft => draft.Token).Should().NotContain(
+            expiredToken,
+            "an expired draft of any actor is swept");
+        drafts.Select(draft => draft.Token).Should().Contain(
+            validToken,
+            "a still-valid draft of another actor is untouched");
+        drafts.Should().HaveCount(2, "the new draft plus the still-valid one");
+    }
+
+    [Fact]
     public async Task Sequential_context_counts_an_earlier_pick_in_the_same_preview()
     {
         await SeedAdminHouseholdAsync();
@@ -519,6 +565,29 @@ public sealed class BatchRerollPreviewIntegrationTests(M1SetupFixture fixture) :
             SnapshotDisplayText = type.ToString(),
             CreatedAt = SeedTimestamp,
             UpdatedAt = SeedTimestamp,
+        });
+        await context.SaveChangesAsync(Ct);
+    }
+
+    /// <summary>
+    /// Seeds a draft owned by the system actor (null user), so it is never swept
+    /// as the signed-in actor's own unapplied draft — only the expiry rule can
+    /// remove it.
+    /// </summary>
+    private async Task SeedDraftAsync(Guid token, DateTimeOffset expiresAt)
+    {
+        await using var context = fixture.CreateContext();
+        context.CalendarRerollDrafts.Add(new CalendarRerollDraft
+        {
+            Token = token,
+            Mode = BatchRerollService.ModeSevenDays,
+            StartDate = Today,
+            EndDate = Today.AddDays(6),
+            ActorUserId = null,
+            ProposalJson = "{}",
+            CreatedAt = expiresAt - BatchRerollService.PreviewTtl,
+            ExpiresAt = expiresAt,
+            AppliedAt = null,
         });
         await context.SaveChangesAsync(Ct);
     }

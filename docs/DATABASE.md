@@ -321,7 +321,12 @@ Suggested:
   batch apply (or one batch undo); `null` for single-date edits
 - `before_json` (jsonb)
 - `after_json` (jsonb)
-- `metadata_json` (jsonb, nullable): the M6 reroll score breakdown (docs/M6_PLAN.md §2.3); `null` for ordinary edits
+- `metadata_json` (jsonb, nullable): the per-operation score breakdown. `null`
+  for ordinary edits; an M6 single-date reroll carries `kind = "reroll"`
+  (docs/M6_PLAN.md §2.3); an M7 batch row carries `kind = "batch_reroll"`,
+  `"fill_empty"`, or `"undo"` plus `mode` (docs/M7_PLAN.md §2.3). Each row keeps
+  its own `operation_id`, while `batch_operation_id` groups all rows of one
+  batch apply/undo
 - `changed_by_user_id`
 - `changed_at`
 - `change_reason` nullable

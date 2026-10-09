@@ -13,6 +13,7 @@ Status legend: `open` (confirmed, not started) · `fixing` · `verifying` ·
 |----|--------|------|---------|--------|
 | BUG-001 | closed | Import / UI | Recipe URL import crashes to a blank page when a parsed ingredient line has no unit | [#93](https://github.com/Tadbitnyght/fate-and-fridge/issues/93) |
 | BUG-002 | open | Import / UI | Nested ingredient-group rows never receive unknown-unit metadata (latent; unreachable with current drafts) | — |
+| BUG-003 | open | Calendar / Concurrency | Concurrent single-date `PUT`/reroll racing a batch Apply on a blank target can raise an unhandled unique-violation 500 | — |
 
 ---
 
@@ -70,4 +71,32 @@ Status legend: `open` (confirmed, not started) · `fixing` · `verifying` ·
   grouped import drafts are ever produced.
 - **Fix direction:** thread `unknownByRowKey` (and the create controls) into the
   group row lists and seed group lines, or remove the dead nested branches.
+
+---
+
+## BUG-003 — Concurrent single-date write racing a batch Apply can 500 on a unique violation
+
+- **Area:** Calendar concurrency (`CalendarService.UpsertAsync`,
+  `BatchRerollService.ApplyAsync`)
+- **Severity:** Low–Medium — requires a precise concurrent race on the same blank
+  target date; no data corruption.
+- **Reported:** 2026-10-09 (found during the M7 backend independent review)
+- **Status:** open
+- **Details:** `calendar_entries.meal_date` is unique. A single-date
+  `PUT`/`DELETE`/reroll path does not take the per-date
+  `pg_advisory_xact_lock` (only `CalendarRandomizer` and the M7 batch
+  apply/undo do), so it can interleave with a batch Apply that is inserting a
+  new entry for the same blank date. If the single-date writer commits first,
+  the batch Apply's insert raises an unhandled Postgres unique violation →
+  HTTP 500 instead of a clean `BATCH_CONFLICT` (409).
+- **Root cause:** pre-existing M6/V1 last-write-wins behavior —
+  `CalendarService.UpsertAsync` takes no advisory lock and the unique index on
+  `calendar_entries.meal_date` is enforced only by the database. M7 serializes
+  its own target dates but cannot serialize against a lockless single-date
+  writer.
+- **Impact:** a rare 500 on a blank date; the batch Apply transaction rolls back
+  so nothing is partially written.
+- **Fix direction:** out of M7 scope. Either make every single-date calendar
+  write take the same per-date advisory lock, or translate the unique-violation
+  into a clean conflict at the API boundary.
 
