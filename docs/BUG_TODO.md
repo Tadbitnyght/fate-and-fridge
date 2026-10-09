@@ -21,7 +21,7 @@ Status legend: `open` (confirmed, not started) · `fixing` · `verifying` ·
 - **Severity:** High — the whole import flow is unusable; the SPA renders a blank page.
 - **Reported:** 2026-10-08
 - **Status:** verifying
-- **Fix commit:** `e8a37c1` on `fix/93-import-unitless-crash`; independent review + live redeploy pending.
+- **Fix commit:** `4e0bc8d` on `fix/93-import-unitless-crash`; independent review + live redeploy pending.
 - **GitHub:** [#93](https://github.com/Tadbitnyght/fate-and-fridge/issues/93)
 - **Reproduction:**
   1. Open `Recipes → Import from URL`.
