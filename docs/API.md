@@ -523,7 +523,11 @@ aborts the whole apply with no writes.
 
 ### Fill Empty
 `POST /calendar/fill-empty` is **superseded** by `mode = "fill_empty"` on
-`POST /calendar/reroll/preview`.
+`POST /calendar/reroll/preview`. Fill Empty proposes **blank dates only** and
+never alters an existing meal, special event, `eat_out`, `fend_for_yourself`,
+`vacation`, or locked entry (each is returned `unchanged`). When the range is
+fully occupied the preview proposes nothing and Apply is a no-op
+(`changed_count = 0`) that still consumes the draft.
 
 ---
 
