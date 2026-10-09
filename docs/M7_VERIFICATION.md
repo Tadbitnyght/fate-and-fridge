@@ -79,20 +79,30 @@ entity. It was updated in the M7-10 commit; the full suite then passed.
 
 ## Live deployment verification
 
-_To be completed by the Lead under the milestone completion gate
-(`AGENTS.md` → "Milestone completion gate"): rebuild/redeploy from the completed
-commit via `docker-admin` (`scripts/deploy.sh up`), then record the deploy-host
-checkout hash, image id/digest, the applied migration, the health response, a
-live M7 route proof, and the live `/progress` bundle evidence below. Do not
-invent digests or health responses._
+Rebuilt and redeployed via `docker-admin` using `scripts/deploy.sh up`
+(`docker compose up -d --build` on the NAS) from `main` at commit `acbf62b`,
+then verified live.
 
-- Deploy-host checkout: _pending_
-- Image identity: _pending_
-- Migrations applied on startup: _pending_ (`M7BatchPlanning` expected)
-- Health: _pending_
-- Live route proof: _pending_ (e.g. `POST /api/v1/calendar/reroll/preview`
-  present, not `404`/`405`)
-- Live `/progress`: _pending_ (`m7-complete` and `Batch Planning` shipped;
-  summary 8 of 15)
-- PostgreSQL remains unpublished (no host port); no volumes/datasets deleted
-  during the deploy: _pending_
+- Deploy-host checkout: `git rev-parse --short HEAD` → `acbf62b`, tree clean.
+- Image `fate-and-fridge:0.1.0`: before `8935d83f364d` → after
+  `3a84c201c5bc` (`sha256:3a84c201c5bce34af6c058f7a96f8e943cf11dd78fdd5ee2047b838fa11fdde3`,
+  created 2026-10-09T08:13:09-05:00). Local-only build, so no registry
+  `RepoDigests`; the image id is the identity.
+- Migrations applied on startup: `Applying migration '20261009062831_M7BatchPlanning'`
+  (`ALTER TABLE calendar_entry_history ADD batch_operation_id uuid`,
+  `CREATE TABLE calendar_reroll_drafts …`), then `Database migrations applied`.
+- Health: `GET /api/v1/health` → `200`
+  `{"status":"ok","app":"Fate & Fridge","version":"0.1.0","environment":"production"}`;
+  the app container reports `healthy`.
+- Live route proof (unauthenticated probes, no mutation):
+  `POST /api/v1/calendar/reroll/preview` → `422 RANDOMIZER_NO_CANDIDATES` for a
+  valid body and `400 VALIDATION_FAILED` for a malformed body (both reached app
+  logic — not `404`/`405`; an unknown route returns `404` as a baseline). The
+  household is in single-user mode and has no `Normal` recipes, so the anonymous
+  system actor is authorized and the empty candidate pool yields the 422.
+- Live `/progress`: the served bundle `/assets/index-azB5w2ge.js` (hash changed
+  from `index-WYIly1Sa.js`) contains `m7-complete`, `Batch Planning`, and the
+  batch UI string `Rest of month`, so the milestone manifest is shipped and M7
+  renders Complete (summary 8 of 15, computed client-side).
+- PostgreSQL remains unpublished (no host port); no volumes/datasets were
+  deleted during the deploy.
