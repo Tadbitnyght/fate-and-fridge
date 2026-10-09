@@ -11,7 +11,8 @@ Status legend: `open` (confirmed, not started) · `fixing` · `verifying` ·
 
 | ID | Status | Area | Summary | GitHub |
 |----|--------|------|---------|--------|
-| BUG-001 | verifying | Import / UI | Recipe URL import crashes to a blank page when a parsed ingredient line has no unit | [#93](https://github.com/Tadbitnyght/fate-and-fridge/issues/93) |
+| BUG-001 | closed | Import / UI | Recipe URL import crashes to a blank page when a parsed ingredient line has no unit | [#93](https://github.com/Tadbitnyght/fate-and-fridge/issues/93) |
+| BUG-002 | open | Import / UI | Nested ingredient-group rows never receive unknown-unit metadata (latent; unreachable with current drafts) | — |
 
 ---
 
@@ -20,8 +21,10 @@ Status legend: `open` (confirmed, not started) · `fixing` · `verifying` ·
 - **Area:** Frontend import review (`features/import`, `features/recipes/IngredientFields.tsx`)
 - **Severity:** High — the whole import flow is unusable; the SPA renders a blank page.
 - **Reported:** 2026-10-08
-- **Status:** verifying
-- **Fix commit:** `4e0bc8d` on `fix/93-import-unitless-crash`; independent review + live redeploy pending.
+- **Status:** closed (2026-10-09)
+- **Fix commit:** `4e0bc8d`, merged to `main` as `72c553c`.
+- **Verified:** independent review verdict approve-with-findings (frontend 254/254 tests; the reviewer independently reproduced the crash by reverting the guards, then confirmed the fix). Live on image `sha256:8935d83f…` (bundle `index-WYIly1Sa.js`): `Recipes → Import from URL` now renders the review screen.
+- **Follow-up nit:** the committed regression test asserts `raw: null` only; `raw: ""`/whitespace with `is_unknown: true` are fixed and reviewer-verified but not asserted in the suite.
 - **GitHub:** [#93](https://github.com/Tadbitnyght/fate-and-fridge/issues/93)
 - **Reproduction:**
   1. Open `Recipes → Import from URL`.
@@ -49,3 +52,22 @@ Status legend: `open` (confirmed, not started) · `fixing` · `verifying` ·
 - **Tests:** add an import-review render test with a unitless ingredient
   (`unit.raw: null, is_unknown: true`) asserting the review renders and saves
   without throwing.
+
+---
+
+## BUG-002 — Nested ingredient-group rows never receive unknown-unit metadata
+
+- **Area:** Frontend import review (`features/import/ImportReview.tsx`, `features/recipes/IngredientFields.tsx`)
+- **Severity:** Low — latent; not reachable with current server drafts.
+- **Reported:** 2026-10-09 (found during the BUG-001 independent review)
+- **Status:** open
+- **Details:** `ImportReview` passes `unknownByRowKey` only to the top-level
+  ingredient list; group `IngredientRowList` rows do not receive it, and
+  `seedUnknownLines` seeds only `draft.ingredients` (the server draft has no
+  `ingredient_groups`). The nested group branches of `validateUnknownUnits` and
+  `IngredientFields` are therefore unreachable in the import flow today.
+- **Impact:** none currently (import drafts are flat); becomes a real gap if
+  grouped import drafts are ever produced.
+- **Fix direction:** thread `unknownByRowKey` (and the create controls) into the
+  group row lists and seed group lines, or remove the dead nested branches.
+
