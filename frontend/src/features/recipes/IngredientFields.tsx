@@ -384,9 +384,10 @@ function IngredientRowEditor({
   // sets `ingredientId` and clears the state.
   const needsIngredient = unknown !== undefined && row.ingredientId === ''
   // A genuinely unrecognized raw unit (M4-10) blocks saving until the reviewer
-  // maps or creates a unit. Blank units and already-resolved units do not.
+  // maps or creates a unit. Blank units (including a `raw: null` absent unit
+  // from the server) and already-resolved units do not.
   const unknownUnit =
-    unknown?.unit !== null && unknown !== undefined && unknown.unit.raw.trim().length > 0
+    unknown?.unit !== null && unknown !== undefined && (unknown.unit.raw ?? '').trim().length > 0
       ? unknown.unit
       : null
   const needsUnit = unknownUnit !== null && row.unitId === ''
@@ -554,6 +555,8 @@ function IngredientRowEditor({
       )}
 
       {needsUnit && unknownUnit !== null && (
+        // `needsUnit` implies `unknownUnit` passed the non-empty check above, so
+        // `unknownUnit.raw` is a non-null, non-blank string at both display sites.
         <div className="ingredient-row__unknown ingredient-row__unknown-unit">
           <p className="ingredient-row__unknown-raw">
             Unrecognized unit: <q>{unknownUnit.raw.trim()}</q>

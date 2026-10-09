@@ -949,6 +949,89 @@ describe('import unknown unit flow', () => {
     }
     expect(body.ingredients[0]).toMatchObject({ ingredient_id: 12, unit_id: null })
   })
+
+  it('renders and saves a unitless ingredient the server marked unknown (raw: null)', async () => {
+    // Regression for #93/BUG-001: the server reports an absent unit as
+    // `raw: null, is_unknown: true`. The review must not crash and must not
+    // demand resolution for a blank unit.
+    const unitlessCandidate: ImportParseResponse = {
+      ...singleCandidate,
+      recipes: [
+        {
+          ...singleCandidate.recipes[0],
+          ingredients: [
+            {
+              ...singleCandidate.recipes[0].ingredients[0],
+              raw: '1 1/2 flour, sifted',
+              unit: {
+                raw: null,
+                matched_unit_id: null,
+                matched_symbol: null,
+                is_unknown: true,
+                suggested_dimension: null,
+                suggestions: [],
+              },
+            },
+          ],
+          warnings: [],
+        },
+      ],
+    }
+    const mock = await openReview(unitlessCandidate, [
+      { path: '/recipes', method: 'POST', status: 201, body: createdRecipe },
+      { path: '/recipes/1', method: 'GET', body: createdRecipe },
+    ])
+
+    // The review renders, with no spurious unknown-unit affordance.
+    expect(screen.getByRole('heading', { level: 2, name: 'Review imported recipe' })).toBeVisible()
+    expect(screen.queryByText(/Unrecognized unit:/)).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/Choose or create a unit before this recipe can be saved/i),
+    ).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save recipe' }))
+
+    await waitFor(() => expect(requestBodyFor(mock, '/recipes', 'POST')).toBeDefined(), {
+      timeout: 4000,
+    })
+    const body = requestBodyFor(mock, '/recipes', 'POST') as {
+      ingredients: Array<Record<string, unknown>>
+    }
+    expect(body.ingredients[0]).toMatchObject({ ingredient_id: 12, unit_id: null })
+  })
+
+  it('still surfaces a resolution affordance for a genuinely unknown non-empty unit', async () => {
+    const smidgenCandidate: ImportParseResponse = {
+      ...singleCandidate,
+      recipes: [
+        {
+          ...singleCandidate.recipes[0],
+          ingredients: [
+            {
+              ...singleCandidate.recipes[0].ingredients[0],
+              raw: '1 1/2 smidgen flour, sifted',
+              unit: {
+                raw: 'smidgen',
+                matched_unit_id: null,
+                matched_symbol: null,
+                is_unknown: true,
+                suggested_dimension: null,
+                suggestions: [],
+              },
+            },
+          ],
+          warnings: [],
+        },
+      ],
+    }
+    await openReview(smidgenCandidate)
+
+    expect(screen.getByText(/Unrecognized unit:/)).toBeVisible()
+    expect(screen.getByText('smidgen')).toBeVisible()
+    expect(
+      screen.getByText(/Choose or create a unit before this recipe can be saved/i),
+    ).toBeVisible()
+  })
 })
 
 describe('import duplicate source URL flow', () => {

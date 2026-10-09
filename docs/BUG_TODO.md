@@ -11,7 +11,7 @@ Status legend: `open` (confirmed, not started) · `fixing` · `verifying` ·
 
 | ID | Status | Area | Summary | GitHub |
 |----|--------|------|---------|--------|
-| BUG-001 | open | Import / UI | Recipe URL import crashes to a blank page when a parsed ingredient line has no unit | [#93](https://github.com/Tadbitnyght/fate-and-fridge/issues/93) |
+| BUG-001 | verifying | Import / UI | Recipe URL import crashes to a blank page when a parsed ingredient line has no unit | [#93](https://github.com/Tadbitnyght/fate-and-fridge/issues/93) |
 
 ---
 
@@ -20,7 +20,8 @@ Status legend: `open` (confirmed, not started) · `fixing` · `verifying` ·
 - **Area:** Frontend import review (`features/import`, `features/recipes/IngredientFields.tsx`)
 - **Severity:** High — the whole import flow is unusable; the SPA renders a blank page.
 - **Reported:** 2026-10-08
-- **Status:** open
+- **Status:** verifying
+- **Fix commit:** `e8a37c1` on `fix/93-import-unitless-crash`; independent review + live redeploy pending.
 - **GitHub:** [#93](https://github.com/Tadbitnyght/fate-and-fridge/issues/93)
 - **Reproduction:**
   1. Open `Recipes → Import from URL`.

@@ -30,7 +30,8 @@ export interface ImportUnitSuggestion {
 }
 
 export interface ImportUnitDraft {
-  raw: string
+  /** Parsed unit text, or `null` when the line has no unit at all. */
+  raw: string | null
   matched_unit_id: number | null
   matched_symbol: string | null
   is_unknown: boolean

@@ -42,7 +42,7 @@ function ingredientRow(ingredient: ImportRecipeDraft['ingredients'][number]): In
     ingredientActive: true,
     quantity: quantityText,
     unitId: unitId === null ? '' : String(unitId),
-    unitLabel: unitId === null ? '' : (ingredient.unit.matched_symbol ?? ingredient.unit.raw),
+    unitLabel: unitId === null ? '' : (ingredient.unit.matched_symbol ?? ingredient.unit.raw ?? ''),
     unitActive: true,
     preparationNote,
     isOptional: false,
@@ -114,8 +114,15 @@ function unknownUnitLine(
   if (!ingredient.unit.is_unknown) {
     return null
   }
+  const raw = ingredient.unit.raw
+  // A blank unit is always allowed (M3 nullable unit) and needs no resolution.
+  // The server reports an absent unit as `raw: null`, so there is no
+  // "unrecognized unit" affordance to show for it.
+  if (raw === null || raw.trim().length === 0) {
+    return null
+  }
   return {
-    raw: ingredient.unit.raw,
+    raw,
     suggestedDimension: ingredient.unit.suggested_dimension,
     suggestions: ingredient.unit.suggestions,
   }
@@ -165,16 +172,18 @@ export function validateUnknownUnits(
   const errors: FieldErrors = {}
   state.ingredients.forEach((row, index) => {
     const unit = unknownLines[row.key]?.unit
-    if (unit !== null && unit !== undefined && unit.raw.trim().length > 0 && row.unitId === '') {
-      errors[`ingredients[${index}].unit_id`] = `Choose or create a unit for “${unit.raw.trim()}”.`
+    const raw = (unit?.raw ?? '').trim()
+    if (unit !== null && unit !== undefined && raw.length > 0 && row.unitId === '') {
+      errors[`ingredients[${index}].unit_id`] = `Choose or create a unit for “${raw}”.`
     }
   })
   state.groups.forEach((group, groupIndex) => {
     group.ingredients.forEach((row, index) => {
       const unit = unknownLines[row.key]?.unit
-      if (unit !== null && unit !== undefined && unit.raw.trim().length > 0 && row.unitId === '') {
+      const raw = (unit?.raw ?? '').trim()
+      if (unit !== null && unit !== undefined && raw.length > 0 && row.unitId === '') {
         errors[`ingredient_groups[${groupIndex}].ingredients[${index}].unit_id`] =
-          `Choose or create a unit for “${unit.raw.trim()}”.`
+          `Choose or create a unit for “${raw}”.`
       }
     })
   })
