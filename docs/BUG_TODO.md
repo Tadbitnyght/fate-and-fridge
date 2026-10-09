@@ -13,6 +13,7 @@ Status legend: `open` (confirmed, not started) · `fixing` · `verifying` ·
 |----|--------|------|---------|--------|
 | BUG-001 | closed | Import / UI | Recipe URL import crashes to a blank page when a parsed ingredient line has no unit | [#93](https://github.com/Tadbitnyght/fate-and-fridge/issues/93) |
 | BUG-002 | open | Import / UI | Nested ingredient-group rows never receive unknown-unit metadata (latent; unreachable with current drafts) | — |
+| BUG-004 | open | Calendar / UI | Replacing a recipe entry with Eat out fails with a misleading "Choose a recipe" error (stale `recipe_id`) | [#105](https://github.com/Tadbitnyght/fate-and-fridge/issues/105) |
 | BUG-003 | open | Calendar / Concurrency | Concurrent single-date `PUT`/reroll racing a batch Apply on a blank target can raise an unhandled unique-violation 500 | — |
 
 ---
@@ -99,4 +100,50 @@ Status legend: `open` (confirmed, not started) · `fixing` · `verifying` ·
 - **Fix direction:** out of M7 scope. Either make every single-date calendar
   write take the same per-date advisory lock, or translate the unique-violation
   into a clean conflict at the API boundary.
+
+---
+
+## BUG-004 — Replacing a recipe entry with Eat out fails with a misleading "Choose a recipe" error
+
+- **Area:** Calendar date editor (`features/calendar/DateDetailDialog.tsx`,
+  `Services/CalendarService.cs`)
+- **Severity:** Medium — blocks a normal edit; workaround is delete-then-recreate.
+- **Reported:** 2026-10-09
+- **Status:** open
+- **GitHub:** [#105](https://github.com/Tadbitnyght/fate-and-fridge/issues/105)
+- **Reproduction:** open a date that has a `recipe` entry → change **Type** to
+  **Eat out** → fill the optional Restaurant (e.g. "Little Ceasers") → **Save**.
+  The save fails with **"Choose a recipe for this date."** Deleting the day and
+  then adding a new Eat out entry works.
+- **Root cause (two parts):**
+  1. `DateDetailDialog.tsx:203-208` — the Type `<select>` `onChange` clears
+     `iconKey` when the new type has no icon, but does **not** clear
+     `recipeId`/`recipeName`. Changing an existing recipe entry to `eat_out`
+     therefore still sends `recipe_id` in the `PUT /calendar/{date}` full-replace
+     body.
+  2. The server rejects that with a `recipe_id` field error
+     ("This entry type does not support a recipe."), and
+     `CalendarService.RequiredCode` maps **any** `recipe_id` error — including the
+     "does not support a recipe" case — to `CALENDAR_RECIPE_REQUIRED`. The UI maps
+     that code to "Choose a recipe for this date.", so the user is told to add a
+     recipe to an Eat out entry.
+  The workaround (delete the day, then add) works because the fresh dialog starts
+  with `recipeId = null`.
+- **Affected:** Calendar date editor for any type change away from a
+  recipe-carrying type (`recipe` → `eat_out`/`fend_for_yourself`/
+  `go_to_family_dinner`/`vacation`), and potentially the reverse (stale
+  restaurant/location/custom fields are sent for other types — they are stored
+  but ignored).
+- **Fix direction:**
+  1. Frontend: when the entry type changes, clear `recipeId`/`recipeName`
+     whenever the new type does not carry a recipe, and clear the other
+     type-specific fields that no longer apply (restaurant/location/custom), so
+     the full-replace body only contains applicable fields.
+  2. Backend: make `RequiredCode` return `CALENDAR_RECIPE_REQUIRED` only for the
+     genuinely-missing-recipe case; the "does not support a recipe" case should
+     stay a generic `VALIDATION_FAILED`.
+- **Tests:** a date-editor test that changes a recipe entry to `eat_out` and saves
+  successfully; a backend test that an unsupported `recipe_id` returns
+  `VALIDATION_FAILED` (not `CALENDAR_RECIPE_REQUIRED`).
+
 
