@@ -114,4 +114,11 @@ public static class ErrorCodes
 
     /// <summary>Reserved for M6-09 undo: a later change invalidated the undo.</summary>
     public const string UndoConflict = "UNDO_CONFLICT";
+
+    // M7 batch-planning codes (docs/M7_PLAN.md §2.2).
+    /// <summary>Reserved for M7-03 apply: a target date changed since the preview.</summary>
+    public const string BatchConflict = "BATCH_CONFLICT";
+
+    /// <summary>Reserved for M7-03 apply: the draft is missing, expired, or already consumed.</summary>
+    public const string BatchDraftExpired = "BATCH_DRAFT_EXPIRED";
 }

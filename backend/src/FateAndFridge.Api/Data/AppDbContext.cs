@@ -59,6 +59,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     public DbSet<CalendarEntryHistory> CalendarEntryHistory => Set<CalendarEntryHistory>();
 
+    public DbSet<CalendarRerollDraft> CalendarRerollDrafts => Set<CalendarRerollDraft>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -93,5 +95,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         // M5-01 calendar core schema (docs/M5_PLAN.md §2.2–§2.3).
         modelBuilder.ApplyConfiguration(new CalendarEntryConfiguration());
         modelBuilder.ApplyConfiguration(new CalendarEntryHistoryConfiguration());
+
+        // M7-01 batch planning draft schema (docs/M7_PLAN.md §2.3).
+        modelBuilder.ApplyConfiguration(new CalendarRerollDraftConfiguration());
     }
 }

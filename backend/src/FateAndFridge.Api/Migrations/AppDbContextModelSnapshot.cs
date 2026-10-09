@@ -276,6 +276,10 @@ namespace FateAndFridge.Api.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("after_json");
 
+                    b.Property<Guid?>("BatchOperationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("batch_operation_id");
+
                     b.Property<string>("BeforeJson")
                         .HasColumnType("jsonb")
                         .HasColumnName("before_json");
@@ -317,6 +321,9 @@ namespace FateAndFridge.Api.Migrations
                     b.HasKey("Id")
                         .HasName("pk_calendar_entry_history");
 
+                    b.HasIndex("BatchOperationId")
+                        .HasDatabaseName("ix_calendar_entry_history_batch_operation_id");
+
                     b.HasIndex("CalendarEntryId")
                         .HasDatabaseName("ix_calendar_entry_history_calendar_entry_id");
 
@@ -330,6 +337,69 @@ namespace FateAndFridge.Api.Migrations
                         .HasDatabaseName("ix_calendar_entry_history_operation_id");
 
                     b.ToTable("calendar_entry_history", (string)null);
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.CalendarRerollDraft", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long?>("ActorUserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("actor_user_id");
+
+                    b.Property<DateTimeOffset?>("AppliedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("applied_at");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateOnly>("EndDate")
+                        .HasColumnType("date")
+                        .HasColumnName("end_date");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<string>("Mode")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("mode");
+
+                    b.Property<string>("ProposalJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("proposal_json");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date")
+                        .HasColumnName("start_date");
+
+                    b.Property<Guid>("Token")
+                        .HasColumnType("uuid")
+                        .HasColumnName("token");
+
+                    b.HasKey("Id")
+                        .HasName("pk_calendar_reroll_drafts");
+
+                    b.HasIndex("ActorUserId")
+                        .HasDatabaseName("ix_calendar_reroll_drafts_actor_user_id");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("ix_calendar_reroll_drafts_expires_at");
+
+                    b.HasIndex("Token")
+                        .IsUnique()
+                        .HasDatabaseName("ix_calendar_reroll_drafts_token");
+
+                    b.ToTable("calendar_reroll_drafts", (string)null);
                 });
 
             modelBuilder.Entity("FateAndFridge.Api.Domain.GroceryDepartment", b =>
@@ -1306,6 +1376,15 @@ namespace FateAndFridge.Api.Migrations
                         .HasForeignKey("ChangedByUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_calendar_entry_history_users_changed_by_user_id");
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.CalendarRerollDraft", b =>
+                {
+                    b.HasOne("FateAndFridge.Api.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_calendar_reroll_drafts_users_actor_user_id");
                 });
 
             modelBuilder.Entity("FateAndFridge.Api.Domain.Ingredient", b =>

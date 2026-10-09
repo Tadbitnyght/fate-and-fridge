@@ -15,9 +15,11 @@ public sealed class CalendarEntryHistoryConfiguration : IEntityTypeConfiguration
         builder.Property(history => history.AfterJson).HasColumnType("jsonb");
         builder.Property(history => history.MetadataJson).HasColumnType("jsonb");
         builder.Property(history => history.IsHistoricalCorrection).HasDefaultValue(false);
+        builder.Property(history => history.BatchOperationId).HasColumnType("uuid");
 
         builder.HasIndex(history => history.CalendarEntryId);
         builder.HasIndex(history => history.OperationId);
+        builder.HasIndex(history => history.BatchOperationId);
         builder.HasIndex(history => history.ChangedAt);
 
         // History outlives its entry: hard deletes null the reference but keep

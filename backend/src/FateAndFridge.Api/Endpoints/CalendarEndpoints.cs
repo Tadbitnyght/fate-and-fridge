@@ -128,6 +128,30 @@ public sealed record CalendarRerollResponse(
     CalendarRepeatWarningResponse? RepeatWarning,
     CalendarOperationResponse Operation);
 
+/// <summary>Draft handle for a batch reroll preview (docs/M7_PLAN.md §2.2).</summary>
+public sealed record BatchPreviewDraftResponse(
+    string Token,
+    string Mode,
+    string StartDate,
+    string EndDate,
+    DateTimeOffset ExpiresAt);
+
+/// <summary>Proposed replacement for one preview day.</summary>
+public sealed record BatchProposedEntryResponse(string EntryType, long RecipeId, string DisplayText);
+
+/// <summary>One day in a batch reroll preview diff.</summary>
+public sealed record BatchPreviewDayResponse(
+    string Date,
+    string Status,
+    string? UnchangedReason,
+    CalendarEntryResponse? Current,
+    BatchProposedEntryResponse? Proposed);
+
+/// <summary>Batch reroll preview response (docs/M7_PLAN.md §2.2).</summary>
+public sealed record BatchPreviewResponse(
+    BatchPreviewDraftResponse Draft,
+    IReadOnlyList<BatchPreviewDayResponse> Days);
+
 /// <summary>
 /// M5 calendar routes (docs/M5_PLAN.md §2.4): reads gated by
 /// <c>calendar.view</c>, writes by <c>calendar.edit</c>, with server-enforced
@@ -148,6 +172,7 @@ public static class CalendarEndpoints
         group.MapPost("/{date}/lock", LockAsync).RequirePermission(PermissionKeys.CalendarEdit);
         group.MapPost("/{date}/unlock", UnlockAsync).RequirePermission(PermissionKeys.CalendarEdit);
         group.MapPost("/{date}/reroll", RerollAsync).RequirePermission(PermissionKeys.CalendarEdit);
+        group.MapPost("/reroll/preview", PreviewBatchRerollAsync).RequirePermission(PermissionKeys.CalendarEdit);
 
         return app;
     }
@@ -431,6 +456,116 @@ public static class CalendarEndpoints
                 failure.Message),
             _ => Results.StatusCode(StatusCodes.Status500InternalServerError),
         };
+    }
+
+    private static async Task<IResult> PreviewBatchRerollAsync(
+        HttpContext context,
+        ICurrentActorProvider actorProvider,
+        HouseholdClock clock,
+        BatchRerollService batch,
+        CancellationToken cancellationToken)
+    {
+        var (root, bodyError) = await ReadObjectAsync(context, cancellationToken);
+        if (bodyError is not null)
+        {
+            return bodyError;
+        }
+
+        var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        var startDate = ReadBodyDate(root, "start_date", errors);
+        var mode = ReadRequiredBodyString(root, "mode", errors);
+        if (mode is not null && !BatchRerollService.IsKnownMode(mode))
+        {
+            errors["mode"] =
+            [
+                $"mode must be one of {BatchRerollService.ModeSevenDays}, "
+                + $"{BatchRerollService.ModeRestOfMonth}, {BatchRerollService.ModeFillEmpty}.",
+            ];
+        }
+
+        if (errors.Count > 0)
+        {
+            return ApiResults.ValidationError(errors);
+        }
+
+        var household = await clock.GetContextAsync(cancellationToken);
+        ValidateHorizon(startDate, "start_date", household.Today, errors);
+        if (errors.Count > 0)
+        {
+            return ApiResults.ValidationError(errors);
+        }
+
+        var (actorUserId, actorError) = await ResolveActorAsync(actorProvider, cancellationToken);
+        if (actorError is not null)
+        {
+            return actorError;
+        }
+
+        var result = await batch.PreviewAsync(startDate, mode!, actorUserId, cancellationToken);
+        return result switch
+        {
+            BatchPreviewOutcome.Success success => Results.Ok(ToPreviewResponse(success)),
+            BatchPreviewOutcome.Failure failure => ApiResults.Error(
+                failure.StatusCode,
+                failure.Code,
+                failure.Message),
+            _ => Results.StatusCode(StatusCodes.Status500InternalServerError),
+        };
+    }
+
+    private static BatchPreviewResponse ToPreviewResponse(BatchPreviewOutcome.Success success) =>
+        new(
+            new BatchPreviewDraftResponse(
+                success.Draft.Token.ToString(),
+                success.Draft.Mode,
+                CalendarDateText.Format(success.Draft.StartDate),
+                CalendarDateText.Format(success.Draft.EndDate),
+                success.Draft.ExpiresAt),
+            success.Days.Select(ToPreviewDayResponse).ToArray());
+
+    private static BatchPreviewDayResponse ToPreviewDayResponse(BatchPreviewDay day) =>
+        new(
+            CalendarDateText.Format(day.Date),
+            day.Status,
+            day.UnchangedReason,
+            day.Current is null ? null : CalendarEntryResponse.From(day.Current),
+            day.Proposed is null
+                ? null
+                : new BatchProposedEntryResponse(
+                    day.Proposed.EntryType,
+                    day.Proposed.RecipeId,
+                    day.Proposed.DisplayText));
+
+    private static DateOnly ReadBodyDate(
+        JsonElement root,
+        string field,
+        Dictionary<string, string[]> errors)
+    {
+        if (!root.TryGetProperty(field, out var element)
+            || element.ValueKind != JsonValueKind.String
+            || !TryParseDate(element.GetString(), out var date))
+        {
+            errors[field] = [$"{field} is required and must be a YYYY-MM-DD date."];
+            return default;
+        }
+
+        return date;
+    }
+
+    private static string? ReadRequiredBodyString(
+        JsonElement root,
+        string field,
+        Dictionary<string, string[]> errors)
+    {
+        if (!root.TryGetProperty(field, out var element)
+            || element.ValueKind != JsonValueKind.String
+            || string.IsNullOrWhiteSpace(element.GetString()))
+        {
+            errors[field] = [$"{field} is required."];
+            return null;
+        }
+
+        return element.GetString();
     }
 
     private static CalendarWriteRequest ParseWriteRequest(

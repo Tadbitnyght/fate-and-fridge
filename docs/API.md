@@ -238,6 +238,7 @@ historical-correction API may change history.
 | `POST /api/v1/calendar/{date}/unlock` | `calendar.edit` | Unlock |
 | `POST /api/v1/calendar/{date}/reroll` | `calendar.edit` | Reroll one date to a random `Normal` recipe (M6) |
 | `POST /api/v1/operations/{operation_id}/undo` | `calendar.edit` | Undo a reroll operation (M6) |
+| `POST /api/v1/calendar/reroll/preview` | `calendar.edit` | Batch reroll preview: a persisted draft plus the per-day diff (M7) |
 
 ### `day` document
 
@@ -355,6 +356,68 @@ Behavior (docs/M6_PLAN.md §1.13):
   restores prior state.
 - Undo broadcasts nothing (live sync is M9) and writes no `audit_events` rows.
 
+### Batch reroll preview (M7)
+
+`POST /api/v1/calendar/reroll/preview` requires `calendar.edit`. Body:
+
+```json
+{ "start_date": "2026-11-15", "mode": "seven_days" }
+```
+
+`mode` ∈ `seven_days` | `rest_of_month` | `fill_empty`. The response is a
+persisted draft handle plus the ordered per-day diff:
+
+```json
+{
+  "draft": {
+    "token": "3f1c…",
+    "mode": "seven_days",
+    "start_date": "2026-11-15",
+    "end_date": "2026-11-21",
+    "expires_at": "2026-11-15T18:15:00+00:00"
+  },
+  "days": [
+    {
+      "date": "2026-11-15",
+      "status": "proposed",
+      "unchanged_reason": null,
+      "current": null,
+      "proposed": { "entry_type": "recipe", "recipe_id": 5, "display_text": "Lasagna" }
+    },
+    {
+      "date": "2026-11-16",
+      "status": "unchanged",
+      "unchanged_reason": "locked",
+      "current": { "…": "the M5 day-document entry" },
+      "proposed": null
+    }
+  ]
+}
+```
+
+Behavior (docs/M7_PLAN.md §1.3–§1.7):
+
+- Ranges: `seven_days` = start … start + 6; `rest_of_month` and `fill_empty` =
+  start … last day of that calendar month. A start before the household today
+  fails `CALENDAR_DATE_IN_PAST` (422); a range outside the ±5-year horizon fails
+  `VALIDATION_FAILED` (400).
+- 7-day and rest-of-month reroll change blank dates and existing plain `recipe`
+  entries only. Special events (`holiday`, `host_family_dinner`, `misc`,
+  `go_to_family_dinner`), `eat_out`, `fend_for_yourself`, `vacation`, and locked
+  dates are shown `unchanged` with `unchanged_reason` `special`,
+  `existing_non_recipe`, `vacation`, or `locked`. `fill_empty` fills blank dates
+  only and leaves every existing entry unchanged.
+- Only `status = Normal` recipes are candidates; an empty pool fails
+  `RANDOMIZER_NO_CANDIDATES` (422). Generation runs in ascending date order, and
+  recipes chosen earlier in the same preview count as occurrences and neighbors
+  for later dates (docs/RANDOMIZER.md §9).
+- The preview persists **no** `calendar_entries` or `calendar_entry_history`
+  rows. It stores one `calendar_reroll_drafts` row keyed by the opaque `token`
+  with a **15-minute TTL** (`expires_at`). A new preview supersedes the actor's
+  previous unapplied draft (Try Another), so the latest token is the live one.
+  The full per-date score breakdown stays server-side in `proposal_json`.
+- Preview broadcasts nothing (live sync is M9).
+
 ### Errors
 
 | Code | HTTP | Meaning |
@@ -368,6 +431,8 @@ Behavior (docs/M6_PLAN.md §1.13):
 | `CALENDAR_MISC_LABEL_REQUIRED` | 400 | `misc` entry without `custom_label` |
 | `UNDO_EXPIRED` | 410 | Undo of an operation that is missing or already undone |
 | `UNDO_CONFLICT` | 409 | Undo of an operation whose date changed afterwards |
+| `BATCH_CONFLICT` | 409 | Reserved for M7 apply: a target date changed since the preview |
+| `BATCH_DRAFT_EXPIRED` | 410 | Reserved for M7 apply: the draft is missing, expired, or consumed |
 | `NOT_FOUND` | 404 | Unknown resource (shared envelope) |
 | `FORBIDDEN` | 403 | Authenticated actor lacks the required permission |
 | `VALIDATION_FAILED` | 400 | Other field/range/horizon errors |
@@ -384,36 +449,33 @@ Behavior:
 - returns replacement
 - returns undo token/operation id where supported
 
-### Preview 7 Days
-- `POST /calendar/reroll/preview`
+### Batch Preview (M7)
+- `POST /calendar/reroll/preview` — see "Batch reroll preview (M7)" above for the
+  full contract.
 
-Body example:
+Body:
 ```json
 {
-  "start_date": "2026-10-06",
+  "start_date": "2026-10-15",
   "mode": "seven_days"
 }
 ```
 
-### Rest of Month Preview
-Same route with:
-```json
-{
-  "start_date": "2026-10-06",
-  "mode": "rest_of_month"
-}
-```
+`mode` ∈ `seven_days` | `rest_of_month` | `fill_empty`. `rest_of_month` uses the
+same route with `"mode": "rest_of_month"`.
 
 ### Try Another
-Generate a fresh preview, not persisted.
+Call the preview route again with the same body. The fresh preview supersedes the
+actor's previous unapplied draft and is not applied until Apply is called.
 
 ### Apply
-- `POST /calendar/reroll/apply`
+- `POST /calendar/reroll/apply` (M7-03)
 
 Must be atomic.
 
 ### Fill Empty
-- `POST /calendar/fill-empty`
+`POST /calendar/fill-empty` is **superseded** by `mode = "fill_empty"` on
+`POST /calendar/reroll/preview`.
 
 ---
 

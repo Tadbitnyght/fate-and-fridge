@@ -317,6 +317,8 @@ Suggested:
 - `id`
 - `calendar_entry_id`
 - `operation_id`
+- `batch_operation_id` (uuid, nullable, indexed): groups the rows of one M7
+  batch apply (or one batch undo); `null` for single-date edits
 - `before_json` (jsonb)
 - `after_json` (jsonb)
 - `metadata_json` (jsonb, nullable): the M6 reroll score breakdown (docs/M6_PLAN.md §2.3); `null` for ordinary edits
@@ -326,6 +328,27 @@ Suggested:
 - `is_historical_correction`
 
 Do not rely on this table alone for the admin audit log; audit events should remain a separate stable security/administration record.
+
+---
+
+### calendar_reroll_drafts
+Server-side batch-reroll preview drafts (M7; docs/M7_PLAN.md §2.3). A preview
+stores the proposal here and returns an opaque token; Apply consumes it. Drafts
+persist no calendar state and expire after 15 minutes.
+
+- `id`
+- `token` (uuid, unique): the client-facing draft handle
+- `mode` (text): `seven_days` / `rest_of_month` / `fill_empty`
+- `start_date` / `end_date` (date): inclusive range
+- `actor_user_id` (bigint, nullable): creator
+- `proposal_json` (jsonb): per-date action/reason, chosen `recipe_id`, the score
+  breakdown, and the before-state (`before_entry_id` / `before_updated_at`) used
+  for apply conflict detection
+- `created_at` (timestamptz)
+- `expires_at` (timestamptz, indexed): `created_at + 15 minutes`
+- `applied_at` (timestamptz, nullable): set when Apply consumes the draft
+
+A new preview supersedes the actor's previous unapplied drafts (Try Another).
 
 ---
 

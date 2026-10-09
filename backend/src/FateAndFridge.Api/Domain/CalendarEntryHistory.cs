@@ -17,6 +17,9 @@ public sealed class CalendarEntryHistory
     /// <summary>Groups the rows of one atomic operation for undo (M6).</summary>
     public Guid? OperationId { get; set; }
 
+    /// <summary>Groups the rows of one M7 batch apply (or batch undo); null for single-date edits.</summary>
+    public Guid? BatchOperationId { get; set; }
+
     public string? BeforeJson { get; set; }
 
     public string? AfterJson { get; set; }
