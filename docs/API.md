@@ -239,6 +239,7 @@ historical-correction API may change history.
 | `POST /api/v1/calendar/{date}/reroll` | `calendar.edit` | Reroll one date to a random `Normal` recipe (M6) |
 | `POST /api/v1/operations/{operation_id}/undo` | `calendar.edit` | Undo a reroll operation (M6) |
 | `POST /api/v1/calendar/reroll/preview` | `calendar.edit` | Batch reroll preview: a persisted draft plus the per-day diff (M7) |
+| `POST /api/v1/calendar/reroll/apply` | `calendar.edit` | Atomically apply a batch reroll preview draft (M7) |
 
 ### `day` document
 
@@ -418,6 +419,50 @@ Behavior (docs/M7_PLAN.md §1.3–§1.7):
   The full per-date score breakdown stays server-side in `proposal_json`.
 - Preview broadcasts nothing (live sync is M9).
 
+### Batch reroll apply (M7)
+
+`POST /api/v1/calendar/reroll/apply` requires `calendar.edit`. Body:
+
+```json
+{ "token": "3f1c…" }
+```
+
+A missing or malformed `token` fails `400 VALIDATION_FAILED` with a field error
+on `token`. Success returns the batch operation handle plus the changed day
+documents:
+
+```json
+{
+  "operation": { "id": "9a2b…", "undo_expires_at": null },
+  "days": [ { "…": "the M5 day document" } ],
+  "changed_count": 5
+}
+```
+
+Behavior (docs/M7_PLAN.md §1.8–§1.12):
+
+- Apply commits **exactly** the recipes shown in the preview; it never rerolls.
+  A blank date gains a `recipe` entry and an existing plain `recipe` entry is
+  replaced, with metadata reset exactly like single reroll (`is_locked = false`,
+  `diner_count = null`, `notes = null`, `include_groceries = true`, cleared
+  restaurant/location/custom/icon fields, snapshot from the chosen recipe).
+- It runs in one transaction. Every proposed target date is serialized with the
+  same `pg_advisory_xact_lock` used by M6 (acquired in ascending date order) and
+  re-checked against the before-state captured at preview time. A target date
+  changed since the preview fails `BATCH_CONFLICT` (409) and **nothing** is
+  written (the conflict scope is proposed target dates only; unchanged, locked,
+  vacation, and special dates are not targets).
+- Exactly one `calendar_entry_history` row is written per changed date, each with
+  its own `operation_id` and a shared `batch_operation_id`, a `before_json` /
+  `after_json` pair, and a `metadata_json` breakdown with `kind` =
+  `batch_reroll` (or `fill_empty`) and the `mode` (docs/M7_PLAN.md §2.3).
+- A draft that is missing, expired (`expires_at`, a 15-minute TTL), or already
+  applied fails `BATCH_DRAFT_EXPIRED` (410). Drafts are per-actor: another
+  actor's token fails `NOT_FOUND` (404) so existence is not leaked. On any
+  failure the draft is not consumed (`applied_at` stays null) and no calendar
+  row is written.
+- Apply broadcasts nothing (live sync is M9) and writes no `audit_events` rows.
+
 ### Errors
 
 | Code | HTTP | Meaning |
@@ -431,8 +476,8 @@ Behavior (docs/M7_PLAN.md §1.3–§1.7):
 | `CALENDAR_MISC_LABEL_REQUIRED` | 400 | `misc` entry without `custom_label` |
 | `UNDO_EXPIRED` | 410 | Undo of an operation that is missing or already undone |
 | `UNDO_CONFLICT` | 409 | Undo of an operation whose date changed afterwards |
-| `BATCH_CONFLICT` | 409 | Reserved for M7 apply: a target date changed since the preview |
-| `BATCH_DRAFT_EXPIRED` | 410 | Reserved for M7 apply: the draft is missing, expired, or consumed |
+| `BATCH_CONFLICT` | 409 | Apply: a target date changed since the preview |
+| `BATCH_DRAFT_EXPIRED` | 410 | Apply: the draft is missing, expired, or consumed |
 | `NOT_FOUND` | 404 | Unknown resource (shared envelope) |
 | `FORBIDDEN` | 403 | Authenticated actor lacks the required permission |
 | `VALIDATION_FAILED` | 400 | Other field/range/horizon errors |
@@ -469,9 +514,12 @@ Call the preview route again with the same body. The fresh preview supersedes th
 actor's previous unapplied draft and is not applied until Apply is called.
 
 ### Apply
-- `POST /calendar/reroll/apply` (M7-03)
+- `POST /calendar/reroll/apply` — see "Batch reroll apply (M7)" above for the
+  full contract.
 
-Must be atomic.
+Apply is atomic: one transaction writes every changed date and the per-date
+history rows sharing one `batch_operation_id`, and a conflicting target date
+aborts the whole apply with no writes.
 
 ### Fill Empty
 `POST /calendar/fill-empty` is **superseded** by `mode = "fill_empty"` on

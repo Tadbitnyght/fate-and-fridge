@@ -152,6 +152,12 @@ public sealed record BatchPreviewResponse(
     BatchPreviewDraftResponse Draft,
     IReadOnlyList<BatchPreviewDayResponse> Days);
 
+/// <summary>Batch reroll apply response (docs/M7_PLAN.md §2.2).</summary>
+public sealed record BatchApplyResponse(
+    CalendarOperationResponse Operation,
+    IReadOnlyList<CalendarDayResponse> Days,
+    int ChangedCount);
+
 /// <summary>
 /// M5 calendar routes (docs/M5_PLAN.md §2.4): reads gated by
 /// <c>calendar.view</c>, writes by <c>calendar.edit</c>, with server-enforced
@@ -173,6 +179,7 @@ public static class CalendarEndpoints
         group.MapPost("/{date}/unlock", UnlockAsync).RequirePermission(PermissionKeys.CalendarEdit);
         group.MapPost("/{date}/reroll", RerollAsync).RequirePermission(PermissionKeys.CalendarEdit);
         group.MapPost("/reroll/preview", PreviewBatchRerollAsync).RequirePermission(PermissionKeys.CalendarEdit);
+        group.MapPost("/reroll/apply", ApplyBatchRerollAsync).RequirePermission(PermissionKeys.CalendarEdit);
 
         return app;
     }
@@ -506,6 +513,49 @@ public static class CalendarEndpoints
         {
             BatchPreviewOutcome.Success success => Results.Ok(ToPreviewResponse(success)),
             BatchPreviewOutcome.Failure failure => ApiResults.Error(
+                failure.StatusCode,
+                failure.Code,
+                failure.Message),
+            _ => Results.StatusCode(StatusCodes.Status500InternalServerError),
+        };
+    }
+
+    private static async Task<IResult> ApplyBatchRerollAsync(
+        HttpContext context,
+        ICurrentActorProvider actorProvider,
+        BatchRerollService batch,
+        CancellationToken cancellationToken)
+    {
+        var (root, bodyError) = await ReadObjectAsync(context, cancellationToken);
+        if (bodyError is not null)
+        {
+            return bodyError;
+        }
+
+        if (!root.TryGetProperty("token", out var tokenElement)
+            || tokenElement.ValueKind != JsonValueKind.String
+            || !Guid.TryParse(tokenElement.GetString(), out var token))
+        {
+            return ApiResults.ValidationError(new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                ["token"] = ["token is required and must be a valid UUID."],
+            });
+        }
+
+        var (actorUserId, actorError) = await ResolveActorAsync(actorProvider, cancellationToken);
+        if (actorError is not null)
+        {
+            return actorError;
+        }
+
+        var result = await batch.ApplyAsync(token, actorUserId, cancellationToken);
+        return result switch
+        {
+            BatchApplyOutcome.Success success => Results.Ok(new BatchApplyResponse(
+                new CalendarOperationResponse(success.BatchOperationId.ToString(), UndoExpiresAt: null),
+                success.Days.Select(CalendarDayResponse.From).ToArray(),
+                success.Days.Count)),
+            BatchApplyOutcome.Failure failure => ApiResults.Error(
                 failure.StatusCode,
                 failure.Code,
                 failure.Message),

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using FateAndFridge.Api.Data;
 using FateAndFridge.Api.Data.Configurations;
@@ -15,6 +16,16 @@ public abstract record BatchPreviewOutcome
 
     /// <summary>A non-validation failure (past date, horizon, no candidates).</summary>
     public sealed record Failure(int StatusCode, string Code, string Message) : BatchPreviewOutcome;
+}
+
+/// <summary>Outcome of a batch reroll apply (docs/M7_PLAN.md §1.8–§1.12).</summary>
+public abstract record BatchApplyOutcome
+{
+    /// <summary>The batch committed; <see cref="Days"/> are the changed day documents.</summary>
+    public sealed record Success(Guid BatchOperationId, IReadOnlyList<CalendarDayRecord> Days) : BatchApplyOutcome;
+
+    /// <summary>A non-validation failure (expired draft, conflict, not found).</summary>
+    public sealed record Failure(int StatusCode, string Code, string Message) : BatchApplyOutcome;
 }
 
 /// <summary>One day in a batch preview diff.</summary>
@@ -68,6 +79,7 @@ public sealed class BatchRerollService(
 
     private const string StatusProposed = "proposed";
     private const string StatusUnchanged = "unchanged";
+    private const string ActionPropose = "propose";
     private const string ReasonLocked = "locked";
     private const string ReasonVacation = "vacation";
     private const string ReasonSpecial = "special";
@@ -236,6 +248,323 @@ public sealed class BatchRerollService(
 
         return new BatchPreviewOutcome.Success(draft, previewDays);
     }
+
+    /// <summary>
+    /// Applies a stored preview draft atomically (docs/M7_PLAN.md §1.8–§1.12).
+    /// One transaction acquires the per-date advisory locks in ascending order,
+    /// re-checks every proposed target date against the stored before-state, and
+    /// writes the previewed recipes plus exactly one history row per changed date
+    /// sharing a single batch operation id. A missing/expired/consumed draft fails
+    /// <c>BATCH_DRAFT_EXPIRED</c>; a changed target date fails <c>BATCH_CONFLICT</c>
+    /// and writes nothing; another actor's draft is reported as <c>NOT_FOUND</c>.
+    /// No live-sync broadcast and no audit rows are written (M9/M12).
+    /// </summary>
+    public async Task<BatchApplyOutcome> ApplyAsync(
+        Guid token,
+        long? actorUserId,
+        CancellationToken cancellationToken = default)
+    {
+        var draft = await db.CalendarRerollDrafts
+            .FirstOrDefaultAsync(candidate => candidate.Token == token, cancellationToken)
+            .ConfigureAwait(false);
+        if (draft is null)
+        {
+            return DraftExpired();
+        }
+
+        // Drafts are per-actor: never reveal (or apply) another actor's draft.
+        // The system actor (null caller) counts as a match for any owner.
+        if (draft.ActorUserId is { } owner
+            && actorUserId is { } caller
+            && owner != caller)
+        {
+            return new BatchApplyOutcome.Failure(
+                StatusCodes.Status404NotFound,
+                ErrorCodes.NotFound,
+                "There is no batch preview for this token.");
+        }
+
+        var now = timeProvider.GetUtcNow();
+        if (draft.AppliedAt is not null || now > draft.ExpiresAt)
+        {
+            return DraftExpired();
+        }
+
+        var proposal = ReadProposal(draft.ProposalJson);
+        if (proposal is null)
+        {
+            return DraftExpired();
+        }
+
+        var proposed = proposal.Days
+            .Where(day => day.Action == ActionPropose && day.RecipeId is not null)
+            .OrderBy(day => day.Date)
+            .ToArray();
+
+        // One transaction owns every lock, write, and the draft consumption; any
+        // early return disposes it and rolls everything back.
+        await using var transaction = await db.Database
+            .BeginTransactionAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        // Serialize per target date with the same advisory lock as M6, acquired
+        // in ascending date order to avoid deadlocks (docs/M7_PLAN.md §1.12).
+        foreach (var day in proposed)
+        {
+            await LockDateAsync(day.Date, cancellationToken).ConfigureAwait(false);
+        }
+
+        // Re-check every target date against the before-state captured at preview
+        // time; a single mismatch aborts the whole apply (docs/M7_PLAN.md §1.8).
+        var currentByDate = new Dictionary<DateOnly, CalendarEntry?>();
+        foreach (var day in proposed)
+        {
+            var current = await db.CalendarEntries
+                .FirstOrDefaultAsync(entry => entry.MealDate == day.Date, cancellationToken)
+                .ConfigureAwait(false);
+            if (!MatchesBeforeState(current, day))
+            {
+                return Conflict();
+            }
+
+            currentByDate[day.Date] = current;
+        }
+
+        // Apply commits exactly the previewed recipes; load their display names
+        // (the frozen proposal stores ids and the score breakdown only).
+        var recipeIds = proposed.Select(day => day.RecipeId!.Value).Distinct().ToArray();
+        var recipeNames = recipeIds.Length == 0
+            ? new Dictionary<long, string>()
+            : await db.Recipes
+                .AsNoTracking()
+                .Where(recipe => recipeIds.Contains(recipe.Id))
+                .Select(recipe => new { recipe.Id, recipe.Name })
+                .ToDictionaryAsync(recipe => recipe.Id, recipe => recipe.Name, cancellationToken)
+                .ConfigureAwait(false);
+        if (proposed.Any(day => !recipeNames.ContainsKey(day.RecipeId!.Value)))
+        {
+            return Conflict();
+        }
+
+        var batchOperationId = Guid.NewGuid();
+        var history = new List<(CalendarEntry Entry, DateOnly Date, string? BeforeJson, string? MetadataJson)>();
+
+        foreach (var day in proposed)
+        {
+            var current = currentByDate[day.Date];
+            var recipeName = recipeNames[day.RecipeId!.Value];
+            string? beforeJson = null;
+            CalendarEntry entry;
+            if (current is null)
+            {
+                entry = new CalendarEntry
+                {
+                    MealDate = day.Date,
+                    SnapshotDisplayText = recipeName,
+                    CreatedAt = now,
+                    CreatedByUserId = actorUserId,
+                };
+                db.CalendarEntries.Add(entry);
+            }
+            else
+            {
+                entry = current;
+                beforeJson = CalendarService.SnapshotJson(entry);
+            }
+
+            // The replacement resets entry metadata exactly like single reroll
+            // (docs/M7_PLAN.md §1.11).
+            entry.EntryType = CalendarEntryType.Recipe;
+            entry.RecipeId = day.RecipeId!.Value;
+            entry.IsLocked = false;
+            entry.DinerCount = null;
+            entry.RestaurantName = null;
+            entry.LocationText = null;
+            entry.CustomLabel = null;
+            entry.Notes = null;
+            entry.IconKey = null;
+            entry.IncludeGroceries = true;
+            entry.SnapshotRecipeName = recipeName;
+            entry.SnapshotDisplayText = recipeName;
+            entry.UpdatedAt = now;
+            entry.UpdatedByUserId = actorUserId;
+
+            history.Add((entry, day.Date, beforeJson, day.MetadataJson));
+        }
+
+        // First save assigns ids to freshly created entries so each history row
+        // can reference its entry (same pattern as CalendarRandomizer).
+        await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        foreach (var (entry, date, beforeJson, metadataJson) in history)
+        {
+            db.CalendarEntryHistory.Add(new CalendarEntryHistory
+            {
+                CalendarEntryId = entry.Id,
+                MealDate = date,
+                OperationId = Guid.NewGuid(),
+                BatchOperationId = batchOperationId,
+                BeforeJson = beforeJson,
+                AfterJson = CalendarService.SnapshotJson(entry),
+                MetadataJson = metadataJson,
+                ChangedByUserId = actorUserId,
+                ChangedAt = now,
+                IsHistoricalCorrection = false,
+            });
+        }
+
+        draft.AppliedAt = now;
+        await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+
+        var days = new List<CalendarDayRecord>(proposed.Length);
+        foreach (var day in proposed)
+        {
+            days.Add(await calendar.GetDayAsync(day.Date, cancellationToken).ConfigureAwait(false));
+        }
+
+        return new BatchApplyOutcome.Success(batchOperationId, days);
+    }
+
+    /// <summary>
+    /// Reads the stored proposal from <c>proposal_json</c>; null when the JSON is
+    /// malformed or lacks the expected day list. Metadata is kept as its raw JSON
+    /// text so the exact per-date breakdown is written to the history row.
+    /// </summary>
+    private static StoredProposal? ReadProposal(string proposalJson)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(proposalJson);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object
+                || !root.TryGetProperty("days", out var daysElement)
+                || daysElement.ValueKind != JsonValueKind.Array)
+            {
+                return null;
+            }
+
+            var days = new List<StoredProposalDay>(daysElement.GetArrayLength());
+            foreach (var dayElement in daysElement.EnumerateArray())
+            {
+                if (!TryReadDate(dayElement, "date", out var date))
+                {
+                    return null;
+                }
+
+                var metadataJson = dayElement.TryGetProperty("metadata", out var metadata)
+                    && metadata.ValueKind == JsonValueKind.Object
+                    ? metadata.GetRawText()
+                    : null;
+
+                days.Add(new StoredProposalDay(
+                    date,
+                    ReadString(dayElement, "action"),
+                    ReadLong(dayElement, "recipe_id"),
+                    ReadLong(dayElement, "before_entry_id"),
+                    ReadDateTimeOffset(dayElement, "before_updated_at"),
+                    metadataJson));
+            }
+
+            return new StoredProposal(days);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// True when the stored before-state still matches the date's current entry
+    /// (a blank date has no entry; an existing one keeps its id and updated_at).
+    /// </summary>
+    private static bool MatchesBeforeState(CalendarEntry? current, StoredProposalDay day)
+    {
+        if (day.BeforeEntryId is null)
+        {
+            return current is null;
+        }
+
+        return current is not null
+            && current.Id == day.BeforeEntryId
+            && current.UpdatedAt == day.BeforeUpdatedAt;
+    }
+
+    /// <summary>
+    /// Takes the per-date transaction-scoped advisory lock so concurrent apply
+    /// and single-date mutations of the same date serialize (docs/M7_PLAN.md
+    /// §1.12). The lock is released on commit/rollback.
+    /// </summary>
+    private Task LockDateAsync(DateOnly date, CancellationToken cancellationToken) =>
+        db.Database.ExecuteSqlRawAsync(
+            "SELECT pg_advisory_xact_lock({0})",
+            new object[] { (long)date.DayNumber },
+            cancellationToken);
+
+    private static bool TryReadDate(JsonElement element, string field, out DateOnly date)
+    {
+        if (element.TryGetProperty(field, out var value)
+            && value.ValueKind == JsonValueKind.String
+            && DateOnly.TryParseExact(
+                value.GetString(),
+                "yyyy-MM-dd",
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out date))
+        {
+            return true;
+        }
+
+        date = default;
+        return false;
+    }
+
+    private static string? ReadString(JsonElement element, string field) =>
+        element.TryGetProperty(field, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+
+    private static long? ReadLong(JsonElement element, string field) =>
+        element.TryGetProperty(field, out var value)
+            && value.ValueKind == JsonValueKind.Number
+            && value.TryGetInt64(out var parsed)
+            ? parsed
+            : null;
+
+    private static DateTimeOffset? ReadDateTimeOffset(JsonElement element, string field) =>
+        element.TryGetProperty(field, out var value)
+            && value.ValueKind == JsonValueKind.String
+            && DateTimeOffset.TryParse(
+                value.GetString(),
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out var parsed)
+            ? parsed
+            : null;
+
+    private static BatchApplyOutcome.Failure DraftExpired() =>
+        new(
+            StatusCodes.Status410Gone,
+            ErrorCodes.BatchDraftExpired,
+            "This batch preview is missing, expired, or has already been applied.");
+
+    private static BatchApplyOutcome.Failure Conflict() =>
+        new(
+            StatusCodes.Status409Conflict,
+            ErrorCodes.BatchConflict,
+            "A date in this batch changed since the preview. Preview again and re-apply.");
+
+    /// <summary>One day of a stored proposal, read from <c>proposal_json</c>.</summary>
+    private sealed record StoredProposalDay(
+        DateOnly Date,
+        string? Action,
+        long? RecipeId,
+        long? BeforeEntryId,
+        DateTimeOffset? BeforeUpdatedAt,
+        string? MetadataJson);
+
+    /// <summary>The stored proposal document read by Apply.</summary>
+    private sealed record StoredProposal(IReadOnlyList<StoredProposalDay> Days);
 
     private static DateOnly ResolveEndDate(DateOnly startDate, string mode) => mode switch
     {
@@ -475,7 +804,7 @@ public sealed class BatchRerollService(
             string mode) =>
             new(
                 date,
-                "propose",
+                ActionPropose,
                 null,
                 recipeId,
                 current?.Id,
