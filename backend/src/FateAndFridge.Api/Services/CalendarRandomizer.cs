@@ -502,8 +502,11 @@ public sealed class CalendarRandomizer(
             ErrorCodes.UndoExpired,
             "This operation is missing or has already been undone.");
 
-    /// <summary>Applies every restorable field from a stored snapshot document.</summary>
-    private static void ApplySnapshot(CalendarEntry entry, string snapshotJson)
+    /// <summary>
+    /// Applies every restorable field from a stored snapshot document. Shared
+    /// with the M7 batch undo so both undo paths restore the exact same fields.
+    /// </summary>
+    internal static void ApplySnapshot(CalendarEntry entry, string snapshotJson)
     {
         using var document = JsonDocument.Parse(snapshotJson);
         var root = document.RootElement;

@@ -28,6 +28,16 @@ public abstract record BatchApplyOutcome
     public sealed record Failure(int StatusCode, string Code, string Message) : BatchApplyOutcome;
 }
 
+/// <summary>Outcome of a batch undo (docs/M7_PLAN.md §1.10).</summary>
+public abstract record BatchUndoOutcome
+{
+    /// <summary>The batch was reverted; <see cref="Days"/> are the restored day documents, in date order.</summary>
+    public sealed record Success(IReadOnlyList<CalendarDayRecord> Days) : BatchUndoOutcome;
+
+    /// <summary>A non-validation failure (missing/already undone, conflict, or a now-historical date).</summary>
+    public sealed record Failure(int StatusCode, string Code, string Message) : BatchUndoOutcome;
+}
+
 /// <summary>One day in a batch preview diff.</summary>
 public sealed record BatchPreviewDay(
     DateOnly Date,
@@ -427,6 +437,165 @@ public sealed class BatchRerollService(
     }
 
     /// <summary>
+    /// Undoes an entire batch apply (docs/M7_PLAN.md §1.10): reverts every date
+    /// the apply changed to its exact prior state (the previous entry, or blank),
+    /// but only while each affected date is still exactly as the apply left it.
+    /// A missing or already-undone batch fails <c>UNDO_EXPIRED</c>; a later change
+    /// to any affected date fails <c>UNDO_CONFLICT</c> and reverts nothing; a date
+    /// that has since become historical fails <c>CALENDAR_DATE_IN_PAST</c>. One
+    /// transaction acquires the per-date advisory locks in ascending date order and
+    /// writes exactly one undo history row per restored date sharing a fresh
+    /// <c>batch_operation_id</c>. No audit rows and no broadcast (M12/M9).
+    /// </summary>
+    public async Task<BatchUndoOutcome> UndoBatchAsync(
+        Guid batchOperationId,
+        long? actorUserId,
+        CancellationToken cancellationToken = default)
+    {
+        // The apply rows of this batch are the only undoable rows carrying the
+        // batch id; the undo rows written below get a fresh batch id and link
+        // back through change_reason instead.
+        var batchRows = await db.CalendarEntryHistory
+            .AsNoTracking()
+            .Where(row => row.BatchOperationId == batchOperationId)
+            .OrderBy(row => row.MealDate)
+            .ThenBy(row => row.Id)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+        var applyRows = batchRows
+            .Where(row => IsBatchApplyMetadata(row.MetadataJson))
+            .ToArray();
+        if (applyRows.Length == 0)
+        {
+            return BatchUndoExpired();
+        }
+
+        // A prior undo of this batch wrote rows whose change_reason names the
+        // original batch id, so a second call is safely reported as expired.
+        var undoReason = BatchUndoChangeReason(batchOperationId);
+        var alreadyUndone = await db.CalendarEntryHistory
+            .AsNoTracking()
+            .AnyAsync(row => row.ChangeReason == undoReason, cancellationToken)
+            .ConfigureAwait(false);
+        if (alreadyUndone)
+        {
+            return BatchUndoExpired();
+        }
+
+        // One transaction owns every lock, restore, and history write; any early
+        // return disposes it and rolls the whole undo back.
+        await using var transaction = await db.Database
+            .BeginTransactionAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        // Serialize per affected date with the same advisory lock as M6/M7 apply,
+        // acquired in ascending date order (docs/M7_PLAN.md §1.12).
+        foreach (var row in applyRows)
+        {
+            await LockDateAsync(row.MealDate, cancellationToken).ConfigureAwait(false);
+        }
+
+        // Every apply row must still be the latest change for its meal date; a
+        // later lock/upsert/delete/reroll makes the whole batch undo ambiguous.
+        foreach (var row in applyRows)
+        {
+            var latest = await db.CalendarEntryHistory
+                .AsNoTracking()
+                .Where(candidate => candidate.MealDate == row.MealDate)
+                .OrderByDescending(candidate => candidate.ChangedAt)
+                .ThenByDescending(candidate => candidate.Id)
+                .FirstAsync(cancellationToken)
+                .ConfigureAwait(false);
+            if (latest.Id != row.Id)
+            {
+                return BatchUndoConflict();
+            }
+        }
+
+        // Past dates are immutable in normal use (AGENTS.md): a batch undo may
+        // not rewrite a date that has since become historical.
+        var context = await clock.GetContextAsync(cancellationToken).ConfigureAwait(false);
+        if (applyRows.Any(row => HouseholdClock.IsHistorical(row.MealDate, context)))
+        {
+            return BatchUndoPastDate();
+        }
+
+        var now = timeProvider.GetUtcNow();
+        var undoBatchOperationId = Guid.NewGuid();
+        var undoMetadataJson = SerializeBatchUndoMetadata(batchOperationId);
+
+        foreach (var row in applyRows)
+        {
+            var entry = await db.CalendarEntries
+                .FirstOrDefaultAsync(candidate => candidate.MealDate == row.MealDate, cancellationToken)
+                .ConfigureAwait(false);
+
+            var undoBeforeJson = entry is null ? null : CalendarService.SnapshotJson(entry);
+
+            long? restoredEntryId = null;
+            string? restoredAfterJson = null;
+            if (row.BeforeJson is null)
+            {
+                // The date was blank before the apply: restoring means deleting
+                // the entry the apply created.
+                if (entry is not null)
+                {
+                    db.CalendarEntries.Remove(entry);
+                    await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+                }
+            }
+            else
+            {
+                if (entry is null)
+                {
+                    // Defensive: the apply's snapshot proves an entry existed.
+                    entry = new CalendarEntry
+                    {
+                        MealDate = row.MealDate,
+                        SnapshotDisplayText = string.Empty,
+                        CreatedAt = now,
+                        CreatedByUserId = actorUserId,
+                    };
+                    db.CalendarEntries.Add(entry);
+                }
+
+                CalendarRandomizer.ApplySnapshot(entry, row.BeforeJson);
+                entry.UpdatedAt = now;
+                entry.UpdatedByUserId = actorUserId;
+                await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+                restoredEntryId = entry.Id;
+                restoredAfterJson = CalendarService.SnapshotJson(entry);
+            }
+
+            db.CalendarEntryHistory.Add(new CalendarEntryHistory
+            {
+                CalendarEntryId = restoredEntryId,
+                MealDate = row.MealDate,
+                OperationId = Guid.NewGuid(),
+                BatchOperationId = undoBatchOperationId,
+                BeforeJson = undoBeforeJson,
+                AfterJson = restoredAfterJson,
+                MetadataJson = undoMetadataJson,
+                ChangedByUserId = actorUserId,
+                ChangeReason = undoReason,
+                ChangedAt = now,
+                IsHistoricalCorrection = false,
+            });
+        }
+
+        await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+
+        var days = new List<CalendarDayRecord>(applyRows.Length);
+        foreach (var row in applyRows)
+        {
+            days.Add(await calendar.GetDayAsync(row.MealDate, cancellationToken).ConfigureAwait(false));
+        }
+
+        return new BatchUndoOutcome.Success(days);
+    }
+
+    /// <summary>
     /// Reads the stored proposal from <c>proposal_json</c>; null when the JSON is
     /// malformed or lacks the expected day list. Metadata is kept as its raw JSON
     /// text so the exact per-date breakdown is written to the history row.
@@ -553,6 +722,61 @@ public sealed class BatchRerollService(
             StatusCodes.Status409Conflict,
             ErrorCodes.BatchConflict,
             "A date in this batch changed since the preview. Preview again and re-apply.");
+
+    /// <summary>True when a history row's metadata is a batch apply document.</summary>
+    private static bool IsBatchApplyMetadata(string? metadataJson)
+    {
+        if (string.IsNullOrWhiteSpace(metadataJson))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(metadataJson);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("kind", out var kind)
+                && kind.ValueKind == JsonValueKind.String
+                && kind.GetString() is "batch_reroll" or "fill_empty";
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static string BatchUndoChangeReason(Guid batchOperationId) =>
+        $"undo:{batchOperationId:D}";
+
+    /// <summary>
+    /// Serializes batch undo metadata in the documented snake_case shape:
+    /// <c>{"kind":"undo","undone_batch_operation_id":"..."}</c>.
+    /// </summary>
+    private static string SerializeBatchUndoMetadata(Guid batchOperationId) =>
+        JsonSerializer.Serialize(
+            new BatchUndoMetadataDocument("undo", batchOperationId),
+            ProposalJsonOptions);
+
+    private static BatchUndoOutcome.Failure BatchUndoExpired() =>
+        new(
+            StatusCodes.Status410Gone,
+            ErrorCodes.UndoExpired,
+            "This batch operation is missing or has already been undone.");
+
+    private static BatchUndoOutcome.Failure BatchUndoConflict() =>
+        new(
+            StatusCodes.Status409Conflict,
+            ErrorCodes.UndoConflict,
+            "A date in this batch changed since it was applied. Undo is no longer available.");
+
+    private static BatchUndoOutcome.Failure BatchUndoPastDate() =>
+        new(
+            StatusCodes.Status422UnprocessableEntity,
+            ErrorCodes.CalendarDateInPast,
+            "Dates in the past are read-only. Use the admin historical correction workflow.");
+
+    /// <summary>Snake_case serialization shape for a batch undo history row.</summary>
+    private sealed record BatchUndoMetadataDocument(string Kind, Guid UndoneBatchOperationId);
 
     /// <summary>One day of a stored proposal, read from <c>proposal_json</c>.</summary>
     private sealed record StoredProposalDay(

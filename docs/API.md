@@ -240,6 +240,7 @@ historical-correction API may change history.
 | `POST /api/v1/operations/{operation_id}/undo` | `calendar.edit` | Undo a reroll operation (M6) |
 | `POST /api/v1/calendar/reroll/preview` | `calendar.edit` | Batch reroll preview: a persisted draft plus the per-day diff (M7) |
 | `POST /api/v1/calendar/reroll/apply` | `calendar.edit` | Atomically apply a batch reroll preview draft (M7) |
+| `POST /api/v1/batch-operations/{batch_operation_id}/undo` | `calendar.edit` | Undo an entire batch apply (M7) |
 
 ### `day` document
 
@@ -463,6 +464,47 @@ Behavior (docs/M7_PLAN.md §1.8–§1.12):
   row is written.
 - Apply broadcasts nothing (live sync is M9) and writes no `audit_events` rows.
 
+### Batch undo (M7)
+
+`POST /api/v1/batch-operations/{batch_operation_id}/undo` requires
+`calendar.edit`, takes no body, and reverts the whole batch apply that wrote the
+given `batch_operation_id`. A malformed `{batch_operation_id}` fails
+`400 VALIDATION_FAILED` with a field error on `batch_operation_id`. Success
+returns the operation handle plus the restored day documents:
+
+```json
+{
+  "operation": { "id": "9a2b…" },
+  "days": [ { "…": "the M5 day document" } ],
+  "reverted_count": 5
+}
+```
+
+Behavior (docs/M7_PLAN.md §1.10):
+
+- Restores **every** date the apply changed to its exact pre-apply state: the
+  previous entry (every field the apply reset), or a blank date if the date was
+  empty before the apply. The day documents are returned in ascending date order.
+- It runs in one transaction, serializing each affected date with the same
+  `pg_advisory_xact_lock` used by apply (ascending date order). The undo is only
+  offered while **every** affected date is still exactly as the apply left it; a
+  later lock/upsert/delete/reroll on any one date fails `UNDO_CONFLICT` (409) and
+  **nothing** is reverted.
+- Exactly one `calendar_entry_history` row is written per restored date, all
+  sharing one **fresh** `batch_operation_id` (distinct from the applied one),
+  each with its own `operation_id`, a `before_json` / `after_json` pair, a
+  `metadata_json` of
+  `{"kind":"undo","undone_batch_operation_id":"<applied batch_operation_id>"}`,
+  and `change_reason` `undo:<applied batch_operation_id>`.
+- A batch that is unknown, is not a batch apply (`metadata_json` `kind` is not
+  `batch_reroll` / `fill_empty`), or has already been undone fails
+  `UNDO_EXPIRED` (410), so repeating an undo is safe. The `operation.id` in the
+  response echoes the batch operation that was undone.
+- A date that has since become historical fails `CALENDAR_DATE_IN_PAST` (422),
+  consistent with past-date immutability; undo does not rewrite history even
+  though it restores prior state.
+- Undo broadcasts nothing (live sync is M9) and writes no `audit_events` rows.
+
 ### Errors
 
 | Code | HTTP | Meaning |
@@ -474,8 +516,8 @@ Behavior (docs/M7_PLAN.md §1.8–§1.12):
 | `RANDOMIZER_NO_CANDIDATES` | 422 | Reroll with no `Normal` recipe available |
 | `CALENDAR_RECIPE_REQUIRED` | 400 | `recipe` entry without `recipe_id` |
 | `CALENDAR_MISC_LABEL_REQUIRED` | 400 | `misc` entry without `custom_label` |
-| `UNDO_EXPIRED` | 410 | Undo of an operation that is missing or already undone |
-| `UNDO_CONFLICT` | 409 | Undo of an operation whose date changed afterwards |
+| `UNDO_EXPIRED` | 410 | Undo of an operation or batch that is missing or already undone |
+| `UNDO_CONFLICT` | 409 | Undo of an operation or batch whose date changed afterwards |
 | `BATCH_CONFLICT` | 409 | Apply: a target date changed since the preview |
 | `BATCH_DRAFT_EXPIRED` | 410 | Apply: the draft is missing, expired, or consumed |
 | `NOT_FOUND` | 404 | Unknown resource (shared envelope) |
@@ -532,8 +574,9 @@ fully occupied the preview proposes nothing and Apply is a no-op
 ---
 
 ## 9. Undo
-Potential route:
-- `POST /operations/{operation_id}/undo`
+Routes:
+- `POST /operations/{operation_id}/undo` (single reroll, M6)
+- `POST /batch-operations/{batch_operation_id}/undo` (batch apply, M7)
 
 Undo must verify:
 - operation still undoable
