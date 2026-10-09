@@ -132,6 +132,59 @@ export interface CalendarRerollResponse extends CalendarDay {
   operation: CalendarOperation
 }
 
+/** Batch reroll range modes (M7, docs/API.md "Batch reroll preview"). */
+export type BatchRerollMode = 'seven_days' | 'rest_of_month' | 'fill_empty'
+
+/** Persisted preview draft handle with a 15-minute TTL. */
+export interface BatchPreviewDraft {
+  token: string
+  mode: BatchRerollMode
+  start_date: string
+  end_date: string
+  expires_at: string
+}
+
+/** Proposed replacement for one previewed day. */
+export interface BatchProposedEntry {
+  entry_type: CalendarEntryType
+  recipe_id: number
+  display_text: string
+}
+
+export type BatchPreviewDayStatus = 'proposed' | 'unchanged'
+
+/**
+ * Why a day is left unchanged: locked, vacation, a special/non-recipe entry,
+ * or an existing plain non-recipe (eat out / fend) entry.
+ */
+export type BatchUnchangedReason = 'locked' | 'vacation' | 'special' | 'existing_non_recipe'
+
+/** One day in a batch reroll preview diff. */
+export interface BatchPreviewDay {
+  date: string
+  status: BatchPreviewDayStatus
+  unchanged_reason: BatchUnchangedReason | null
+  current: CalendarEntry | null
+  proposed: BatchProposedEntry | null
+}
+
+export interface BatchPreviewResponse {
+  draft: BatchPreviewDraft
+  days: BatchPreviewDay[]
+}
+
+export interface BatchApplyResponse {
+  operation: CalendarOperation
+  days: CalendarDay[]
+  changed_count: number
+}
+
+export interface BatchUndoResponse {
+  operation: CalendarOperation
+  days: CalendarDay[]
+  reverted_count: number
+}
+
 export interface CalendarRepeatCheck {
   is_repeat: boolean
   window_start: string
@@ -186,4 +239,33 @@ export function rerollCalendarDay(date: string): Promise<CalendarRerollResponse>
 /** Restores the pre-reroll state of an operation (M6, `calendar.edit`). */
 export function undoCalendarOperation(operationId: string): Promise<CalendarDay> {
   return apiRequest<CalendarDay>(`/operations/${operationId}/undo`, { method: 'POST' })
+}
+
+/** Builds a batch reroll preview draft (M7, `calendar.edit`). */
+export function previewBatchReroll({
+  startDate,
+  mode,
+}: {
+  startDate: string
+  mode: BatchRerollMode
+}): Promise<BatchPreviewResponse> {
+  return apiRequest<BatchPreviewResponse>('/calendar/reroll/preview', {
+    method: 'POST',
+    body: { start_date: startDate, mode },
+  })
+}
+
+/** Atomically applies a preview draft by token (M7, `calendar.edit`). */
+export function applyBatchReroll(token: string): Promise<BatchApplyResponse> {
+  return apiRequest<BatchApplyResponse>('/calendar/reroll/apply', {
+    method: 'POST',
+    body: { token },
+  })
+}
+
+/** Reverts an entire batch apply (M7, `calendar.edit`). */
+export function undoBatchOperation(batchOperationId: string): Promise<BatchUndoResponse> {
+  return apiRequest<BatchUndoResponse>(`/batch-operations/${batchOperationId}/undo`, {
+    method: 'POST',
+  })
 }

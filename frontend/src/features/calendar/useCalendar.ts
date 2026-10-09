@@ -1,15 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
+  applyBatchReroll,
   checkCalendarRepeat,
   deleteCalendarDay,
   getCalendarDay,
   getCalendarRange,
   lockCalendarDay,
+  previewBatchReroll,
   putCalendarDay,
   rerollCalendarDay,
+  undoBatchOperation,
   undoCalendarOperation,
   unlockCalendarDay,
+  type BatchRerollMode,
   type CalendarWriteRequest,
 } from '../../api/calendar'
 
@@ -86,6 +90,35 @@ export function useUndoCalendarOperation() {
   const invalidate = useInvalidateCalendar()
   return useMutation({
     mutationFn: (operationId: string) => undoCalendarOperation(operationId),
+    onSuccess: invalidate,
+  })
+}
+
+/**
+ * Builds a batch reroll preview draft (M7). Preview persists no calendar state,
+ * so it does not invalidate any query; Try Another simply replaces the draft.
+ */
+export function usePreviewBatchReroll() {
+  return useMutation({
+    mutationFn: ({ startDate, mode }: { startDate: string; mode: BatchRerollMode }) =>
+      previewBatchReroll({ startDate, mode }),
+  })
+}
+
+/** Applies a batch reroll draft and refreshes the calendar (M7). */
+export function useApplyBatchReroll() {
+  const invalidate = useInvalidateCalendar()
+  return useMutation({
+    mutationFn: (token: string) => applyBatchReroll(token),
+    onSuccess: invalidate,
+  })
+}
+
+/** Reverts an entire batch apply and refreshes the calendar (M7). */
+export function useUndoBatchOperation() {
+  const invalidate = useInvalidateCalendar()
+  return useMutation({
+    mutationFn: (batchOperationId: string) => undoBatchOperation(batchOperationId),
     onSuccess: invalidate,
   })
 }

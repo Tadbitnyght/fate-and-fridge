@@ -1,6 +1,11 @@
 import { useMemo, useState, type JSX } from 'react'
 
-import type { CalendarDay, CalendarEntry, CalendarOperation } from '../../api/calendar'
+import type {
+  BatchRerollMode,
+  CalendarDay,
+  CalendarEntry,
+  CalendarOperation,
+} from '../../api/calendar'
 import { useHouseholdSettings } from '../settings/useHouseholdSettings'
 import {
   buildMonthGrid,
@@ -11,14 +16,20 @@ import {
   parseIsoDate,
 } from './calendarDates'
 import { AgendaList } from './AgendaList'
+import { BatchPreviewDialog } from './BatchPreviewDialog'
 import { DateDetailDialog } from './DateDetailDialog'
 import { MonthGrid } from './MonthGrid'
+import { RerollMenu } from './RerollMenu'
 import { UndoBanner } from './UndoBanner'
 import { useCalendarAccess } from './access'
 import { describeRerollError } from './calendarErrors'
 import { useCalendarRange, useRerollCalendarDay } from './useCalendar'
 
 type CalendarView = 'month' | 'agenda'
+
+/** The operation the Undo banner is currently offering to revert. */
+type UndoTarget =
+  { kind: 'single'; operation: CalendarOperation } | { kind: 'batch'; operation: CalendarOperation }
 
 /**
  * Calendar page (M5-09/M5-10/M5-12): a desktop month grid and a mobile
@@ -32,7 +43,9 @@ export function CalendarPage(): JSX.Element {
   const [monthIndex, setMonthIndex] = useState(now.getMonth())
   const [view, setView] = useState<CalendarView>('month')
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
-  const [operation, setOperation] = useState<CalendarOperation | null>(null)
+  const [undoTarget, setUndoTarget] = useState<UndoTarget | null>(null)
+  const [batchMode, setBatchMode] = useState<BatchRerollMode | null>(null)
+  const [batchNotice, setBatchNotice] = useState<string | null>(null)
   const [rerollError, setRerollError] = useState<string | null>(null)
   const [undoError, setUndoError] = useState<string | null>(null)
 
@@ -77,7 +90,7 @@ export function CalendarPage(): JSX.Element {
     rerollMutation.mutate(date, {
       onSuccess: (result) => {
         setRerollError(null)
-        setOperation(result.operation)
+        setUndoTarget({ kind: 'single', operation: result.operation })
       },
       onError: (caught) => setRerollError(describeRerollError(caught)),
     })
@@ -86,7 +99,18 @@ export function CalendarPage(): JSX.Element {
   function handleRerolled(nextOperation: CalendarOperation): void {
     setRerollError(null)
     setUndoError(null)
-    setOperation(nextOperation)
+    setUndoTarget({ kind: 'single', operation: nextOperation })
+  }
+
+  function handleBatchApplied(result: { operation: CalendarOperation | null }): void {
+    setRerollError(null)
+    setUndoError(null)
+    if (result.operation) {
+      setBatchNotice(null)
+      setUndoTarget({ kind: 'batch', operation: result.operation })
+    } else {
+      setBatchNotice('Nothing to change.')
+    }
   }
 
   function goToMonth(delta: number): void {
@@ -137,6 +161,14 @@ export function CalendarPage(): JSX.Element {
           <button type="button" onClick={() => window.print()}>
             Print
           </button>
+          {canEdit && (
+            <RerollMenu
+              onChoose={(mode) => {
+                setBatchNotice(null)
+                setBatchMode(mode)
+              }}
+            />
+          )}
         </div>
       </div>
 
@@ -159,12 +191,18 @@ export function CalendarPage(): JSX.Element {
         </button>
       </div>
 
-      {operation && (
+      {undoTarget && (
         <UndoBanner
-          operation={operation}
-          onDismiss={() => setOperation(null)}
+          operation={undoTarget.operation}
+          kind={undoTarget.kind}
+          onDismiss={() => setUndoTarget(null)}
           onError={(message) => setUndoError(message)}
         />
+      )}
+      {batchNotice !== null && (
+        <p className="form__notice" role="status">
+          {batchNotice}
+        </p>
       )}
       {undoError !== null && (
         <p className="form__error" role="alert">
@@ -212,6 +250,18 @@ export function CalendarPage(): JSX.Element {
           canEdit={canEdit}
           onClose={() => setSelectedDate(null)}
           onRerolled={handleRerolled}
+        />
+      )}
+
+      {batchMode !== null && (
+        <BatchPreviewDialog
+          mode={batchMode}
+          startDate={selectedDate ?? householdToday}
+          onClose={() => setBatchMode(null)}
+          onApplied={(result) => {
+            setBatchMode(null)
+            handleBatchApplied(result)
+          }}
         />
       )}
     </section>

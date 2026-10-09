@@ -52,6 +52,9 @@ export const ErrorCodes = {
   RandomizerNoCandidates: 'RANDOMIZER_NO_CANDIDATES',
   UndoConflict: 'UNDO_CONFLICT',
   UndoExpired: 'UNDO_EXPIRED',
+  // M7 batch reroll codes (docs/API.md §7).
+  BatchConflict: 'BATCH_CONFLICT',
+  BatchDraftExpired: 'BATCH_DRAFT_EXPIRED',
 } as const
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes]

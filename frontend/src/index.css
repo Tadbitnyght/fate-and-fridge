@@ -2268,9 +2268,106 @@ a.recipes__import:focus-visible {
   font-size: 0.8rem;
 }
 
+.reroll-menu {
+  position: relative;
+}
+
+.reroll-menu__trigger {
+  min-width: 2.25rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 0.45rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.reroll-menu__popover {
+  z-index: 40;
+  min-width: 12rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 25%);
+}
+
+.reroll-menu__heading {
+  margin: 0 0 0.15rem;
+  padding: 0 0.6rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.reroll-menu__popover button {
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 0.45rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.batch-preview__days {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 20rem;
+  margin: 0.5rem 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.batch-preview__day {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 0.45rem;
+}
+
+.batch-preview__day--changed {
+  border-left: 4px solid var(--ok-text);
+  background: var(--ok-bg);
+}
+
+.batch-preview__day--unchanged {
+  color: var(--muted);
+  opacity: 0.85;
+}
+
+.batch-preview__date {
+  font-weight: 600;
+}
+
+.batch-preview__badge {
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
 @media print {
   .undo-banner,
-  .day-action-menu {
+  .day-action-menu,
+  .reroll-menu__popover {
     display: none !important;
   }
 }
@@ -2295,6 +2392,10 @@ a.recipes__import:focus-visible {
 
 @media (max-width: 40rem) {
   .calendar-toolbar__nav button {
+    min-height: 2.75rem;
+  }
+
+  .reroll-menu__popover button {
     min-height: 2.75rem;
   }
 
