@@ -243,7 +243,7 @@ export const MILESTONES: Milestone[] = [
     id: 'M7',
     number: 7,
     name: 'Batch Planning',
-    status: 'in_progress',
+    status: 'complete',
     summary:
       'Planning a range at once: previews, conflicts, atomic apply, and lock/vacation awareness.',
     features: [
@@ -253,6 +253,16 @@ export const MILESTONES: Milestone[] = [
       'Lock behavior in batch operations',
       'Vacation blocking',
       'Batch concurrency protection',
+    ],
+    completedOn: '2026-10-09',
+    tag: 'm7-complete',
+    commit: '2088cf2',
+    evidence: [
+      { label: 'Backend tests', value: '1818' },
+      { label: 'Vitest', value: '266' },
+      { label: 'Playwright (hermetic)', value: '37 passed / 2 pre-existing stack skips' },
+      { label: 'M7 verification', value: 'independent review + full §4 battery' },
+      { label: 'Backend gates', value: 'format/build/EF clean' },
     ],
     issues: [94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104],
     issuesNote: 'Tracking #94; M7-01…M7-10: #95–#104.',

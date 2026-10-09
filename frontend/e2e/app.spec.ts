@@ -196,7 +196,7 @@ test('progress roadmap is reachable from the dashboard card and the footer', asy
   await page.getByRole('link', { name: 'Open the milestone roadmap' }).click()
   await expect(page).toHaveURL(/\/progress$/)
   await expect(page.getByRole('heading', { level: 2, name: 'Progress' })).toBeVisible()
-  await expect(page.getByText('7 of 15 milestones complete (47%).')).toBeVisible()
+  await expect(page.getByText('8 of 15 milestones complete (53%).')).toBeVisible()
   await expect(
     page.getByRole('heading', { level: 3, name: 'M1 — Setup and Authentication' }),
   ).toBeVisible()

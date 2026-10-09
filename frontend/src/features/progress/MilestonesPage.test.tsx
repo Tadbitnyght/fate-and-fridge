@@ -29,13 +29,13 @@ describe('progress page', () => {
     renderWithProviders(<App />, { route: '/progress' })
 
     expect(await screen.findByRole('heading', { level: 2, name: 'Progress' })).toBeInTheDocument()
-    expect(screen.getByText('7 of 15 milestones complete (47%).')).toBeInTheDocument()
+    expect(screen.getByText('8 of 15 milestones complete (53%).')).toBeInTheDocument()
 
     const progressbar = screen.getByRole('progressbar', { name: 'Milestones complete' })
-    expect(progressbar).toHaveAttribute('aria-valuenow', '47')
-    expect(progressbar).toHaveAttribute('aria-valuetext', '47%')
+    expect(progressbar).toHaveAttribute('aria-valuenow', '53')
+    expect(progressbar).toHaveAttribute('aria-valuetext', '53%')
 
-    expect(screen.getAllByText('Complete', { exact: true })).toHaveLength(7)
+    expect(screen.getAllByText('Complete', { exact: true })).toHaveLength(8)
     expect(screen.getAllByText('Planned', { exact: true }).length).toBeGreaterThan(9)
 
     const m1Card = screen
@@ -73,6 +73,13 @@ describe('progress page', () => {
     expect(within(m6Card).getByText('Complete', { exact: true })).toBeInTheDocument()
     expect(within(m6Card).getByText(/Completed 2026-10-08/)).toBeInTheDocument()
     expect(within(m6Card).getByText(/m6-complete/)).toBeInTheDocument()
+
+    const m7Card = screen
+      .getByRole('heading', { level: 3, name: 'M7 — Batch Planning' })
+      .closest('li')!
+    expect(within(m7Card).getByText('Complete', { exact: true })).toBeInTheDocument()
+    expect(within(m7Card).getByText(/Completed 2026-10-09/)).toBeInTheDocument()
+    expect(within(m7Card).getAllByText(/m7-complete/).length).toBeGreaterThan(0)
 
     expect(screen.getByRole('heading', { level: 3, name: 'M14 — Hardening' })).toBeInTheDocument()
   })

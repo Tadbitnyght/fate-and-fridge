@@ -124,6 +124,30 @@ versions follow [Semantic Versioning](https://semver.org/).
   `household_settings.randomizer_*` and
   `calendar_entry_history.metadata_json` (migrations `M6Randomizer`,
   `M6OperationMetadata`).
+- Milestone 7 — batch planning (2026-10-09): reroll a whole range at once.
+  `POST /api/v1/calendar/reroll/preview` (`calendar.edit`) builds a persisted
+  15-minute draft over 7-day, rest-of-month, or Fill Empty ranges and returns a
+  per-date diff (changed dates highlighted; locked, vacation, special, eat-out,
+  fend-for-yourself, and non-recipe dates shown unchanged). Generation is
+  sequential in ascending date order and draws only `Normal` recipes, with
+  earlier picks in the proposal counting as occurrences/neighbours for later
+  dates. `POST /api/v1/calendar/reroll/apply` re-checks every target date and
+  writes all changes atomically, failing `BATCH_CONFLICT` (409) on a changed
+  target and `BATCH_DRAFT_EXPIRED` (410) on a missing/expired/consumed draft;
+  each changed date writes one `calendar_entry_history` row sharing a new
+  nullable, indexed `batch_operation_id` while keeping its own `operation_id`,
+  with a `metadata_json` score breakdown carrying `kind = batch_reroll` or
+  `fill_empty` plus `mode`. Apply serializes per target date with the M6
+  `pg_advisory_xact_lock`. `POST /api/v1/batch-operations/{id}/undo`
+  (`calendar.edit`) reverts every changed date while each is still in the
+  applied state (`UNDO_CONFLICT` 409 otherwise; `UNDO_EXPIRED` 410 for a
+  missing/already-undone batch), writing one history row per restored date
+  sharing a fresh `batch_operation_id` and `metadata_json` with
+  `kind = undo` and `undone_batch_operation_id`. The frontend adds a "Reroll…"
+  toolbar menu (7-day / Rest of month / Fill empty) with a modal preview wizard
+  (diff, Try Another, Apply, Cancel) and reuses the dismissible Undo banner for
+  the batch. Schema: `calendar_reroll_drafts` and
+  `calendar_entry_history.batch_operation_id` (migration `M7BatchPlanning`).
 
 ### Changed
 
