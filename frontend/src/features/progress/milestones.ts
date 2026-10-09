@@ -243,7 +243,7 @@ export const MILESTONES: Milestone[] = [
     id: 'M7',
     number: 7,
     name: 'Batch Planning',
-    status: 'planned',
+    status: 'in_progress',
     summary:
       'Planning a range at once: previews, conflicts, atomic apply, and lock/vacation awareness.',
     features: [
@@ -254,9 +254,8 @@ export const MILESTONES: Milestone[] = [
       'Vacation blocking',
       'Batch concurrency protection',
     ],
-    issues: [],
-    issuesNote:
-      'Planned in docs/MILESTONES.md; GitHub issues are created when the milestone starts.',
+    issues: [94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104],
+    issuesNote: 'Tracking #94; M7-01…M7-10: #95–#104.',
   },
   {
     id: 'M8',
