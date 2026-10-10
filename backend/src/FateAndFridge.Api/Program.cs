@@ -187,6 +187,10 @@ builder.Services.AddSingleton<UnitConversionService>();
 // I/O-free, so a singleton over the conversion service above.
 builder.Services.AddSingleton<GroceryAggregationService>();
 
+// M8-03: the live grocery list projection over calendar, recipe, manual, and
+// check-state rows. Scoped because it reads through the request AppDbContext.
+builder.Services.AddScoped<GroceryListService>();
+
 // M1-09 permission model: one uncached grant reader plus the evaluator service
 // shared by GET /auth/session and the route enforcement filter.
 builder.Services.AddScoped<IPermissionGrantReader, DbPermissionGrantReader>();
@@ -269,6 +273,7 @@ app.MapTagEndpoints();
 app.MapRecipeEndpoints();
 app.MapRecipeImageEndpoints();
 app.MapCalendarEndpoints();
+app.MapGroceryEndpoints();
 app.MapOperationEndpoints();
 app.MapImportEndpoints();
 

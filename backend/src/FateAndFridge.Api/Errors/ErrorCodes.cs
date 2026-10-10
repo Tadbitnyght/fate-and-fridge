@@ -121,4 +121,8 @@ public static class ErrorCodes
 
     /// <summary>Reserved for M7-03 apply: the draft is missing, expired, or already consumed.</summary>
     public const string BatchDraftExpired = "BATCH_DRAFT_EXPIRED";
+
+    // M8 grocery codes (docs/M8_PLAN.md §2.2).
+    /// <summary>A resolved grocery range exceeds the 366-day cap.</summary>
+    public const string GroceryRangeTooLarge = "GROCERY_RANGE_TOO_LARGE";
 }

@@ -621,23 +621,129 @@ No silent deletion when referenced.
 
 ## 13. Grocery List
 
-Read:
-- `GET /groceries?start=...&days=...`
-- presets may map to resolved ranges server-side
+### `GET /api/v1/groceries` (M8-03)
 
-Manual items:
+The live grocery projection over the active range (docs/M8_PLAN.md §1.3–§1.12,
+§2.2). Permission: `groceries.view` (`groceries.edit` implies it). An
+unauthenticated request gets `401 AUTH_REQUIRED`; an authenticated member
+without the key gets `403 FORBIDDEN`; the single-user system actor has full
+access.
+
+Query — exactly one of the two forms, both optional:
+
+| Parameter | Value |
+|-----------|-------|
+| `preset` | `next_3_days` \| `next_7_days` \| `next_14_days` \| `rest_of_month` \| `custom` |
+| `start` + `days` | explicit range: `start=YYYY-MM-DD`, `days=<positive integer>` |
+
+Rules:
+
+- Supplying `preset` (other than `custom`) together with `start` or `days` fails
+  `400 VALIDATION_FAILED`.
+- `preset=custom` requires both `start` and `days`; `start` without `days` (or
+  vice versa) fails `400 VALIDATION_FAILED`.
+- An unknown `preset`, a malformed `start`, or a non-positive/non-integer `days`
+  fails `400 VALIDATION_FAILED` with `details.field_errors`.
+- Ranges are today/future only: a `start` before the household today fails
+  `400 VALIDATION_FAILED` on `start`.
+- A resolved range longer than 366 days fails `400 GROCERY_RANGE_TOO_LARGE`.
+- With no query parameters the server resolves the caller's remembered
+  `user_grocery_preferences` range (`range_preset`/`range_start`/`range_days`),
+  falling back to `next_7_days` when there is no row or an unusable/legacy
+  value. This read never writes the preference (the M8-04 PATCH owns that).
+- `next_N_days`: `start` = household today, `end` = today + (N − 1).
+  `rest_of_month`: `start` = today, `end` = last day of the current month, so the
+  range is a **single day** when today is the last day of the month.
+  `custom`: `end` = `start` + `days` − 1. Dates are household-local
+  (`YYYY-MM-DD`).
+
+Response `200`:
+
+```json
+{
+  "range": { "preset": "next_7_days", "start": "2026-10-10", "end": "2026-10-16", "day_count": 7 },
+  "departments": [
+    {
+      "department_id": 12,
+      "name": "Produce",
+      "sort_order": 3,
+      "is_other": false,
+      "items": [
+        {
+          "identity": "<64-char lowercase hex>",
+          "name": "Onion",
+          "quantity_text": "1 1/2",
+          "quantity": 1.5,
+          "unit": "lb",
+          "ingredient_id": 42,
+          "department_id": 12,
+          "checked": false,
+          "source_type": "recipe",
+          "manual_item_id": null,
+          "sources": [
+            { "recipe_id": 5, "recipe_name": "Tacos", "date": "2026-10-06" }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+- `identity` is the stable `GroceryItemIdentity` hash the check API (M8-06) keys
+  on: for recipe-derived lines the aggregation identity (canonical ingredient +
+  unit dimension, quantity-independent); for manual lines `manual|{id}`.
+  `sources` has one row per contributing meal (`[]` for manual items).
+  `ingredient_id` is `null` for a free-text manual item; `department_id` is
+  `null` for the "Other" group.
+- **Quantity-less lines:** `quantity` is `null` and `quantity_text` is `""`.
+  `unit` is the line's display-unit symbol when one exists — M8-02 preserves the
+  display unit for a quantity-less line (for example a nonconvertible "to
+  taste") — and is `null` only when the line has no unit at all (a unitless
+  count).
+- **Contribution scope:** only calendar entries in the range whose derived
+  `include_groceries` is true **and** that carry a recipe contribute
+  recipe-derived lines. `eat_out`, `fend_for_yourself`, `go_to_family_dinner`,
+  and vacation never do; `host_family_dinner`/`holiday`/`misc` do when they
+  carry a recipe. A retired or missing recipe still contributes through its
+  stored ingredient rows. Aliases resolve to their canonical ingredient (merge
+  redirect). Compatible units in one dimension combine into the largest present
+  unit (1 lb + 8 oz → `1 1/2` lb); incompatible dimensions stay separate.
+- **Manual items:** a manual item is included only when its stored
+  `(range_start, range_days)` **exactly equals** the resolved range, so it is
+  hidden the moment the range changes. Its department is its own
+  `department_id`, else the linked canonical ingredient's department, else the
+  trailing "Other" group. Manual lines are never merged into recipe buckets.
+- **Ordering:** departments ascending `sort_order`, then name; the
+  null-department "Other" group is last (`is_other: true`, `sort_order`
+  `2147483647`). Within a department, unchecked lines come first (alphabetical
+  by name, then identity, then unit symbol), then checked lines alphabetically.
+- `checked` is the household-shared `grocery_check_state` flag for the line's
+  identity.
+
+### Routes (remaining M8 issues)
+
+Manual items (`groceries.edit`):
 - `POST /groceries/manual`
 - `PATCH /groceries/manual/{id}`
 - `DELETE /groceries/manual/{id}`
 
-Check state:
+Check state (`groceries.edit`):
 - `POST /groceries/check`
 - `POST /groceries/uncheck`
 
-Staples:
+Staples (`groceries.view` read, `groceries.edit` writes):
 - `GET /groceries/staples`
 - `POST /groceries/staples`
 - `POST /groceries/staples/{id}/add-to-list`
+
+Preferences (`groceries.view`):
+- `GET /groceries/preferences`
+- `PATCH /groceries/preferences`
+
+Errors: `VALIDATION_FAILED` (range/preset/quantity), `GROCERY_RANGE_TOO_LARGE`
+(resolved range exceeds 366 days), `NOT_FOUND`, and `FORBIDDEN` (shared
+envelope).
 
 ---
 

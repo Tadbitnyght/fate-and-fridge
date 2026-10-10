@@ -486,7 +486,13 @@ public sealed class GroceryAggregationService
             .ThenBy(source => source.RecipeId)
             .ToList();
 
-    private static string FormatQuantityText(decimal? quantity) =>
+    /// <summary>
+    /// Renders a quantity as the ready-to-display grocery text using the same
+    /// fraction/decimal rule as aggregation (docs/M8_PLAN.md §1.5), so manual
+    /// lines and recipe-derived lines render identically. Returns an empty string
+    /// for a quantity-less line.
+    /// </summary>
+    public static string FormatQuantityText(decimal? quantity) =>
         quantity is { } value ? FormatQuantity(value) : string.Empty;
 
     /// <summary>
