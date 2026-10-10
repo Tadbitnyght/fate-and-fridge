@@ -89,6 +89,27 @@ public sealed record GroceryAggregatedItem(
 /// the main line.
 /// </para>
 /// <para>
+/// Quantity handling (docs/M8_PLAN.md §1.4): a contribution carrying an explicit
+/// numeric quantity of zero or less contributes nothing at all — no arithmetic,
+/// no line, and no attribution row — because recipe/import validation permits a
+/// literal zero. A quantity-less (null) contribution is different: it always
+/// keeps its place, joining the shared line or, for an incompatible unit, its own
+/// non-numeric line. A nonconvertible unit that carries a numeric quantity (for
+/// example "2 to taste") retains that quantity and its unit symbol, and multiple
+/// same-identity nonconvertible numerics are summed; different nonconvertible
+/// units stay separate through their unit-specific identity.
+/// </para>
+/// <para>
+/// Overflow handling: the only arithmetic here is decimal addition plus the
+/// conversion service call. A contribution whose addition to a bucket would
+/// overflow <see cref="decimal"/> is caught and split onto its own fallback line
+/// rather than throwing (the count/nonconvertible path included). Multiple output
+/// lines may therefore legitimately share one
+/// <see cref="GroceryAggregatedItem.IdentityHash"/>: defensive fallback lines
+/// reuse the dimension identity so household check state stays stable, and an
+/// overflow split is a never-guessed-at representation of an extreme input.
+/// </para>
+/// <para>
 /// Output is deterministic: items are ordered by ingredient name, then identity,
 /// then display unit; attribution rows are chronological, then by recipe id.
 /// Final department/checked ordering belongs to the list service (M8-03).
@@ -99,9 +120,10 @@ public sealed class GroceryAggregationService
     private const decimal FractionTolerance = 0.000001m;
 
     /// <summary>
-    /// Cooking fractions up to eighths, checked in the same ascending "nicest
-    /// first" order as the frontend <c>formatQuantity</c> helper
-    /// (docs/PRODUCT_SPEC.md §37).
+    /// Cooking fractions up to eighths, the same fraction table the frontend
+    /// <c>formatQuantity</c> helper checks in the same ascending "nicest first"
+    /// order (docs/PRODUCT_SPEC.md §37). Only the fallback decimal formatting
+    /// differs between the two helpers.
     /// </summary>
     private static readonly (int Numerator, int Denominator)[] Fractions =
     [
@@ -170,7 +192,7 @@ public sealed class GroceryAggregationService
 
         return dimension is UnitDimension.Mass or UnitDimension.Volume
             ? AggregateMeasured(group, first.IngredientId, name, dimension)
-            : [AggregateCounted(group, first.IngredientId, name, dimension)];
+            : AggregateCounted(group, first.IngredientId, name, dimension);
     }
 
     private static string PickName(IEnumerable<GroceryIngredientInput> group) =>
@@ -180,7 +202,7 @@ public sealed class GroceryAggregationService
             .OrderBy(name => name, StringComparer.Ordinal)
             .FirstOrDefault() ?? string.Empty;
 
-    private static GroceryAggregatedItem AggregateCounted(
+    private static IEnumerable<GroceryAggregatedItem> AggregateCounted(
         IEnumerable<GroceryIngredientInput> group,
         long ingredientId,
         string name,
@@ -188,28 +210,69 @@ public sealed class GroceryAggregationService
     {
         var inputs = group.ToList();
         var unit = inputs[0].Unit;
-        decimal? quantity = null;
+        var main = new Bucket(unit);
+        var overflowLines = new List<Bucket>();
 
-        if (dimension == UnitDimension.Count)
+        foreach (var input in inputs)
         {
-            foreach (var input in inputs)
+            if (input.QuantityNumeric is not { } value)
             {
-                if (input.QuantityNumeric is { } value)
-                {
-                    quantity = quantity is null ? value : quantity.Value + value;
-                }
+                // A quantity-less contribution needs no math and keeps its place.
+                main.AddSource(input);
+                continue;
+            }
+
+            if (value <= 0m)
+            {
+                // An explicit non-positive quantity (recipe validation permits a
+                // zero) contributes nothing: no arithmetic, no line, no source.
+                continue;
+            }
+
+            if (!main.TryAdd(input, value))
+            {
+                // A running total that overflows decimal is split onto its own line
+                // rather than throwing (docs/M8_PLAN.md §1.4).
+                overflowLines.Add(SingletonBucket(unit, input, value));
             }
         }
 
-        return new GroceryAggregatedItem(
-            GroceryItemIdentity.ForRecipeItem(ingredientId, dimension, unit?.Id, unit?.Symbol),
-            ingredientId,
-            name,
-            dimension,
-            quantity,
-            unit?.Symbol,
-            FormatQuantityText(quantity),
-            BuildSources(inputs));
+        if (main.IsEmpty && overflowLines.Count == 0)
+        {
+            return [];
+        }
+
+        var identity = GroceryItemIdentity.ForRecipeItem(
+            ingredientId, dimension, unit?.Id, unit?.Symbol);
+        var results = new List<GroceryAggregatedItem>();
+
+        if (!main.IsEmpty)
+        {
+            results.Add(new GroceryAggregatedItem(
+                identity,
+                ingredientId,
+                name,
+                dimension,
+                main.Quantity,
+                unit?.Symbol,
+                FormatQuantityText(main.Quantity),
+                BuildSources(main.Inputs)));
+        }
+
+        foreach (var bucket in overflowLines)
+        {
+            results.Add(new GroceryAggregatedItem(
+                identity,
+                ingredientId,
+                name,
+                dimension,
+                bucket.Quantity,
+                unit?.Symbol,
+                FormatQuantityText(bucket.Quantity),
+                BuildSources(bucket.Inputs)));
+        }
+
+        return results;
     }
 
     private IEnumerable<GroceryAggregatedItem> AggregateMeasured(
@@ -223,6 +286,7 @@ public sealed class GroceryAggregationService
         var displayUnit = SelectDisplayUnit(inputs);
         var main = new Bucket(displayUnit);
         var fallbacks = new Dictionary<string, Bucket>(StringComparer.Ordinal);
+        var overflowLines = new List<Bucket>();
 
         foreach (var input in inputs)
         {
@@ -237,19 +301,37 @@ public sealed class GroceryAggregationService
                 continue;
             }
 
+            if (quantity.Value <= 0m)
+            {
+                // An explicit non-positive quantity (recipe validation permits a
+                // zero) contributes nothing: no arithmetic, no line, no source.
+                continue;
+            }
+
             if (displayUnit is not null && SameUnit(unit, displayUnit))
             {
-                main.Add(input, quantity.Value);
+                if (main.TryAdd(input, quantity.Value))
+                {
+                    continue;
+                }
+
+                AddToFallback(fallbacks, overflowLines, unit, input, quantity.Value);
                 continue;
             }
 
-            if (displayUnit is not null && TryConvert(unit, displayUnit, quantity.Value) is { } converted)
+            if (displayUnit is not null
+                && TryConvert(unit, displayUnit, quantity.Value) is { } converted)
             {
-                main.Add(input, converted);
+                if (main.TryAdd(input, converted))
+                {
+                    continue;
+                }
+
+                AddToFallback(fallbacks, overflowLines, unit, input, quantity.Value);
                 continue;
             }
 
-            GetOrAdd(fallbacks, unit).Add(input, quantity.Value);
+            AddToFallback(fallbacks, overflowLines, unit, input, quantity.Value);
         }
 
         var results = new List<GroceryAggregatedItem>();
@@ -267,7 +349,9 @@ public sealed class GroceryAggregationService
                 BuildSources(main.Inputs)));
         }
 
-        foreach (var bucket in fallbacks.Values.OrderBy(bucket => bucket.Unit!.Symbol, StringComparer.Ordinal))
+        foreach (var bucket in fallbacks.Values
+            .Concat(overflowLines)
+            .OrderBy(bucket => bucket.Unit!.Symbol, StringComparer.Ordinal))
         {
             results.Add(new GroceryAggregatedItem(
                 identity,
@@ -288,6 +372,14 @@ public sealed class GroceryAggregationService
         var units = new Dictionary<string, ConversionUnit>(StringComparer.Ordinal);
         foreach (var input in inputs)
         {
+            // A contribution with an explicit non-positive quantity is ignored
+            // entirely (no arithmetic, no line, no source), so its unit must not
+            // influence the display unit either.
+            if (input.QuantityNumeric is { } quantity && quantity <= 0m)
+            {
+                continue;
+            }
+
             if (input.Unit is { } unit)
             {
                 units.TryAdd(UnitKey(unit), unit);
@@ -322,6 +414,37 @@ public sealed class GroceryAggregationService
         }
 
         return largest;
+    }
+
+    /// <summary>
+    /// Files a contribution that could not join the main bucket: into the unit's
+    /// shared fallback bucket when it fits there, otherwise onto a fresh line of
+    /// its own when even that bucket would overflow.
+    /// </summary>
+    private static void AddToFallback(
+        Dictionary<string, Bucket> fallbacks,
+        List<Bucket> overflowLines,
+        ConversionUnit unit,
+        GroceryIngredientInput input,
+        decimal quantity)
+    {
+        if (GetOrAdd(fallbacks, unit).TryAdd(input, quantity))
+        {
+            return;
+        }
+
+        overflowLines.Add(SingletonBucket(unit, input, quantity));
+    }
+
+    /// <summary>A bucket holding exactly one contribution, used for overflow splits.</summary>
+    private static Bucket SingletonBucket(
+        ConversionUnit? unit,
+        GroceryIngredientInput input,
+        decimal quantity)
+    {
+        var bucket = new Bucket(unit);
+        bucket.TryAdd(input, quantity);
+        return bucket;
     }
 
     private static Bucket GetOrAdd(Dictionary<string, Bucket> fallbacks, ConversionUnit unit)
@@ -369,8 +492,10 @@ public sealed class GroceryAggregationService
     /// <summary>
     /// Renders a quantity as the nearest common cooking fraction when the value is
     /// exact within a small tolerance (0.5 → "1/2", 1.5 → "1 1/2", 2.25 → "2 1/4",
-    /// matching docs/PRODUCT_SPEC.md §37 and the frontend helper), otherwise as a
-    /// decimal with up to two places (1.234 → "1.23", 0.3 → "0.3").
+    /// docs/PRODUCT_SPEC.md §37), otherwise as a decimal with up to two places
+    /// (1.234 → "1.23", 0.3 → "0.3"). The two-decimal cap is the plan's grocery
+    /// display rule (docs/M8_PLAN.md §1.5); it intentionally differs from the
+    /// frontend <c>formatQuantity</c> helper, which rounds to six decimals.
     /// </summary>
     private static string FormatQuantity(decimal value)
     {
@@ -433,10 +558,31 @@ public sealed class GroceryAggregationService
 
         public void AddSource(GroceryIngredientInput input) => _inputs.Add(input);
 
-        public void Add(GroceryIngredientInput input, decimal quantity)
+        /// <summary>
+        /// Adds a quantity-bearing contribution, returning false — leaving the
+        /// bucket untouched — when the running total would overflow
+        /// <see cref="decimal"/>, rather than throwing.
+        /// </summary>
+        public bool TryAdd(GroceryIngredientInput input, decimal quantity)
         {
+            if (_quantity is { } current)
+            {
+                try
+                {
+                    _quantity = current + quantity;
+                }
+                catch (OverflowException)
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                _quantity = quantity;
+            }
+
             _inputs.Add(input);
-            _quantity = _quantity is null ? quantity : _quantity.Value + quantity;
+            return true;
         }
     }
 }

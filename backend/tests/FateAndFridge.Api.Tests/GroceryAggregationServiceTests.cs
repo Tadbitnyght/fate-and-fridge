@@ -409,4 +409,151 @@ public sealed class GroceryAggregationServiceTests
         items[0].Quantity.Should().Be(5m);
         items[0].Sources.Should().HaveCount(2);
     }
+
+    // ---- Non-positive quantities ---------------------------------------------
+
+    [Fact]
+    public void A_zero_quantity_in_a_different_unit_is_ignored()
+    {
+        // "1 lb + 0 oz" must not create a spurious second (same-identity) line.
+        var items = _service.Aggregate(
+        [
+            Ingredient(1, "Ground Beef", 1m, "lb", 10, "Tacos", day: 6),
+            Ingredient(1, "Ground Beef", 0m, "oz", 20, "Meatloaf", day: 7),
+        ]);
+
+        items.Should().HaveCount(1);
+        items[0].Quantity.Should().Be(1m);
+        items[0].UnitSymbol.Should().Be("lb");
+        items[0].Sources.Should().ContainSingle();
+    }
+
+    [Fact]
+    public void A_zero_larger_unit_does_not_change_the_display_unit()
+    {
+        // The zero "kg" contribution is ignored entirely, so it must not pull the
+        // display unit away from the only real (lb) contribution.
+        var items = _service.Aggregate(
+        [
+            Ingredient(1, "Ground Beef", 1m, "lb", 10, "Tacos", day: 6),
+            Ingredient(1, "Ground Beef", 0m, "kg", 20, "Meatloaf", day: 7),
+        ]);
+
+        items.Should().HaveCount(1);
+        items[0].Quantity.Should().Be(1m);
+        items[0].UnitSymbol.Should().Be("lb");
+        items[0].Sources.Should().ContainSingle();
+    }
+
+    [Fact]
+    public void A_non_positive_unitless_count_is_ignored()
+    {
+        var items = _service.Aggregate(
+        [
+            Ingredient(1, "Egg", 2m, null, 10, "A", day: 6),
+            Ingredient(1, "Egg", 0m, null, 20, "B", day: 7),
+            Ingredient(1, "Egg", -1m, null, 30, "C", day: 8),
+        ]);
+
+        items.Should().HaveCount(1);
+        items[0].Quantity.Should().Be(2m);
+        items[0].UnitSymbol.Should().BeNull();
+        items[0].Sources.Should().ContainSingle();
+    }
+
+    [Fact]
+    public void A_lone_non_positive_quantity_produces_no_line()
+    {
+        _service.Aggregate([Ingredient(1, "Ground Beef", 0m, "oz", 10, "A", day: 6)])
+            .Should().BeEmpty();
+    }
+
+    // ---- Nonconvertible numerics ---------------------------------------------
+
+    [Fact]
+    public void Nonconvertible_numeric_quantities_are_retained_and_summed()
+    {
+        var items = _service.Aggregate(
+        [
+            Ingredient(1, "Salt", 2m, "to taste", 10, "A", day: 6),
+            Ingredient(1, "Salt", 3m, "to taste", 20, "B", day: 7),
+        ]);
+
+        items.Should().HaveCount(1);
+        items[0].Dimension.Should().Be(UnitDimension.Nonconvertible);
+        items[0].Quantity.Should().Be(5m);
+        items[0].QuantityText.Should().Be("5");
+        items[0].UnitSymbol.Should().Be("to taste");
+        items[0].Sources.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void Different_nonconvertible_units_stay_separate()
+    {
+        var mystery = new ConversionUnit(98, "pinch of love", UnitDimension.Nonconvertible, null);
+
+        var items = _service.Aggregate(
+        [
+            Ingredient(1, "Salt", 2m, "to taste", 10, "A", day: 6),
+            new GroceryIngredientInput(
+                1, "Salt", 3m, mystery, 20, "B", new DateOnly(2026, 10, 7)),
+        ]);
+
+        items.Should().HaveCount(2);
+        items.Should().ContainSingle(item => item.UnitSymbol == "to taste" && item.Quantity == 2m);
+        items.Should().ContainSingle(item => item.UnitSymbol == "pinch of love" && item.Quantity == 3m);
+        items.Select(item => item.IdentityHash).Should().OnlyHaveUniqueItems();
+    }
+
+    // ---- Display unit ordering and overflow ----------------------------------
+
+    [Fact]
+    public void Three_unit_mass_bucket_uses_the_largest_unit_in_any_position()
+    {
+        var items = _service.Aggregate(
+        [
+            Ingredient(1, "Flour", 8m, "oz", 10, "A", day: 6),
+            Ingredient(1, "Flour", 1m, "kg", 20, "B", day: 7),
+            Ingredient(1, "Flour", 100m, "g", 30, "C", day: 8),
+        ]);
+
+        items.Should().HaveCount(1);
+        items[0].UnitSymbol.Should().Be("kg");
+        items[0].Quantity.Should().Be(1.326796185m);
+        items[0].QuantityText.Should().Be("1.33");
+        items[0].Sources.Should().HaveCount(3);
+    }
+
+    [Fact]
+    public void An_overflowing_mass_total_splits_onto_its_own_line()
+    {
+        var items = _service.Aggregate(
+        [
+            Ingredient(1, "Ground Beef", 1m, "lb", 10, "A", day: 6),
+            Ingredient(1, "Ground Beef", decimal.MaxValue, "lb", 20, "B", day: 7),
+        ]);
+
+        // Two rows sharing one identity is intentional (documented on the service).
+        items.Should().HaveCount(2);
+        items.Select(item => item.IdentityHash).Distinct().Should().ContainSingle();
+        items.Select(item => item.UnitSymbol).Should().OnlyContain(symbol => symbol == "lb");
+        items.Should().ContainSingle(item => item.Quantity == 1m);
+        items.Should().ContainSingle(item => item.Quantity == decimal.MaxValue);
+    }
+
+    [Fact]
+    public void An_overflowing_count_total_splits_onto_its_own_line()
+    {
+        var items = _service.Aggregate(
+        [
+            Ingredient(1, "Tortilla", decimal.MaxValue, "each", 10, "A", day: 6),
+            Ingredient(1, "Tortilla", 1m, "each", 20, "B", day: 7),
+        ]);
+
+        items.Should().HaveCount(2);
+        items.Select(item => item.IdentityHash).Distinct().Should().ContainSingle();
+        items.Select(item => item.UnitSymbol).Should().OnlyContain(symbol => symbol == "each");
+        items.Should().ContainSingle(item => item.Quantity == decimal.MaxValue);
+        items.Should().ContainSingle(item => item.Quantity == 1m);
+    }
 }
