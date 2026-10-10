@@ -49,6 +49,10 @@ public sealed class M2SchemaBaselineModelTests
                 typeof(CalendarEntry),
                 typeof(CalendarEntryHistory),
                 typeof(CalendarRerollDraft),
+                typeof(GroceryStaple),
+                typeof(ManualGroceryItem),
+                typeof(GroceryCheckState),
+                typeof(UserGroceryPreference),
             ]);
     }
 

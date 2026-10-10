@@ -402,6 +402,51 @@ namespace FateAndFridge.Api.Migrations
                     b.ToTable("calendar_reroll_drafts", (string)null);
                 });
 
+            modelBuilder.Entity("FateAndFridge.Api.Domain.GroceryCheckState", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<bool>("Checked")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("checked");
+
+                    b.Property<DateTimeOffset?>("CheckedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("checked_at");
+
+                    b.Property<long?>("CheckedByUserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("checked_by_user_id");
+
+                    b.Property<string>("ItemIdentityHash")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("item_identity_hash");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_grocery_check_state");
+
+                    b.HasIndex("CheckedByUserId")
+                        .HasDatabaseName("ix_grocery_check_state_checked_by_user_id");
+
+                    b.HasIndex("ItemIdentityHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_grocery_check_state_item_identity_hash");
+
+                    b.ToTable("grocery_check_state", (string)null);
+                });
+
             modelBuilder.Entity("FateAndFridge.Api.Domain.GroceryDepartment", b =>
                 {
                     b.Property<long>("Id")
@@ -447,6 +492,66 @@ namespace FateAndFridge.Api.Migrations
                         .HasDatabaseName("ix_grocery_departments_normalized_name");
 
                     b.ToTable("grocery_departments", (string)null);
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.GroceryStaple", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<decimal?>("DefaultQuantityNumeric")
+                        .HasPrecision(28, 14)
+                        .HasColumnType("numeric(28,14)")
+                        .HasColumnName("default_quantity_numeric");
+
+                    b.Property<long?>("DepartmentId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("department_id");
+
+                    b.Property<long?>("IngredientId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("ingredient_id");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<long?>("UnitId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("unit_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_grocery_staples");
+
+                    b.HasIndex("DepartmentId")
+                        .HasDatabaseName("ix_grocery_staples_department_id");
+
+                    b.HasIndex("IngredientId")
+                        .HasDatabaseName("ix_grocery_staples_ingredient_id");
+
+                    b.HasIndex("UnitId")
+                        .HasDatabaseName("ix_grocery_staples_unit_id");
+
+                    b.ToTable("grocery_staples", (string)null);
                 });
 
             modelBuilder.Entity("FateAndFridge.Api.Domain.HouseholdSettings", b =>
@@ -662,6 +767,84 @@ namespace FateAndFridge.Api.Migrations
                         .HasDatabaseName("ix_ingredient_aliases_normalized_alias");
 
                     b.ToTable("ingredient_aliases", (string)null);
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.ManualGroceryItem", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<long?>("CreatedByUserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<long?>("DepartmentId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("department_id");
+
+                    b.Property<long?>("IngredientId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("ingredient_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<decimal?>("QuantityNumeric")
+                        .HasPrecision(28, 14)
+                        .HasColumnType("numeric(28,14)")
+                        .HasColumnName("quantity_numeric");
+
+                    b.Property<int>("RangeDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("range_days");
+
+                    b.Property<DateOnly>("RangeStart")
+                        .HasColumnType("date")
+                        .HasColumnName("range_start");
+
+                    b.Property<bool>("SaveForFuture")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("save_for_future");
+
+                    b.Property<long?>("UnitId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("unit_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_manual_grocery_items");
+
+                    b.HasIndex("CreatedByUserId")
+                        .HasDatabaseName("ix_manual_grocery_items_created_by_user_id");
+
+                    b.HasIndex("DepartmentId")
+                        .HasDatabaseName("ix_manual_grocery_items_department_id");
+
+                    b.HasIndex("IngredientId")
+                        .HasDatabaseName("ix_manual_grocery_items_ingredient_id");
+
+                    b.HasIndex("UnitId")
+                        .HasDatabaseName("ix_manual_grocery_items_unit_id");
+
+                    b.HasIndex("RangeStart", "RangeDays")
+                        .HasDatabaseName("ix_manual_grocery_items_range_start_range_days");
+
+                    b.ToTable("manual_grocery_items", (string)null);
                 });
 
             modelBuilder.Entity("FateAndFridge.Api.Domain.Protein", b =>
@@ -1228,6 +1411,40 @@ namespace FateAndFridge.Api.Migrations
                     b.ToTable("users", (string)null);
                 });
 
+            modelBuilder.Entity("FateAndFridge.Api.Domain.UserGroceryPreference", b =>
+                {
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.Property<bool>("HideChecked")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("hide_checked");
+
+                    b.Property<int?>("RangeDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("range_days");
+
+                    b.Property<string>("RangePreset")
+                        .HasColumnType("text")
+                        .HasColumnName("range_preset");
+
+                    b.Property<DateOnly?>("RangeStart")
+                        .HasColumnType("date")
+                        .HasColumnName("range_start");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("UserId")
+                        .HasName("pk_user_grocery_preferences");
+
+                    b.ToTable("user_grocery_preferences", (string)null);
+                });
+
             modelBuilder.Entity("FateAndFridge.Api.Domain.UserPermission", b =>
                 {
                     b.Property<long>("Id")
@@ -1387,6 +1604,36 @@ namespace FateAndFridge.Api.Migrations
                         .HasConstraintName("fk_calendar_reroll_drafts_users_actor_user_id");
                 });
 
+            modelBuilder.Entity("FateAndFridge.Api.Domain.GroceryCheckState", b =>
+                {
+                    b.HasOne("FateAndFridge.Api.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("CheckedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_grocery_check_state_users_checked_by_user_id");
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.GroceryStaple", b =>
+                {
+                    b.HasOne("FateAndFridge.Api.Domain.GroceryDepartment", null)
+                        .WithMany()
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_grocery_staples_grocery_departments_department_id");
+
+                    b.HasOne("FateAndFridge.Api.Domain.Ingredient", null)
+                        .WithMany()
+                        .HasForeignKey("IngredientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_grocery_staples_ingredients_ingredient_id");
+
+                    b.HasOne("FateAndFridge.Api.Domain.Unit", null)
+                        .WithMany()
+                        .HasForeignKey("UnitId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_grocery_staples_units_unit_id");
+                });
+
             modelBuilder.Entity("FateAndFridge.Api.Domain.Ingredient", b =>
                 {
                     b.HasOne("FateAndFridge.Api.Domain.GroceryDepartment", null)
@@ -1410,6 +1657,33 @@ namespace FateAndFridge.Api.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_ingredient_aliases_ingredients_ingredient_id");
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.ManualGroceryItem", b =>
+                {
+                    b.HasOne("FateAndFridge.Api.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_manual_grocery_items_users_created_by_user_id");
+
+                    b.HasOne("FateAndFridge.Api.Domain.GroceryDepartment", null)
+                        .WithMany()
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_manual_grocery_items_grocery_departments_department_id");
+
+                    b.HasOne("FateAndFridge.Api.Domain.Ingredient", null)
+                        .WithMany()
+                        .HasForeignKey("IngredientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_manual_grocery_items_ingredients_ingredient_id");
+
+                    b.HasOne("FateAndFridge.Api.Domain.Unit", null)
+                        .WithMany()
+                        .HasForeignKey("UnitId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_manual_grocery_items_units_unit_id");
                 });
 
             modelBuilder.Entity("FateAndFridge.Api.Domain.RecipeImage", b =>
@@ -1523,6 +1797,16 @@ namespace FateAndFridge.Api.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_unit_aliases_units_unit_id");
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.UserGroceryPreference", b =>
+                {
+                    b.HasOne("FateAndFridge.Api.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_user_grocery_preferences_users_user_id");
                 });
 
             modelBuilder.Entity("FateAndFridge.Api.Domain.UserPermission", b =>

@@ -61,6 +61,14 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     public DbSet<CalendarRerollDraft> CalendarRerollDrafts => Set<CalendarRerollDraft>();
 
+    public DbSet<GroceryStaple> GroceryStaples => Set<GroceryStaple>();
+
+    public DbSet<ManualGroceryItem> ManualGroceryItems => Set<ManualGroceryItem>();
+
+    public DbSet<GroceryCheckState> GroceryCheckStates => Set<GroceryCheckState>();
+
+    public DbSet<UserGroceryPreference> UserGroceryPreferences => Set<UserGroceryPreference>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -98,5 +106,11 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
         // M7-01 batch planning draft schema (docs/M7_PLAN.md §2.3).
         modelBuilder.ApplyConfiguration(new CalendarRerollDraftConfiguration());
+
+        // M8-01 grocery schema and per-user preferences (docs/M8_PLAN.md §2.3).
+        modelBuilder.ApplyConfiguration(new GroceryStapleConfiguration());
+        modelBuilder.ApplyConfiguration(new ManualGroceryItemConfiguration());
+        modelBuilder.ApplyConfiguration(new GroceryCheckStateConfiguration());
+        modelBuilder.ApplyConfiguration(new UserGroceryPreferenceConfiguration());
     }
 }
