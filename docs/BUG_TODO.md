@@ -14,6 +14,8 @@ Status legend: `open` (confirmed, not started) · `fixing` · `verifying` ·
 | BUG-001 | closed | Import / UI | Recipe URL import crashes to a blank page when a parsed ingredient line has no unit | [#93](https://github.com/Tadbitnyght/fate-and-fridge/issues/93) |
 | BUG-002 | open | Import / UI | Nested ingredient-group rows never receive unknown-unit metadata (latent; unreachable with current drafts) | — |
 | BUG-004 | open | Calendar / UI | Replacing a recipe entry with Eat out fails with a misleading "Choose a recipe" error (stale `recipe_id`) | [#105](https://github.com/Tadbitnyght/fate-and-fridge/issues/105) |
+| BUG-005 | open | Recipes / UI | Saving a recipe stays on the recipe form instead of returning to the recipes list | [#118](https://github.com/Tadbitnyght/fate-and-fridge/issues/118) |
+| BUG-006 | open | Recipes / UI | Recipe cards only open from the name; the whole card should open the editor | [#119](https://github.com/Tadbitnyght/fate-and-fridge/issues/119) |
 | BUG-003 | open | Calendar / Concurrency | Concurrent single-date `PUT`/reroll racing a batch Apply on a blank target can raise an unhandled unique-violation 500 | — |
 
 ---
@@ -145,5 +147,45 @@ Status legend: `open` (confirmed, not started) · `fixing` · `verifying` ·
 - **Tests:** a date-editor test that changes a recipe entry to `eat_out` and saves
   successfully; a backend test that an unsupported `recipe_id` returns
   `VALIDATION_FAILED` (not `CALENDAR_RECIPE_REQUIRED`).
+
+---
+
+## BUG-005 — Saving a recipe stays on the form instead of returning to the recipes list
+
+- **Area:** Recipe editor (`features/recipes/RecipeFormPage.tsx`)
+- **Severity:** Low–Medium (UX) — every save leaves the user on the editor.
+- **Reported:** 2026-10-09
+- **Status:** open
+- **GitHub:** [#118](https://github.com/Tadbitnyght/fate-and-fridge/issues/118)
+- **Reproduction:** open `/recipes/new` or an existing recipe, fill it in, press
+  **Save** — the page stays on the recipe editor instead of the recipes list.
+- **Root cause:** `handleSubmit` (edit path ~line 119-121) saves and shows a local
+  "Recipe saved." notice but never navigates; the create path (~line 122-124)
+  navigates to `/recipes/${created.id}/edit`, re-entering the editor. Nothing
+  returns to `/recipes`.
+- **Fix direction:** navigate to `/recipes` after a successful create or update
+  (optionally pass a success notice via router state). The M4 import review flow
+  navigates itself and is unaffected.
+- **Tests:** a form test asserting save (create and edit) navigates to `/recipes`.
+
+---
+
+## BUG-006 — Recipe cards only open from the name
+
+- **Area:** Recipe browser (`features/recipes/RecipesBrowser.tsx`)
+- **Severity:** Low–Medium (UX) — the large photo/white box look clickable but are not.
+- **Reported:** 2026-10-09
+- **Status:** open
+- **GitHub:** [#119](https://github.com/Tadbitnyght/fate-and-fridge/issues/119)
+- **Reproduction:** on `/recipes`, click the recipe photo or the card's white box —
+  nothing happens; only the recipe name link opens the editor.
+- **Root cause:** each item is an `<li className="recipe-card">` with the image and
+  body as plain elements; only the name is a `Link` (`recipe-card__name-link`, ~line 82).
+- **Fix direction:** make the entire card activate the editor — wrap the card content
+  in a single `Link` to `/recipes/{id}/edit`, or use a stretched-link overlay — while
+  keeping keyboard access, preserving alt text, and avoiding nested interactive elements.
+- **Tests:** a card test asserting a click on the image/body (not just the name)
+  navigates to `/recipes/{id}/edit`, plus keyboard activation.
+
 
 
