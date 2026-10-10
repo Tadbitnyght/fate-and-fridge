@@ -271,7 +271,7 @@ export const MILESTONES: Milestone[] = [
     id: 'M8',
     number: 8,
     name: 'Groceries',
-    status: 'planned',
+    status: 'in_progress',
     summary:
       'The live grocery projection: aggregation, compatible unit families, manual items and staples, department ordering, and printing.',
     features: [
@@ -282,9 +282,9 @@ export const MILESTONES: Milestone[] = [
       'Department ordering, checkbox persistence, hide checked',
       'Mobile grocery UI and printable list',
     ],
-    issues: [],
+    issues: [106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116],
     issuesNote:
-      'Planned in docs/MILESTONES.md; GitHub issues are created when the milestone starts.',
+      'Tracking #106; M8-01…M8-10: #107–#116. Runbook: docs/M8_PLAN.md.',
   },
   {
     id: 'M9',
