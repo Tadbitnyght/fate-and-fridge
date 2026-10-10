@@ -1,5 +1,7 @@
+import { useRef, useState, type KeyboardEvent } from 'react'
 import { Link } from 'react-router-dom'
 
+import { FutureFeaturesPanel } from './FutureFeaturesPanel'
 import {
   MILESTONES,
   STATUS_LABELS,
@@ -8,6 +10,13 @@ import {
   type Milestone,
   type MilestoneStatus,
 } from './milestones'
+
+type ProgressTab = 'milestones' | 'future'
+
+const TABS: { id: ProgressTab; label: string }[] = [
+  { id: 'milestones', label: 'Milestones' },
+  { id: 'future', label: 'Future & ideas' },
+]
 
 function StatusChip({ status }: { status: MilestoneStatus }) {
   return <span className={`status-chip status-chip--${status}`}>{STATUS_LABELS[status]}</span>
@@ -77,17 +86,13 @@ function MilestoneCard({ milestone }: { milestone: Milestone }) {
   )
 }
 
-/** Milestone roadmap with visual evidence (issue #22); rendered from the manifest. */
-export function MilestonesPage() {
+/** The current milestone roadmap: summary bar, intro, and the manifest cards. */
+function MilestonesPanel() {
   const summary = progressSummary()
   const percentLabel = `${summary.percent}%`
 
   return (
-    <section className="page progress-page" aria-labelledby="progress-heading">
-      <h2 id="progress-heading" tabIndex={-1}>
-        Progress
-      </h2>
-
+    <>
       <p className="progress-summary">
         {summary.completed} of {summary.total} milestones complete ({percentLabel}).
       </p>
@@ -114,6 +119,100 @@ export function MilestonesPage() {
           <MilestoneCard key={milestone.id} milestone={milestone} />
         ))}
       </ol>
+    </>
+  )
+}
+
+/**
+ * Milestone roadmap with visual evidence (issue #22) plus a "Future & ideas"
+ * tab backed by the checked-in future registry (issue #117). Both views render
+ * offline from manifests — no runtime fetch, no external service.
+ */
+export function MilestonesPage() {
+  const [activeTab, setActiveTab] = useState<ProgressTab>('milestones')
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
+
+  function activateTab(index: number) {
+    const clamped = (index + TABS.length) % TABS.length
+    setActiveTab(TABS[clamped].id)
+    tabRefs.current[clamped]?.focus()
+  }
+
+  function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    switch (event.key) {
+      case 'ArrowRight':
+        event.preventDefault()
+        activateTab(index + 1)
+        break
+      case 'ArrowLeft':
+        event.preventDefault()
+        activateTab(index - 1)
+        break
+      case 'Home':
+        event.preventDefault()
+        activateTab(0)
+        break
+      case 'End':
+        event.preventDefault()
+        activateTab(TABS.length - 1)
+        break
+      default:
+        break
+    }
+  }
+
+  return (
+    <section className="page progress-page" aria-labelledby="progress-heading">
+      <h2 id="progress-heading" tabIndex={-1}>
+        Progress
+      </h2>
+
+      <div className="progress-tabs" role="tablist" aria-label="Progress views">
+        {TABS.map((tab, index) => {
+          const selected = activeTab === tab.id
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              id={`progress-tab-${tab.id}`}
+              className={`progress-tab${selected ? ' progress-tab--active' : ''}`}
+              aria-selected={selected}
+              aria-controls={`progress-panel-${tab.id}`}
+              tabIndex={selected ? 0 : -1}
+              ref={(element) => {
+                tabRefs.current[index] = element
+              }}
+              onClick={() => setActiveTab(tab.id)}
+              onKeyDown={(event) => handleTabKeyDown(event, index)}
+            >
+              {tab.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {activeTab === 'milestones' ? (
+        <div
+          className="progress-tabpanel"
+          id="progress-panel-milestones"
+          role="tabpanel"
+          aria-labelledby="progress-tab-milestones"
+          tabIndex={0}
+        >
+          <MilestonesPanel />
+        </div>
+      ) : (
+        <div
+          className="progress-tabpanel"
+          id="progress-panel-future"
+          role="tabpanel"
+          aria-labelledby="progress-tab-future"
+          tabIndex={0}
+        >
+          <FutureFeaturesPanel />
+        </div>
+      )}
     </section>
   )
 }

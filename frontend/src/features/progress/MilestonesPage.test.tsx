@@ -127,4 +127,72 @@ describe('progress page', () => {
     fireEvent.click(cardLink)
     expect(await screen.findByRole('heading', { level: 2, name: 'Progress' })).toBeInTheDocument()
   })
+
+  it('defaults to the Milestones tab and switches to Future & ideas on click', async () => {
+    installMocks()
+
+    renderWithProviders(<App />, { route: '/progress' })
+    await screen.findByRole('heading', { level: 2, name: 'Progress' })
+
+    const milestonesTab = screen.getByRole('tab', { name: 'Milestones' })
+    const futureTab = screen.getByRole('tab', { name: 'Future & ideas' })
+
+    // The milestone roadmap is the default view and occupies the single tab stop.
+    expect(milestonesTab).toHaveAttribute('aria-selected', 'true')
+    expect(milestonesTab).toHaveAttribute('tabindex', '0')
+    expect(futureTab).toHaveAttribute('aria-selected', 'false')
+    expect(futureTab).toHaveAttribute('tabindex', '-1')
+    expect(screen.getByText('8 of 15 milestones complete (53%).')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { level: 4, name: 'Pantry / inventory' }),
+    ).not.toBeInTheDocument()
+
+    fireEvent.click(futureTab)
+
+    expect(futureTab).toHaveAttribute('aria-selected', 'true')
+    expect(milestonesTab).toHaveAttribute('aria-selected', 'false')
+    expect(
+      screen.getByRole('heading', { level: 4, name: 'Pantry / inventory' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/approved or scheduled/i)).toBeInTheDocument()
+    // The registry-backed panel groups items and keeps V2 first.
+    const v2Heading = screen.getByRole('heading', { level: 3, name: /V2/ })
+    expect(v2Heading).toBeInTheDocument()
+    // The milestone roadmap is unmounted while the future tab is active.
+    expect(
+      screen.queryByRole('heading', { level: 3, name: 'M1 — Setup and Authentication' }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText('8 of 15 milestones complete (53%).')).not.toBeInTheDocument()
+  })
+
+  it('supports Left/Right/Home/End keyboard navigation with roving focus', async () => {
+    installMocks()
+
+    renderWithProviders(<App />, { route: '/progress' })
+    await screen.findByRole('heading', { level: 2, name: 'Progress' })
+
+    const milestonesTab = screen.getByRole('tab', { name: 'Milestones' })
+    const futureTab = screen.getByRole('tab', { name: 'Future & ideas' })
+
+    milestonesTab.focus()
+    fireEvent.keyDown(milestonesTab, { key: 'ArrowRight' })
+    expect(futureTab).toHaveAttribute('aria-selected', 'true')
+    expect(document.activeElement).toBe(futureTab)
+
+    fireEvent.keyDown(futureTab, { key: 'ArrowLeft' })
+    expect(milestonesTab).toHaveAttribute('aria-selected', 'true')
+    expect(document.activeElement).toBe(milestonesTab)
+
+    // Arrows wrap around the ends of the tablist.
+    fireEvent.keyDown(milestonesTab, { key: 'ArrowLeft' })
+    expect(futureTab).toHaveAttribute('aria-selected', 'true')
+
+    fireEvent.keyDown(futureTab, { key: 'Home' })
+    expect(milestonesTab).toHaveAttribute('aria-selected', 'true')
+    expect(document.activeElement).toBe(milestonesTab)
+
+    fireEvent.keyDown(milestonesTab, { key: 'End' })
+    expect(futureTab).toHaveAttribute('aria-selected', 'true')
+    expect(document.activeElement).toBe(futureTab)
+  })
 })

@@ -1338,6 +1338,143 @@ main:focus-visible {
   color: var(--text);
 }
 
+/* ---------- progress tabs + future registry (#117) ---------- */
+
+.progress-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin: 1rem 0 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.progress-tab {
+  margin-bottom: -1px;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 0.5rem 0.5rem 0 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.progress-tab:hover {
+  color: var(--text);
+}
+
+.progress-tab--active {
+  border-color: var(--border);
+  border-bottom-color: var(--surface);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.progress-tab:focus-visible,
+.progress-tabpanel:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.progress-tabpanel {
+  outline: none;
+}
+
+.future-features {
+  margin-top: 0.5rem;
+}
+
+.future-group {
+  margin-top: 1.5rem;
+}
+
+.future-group__title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.6rem;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+.future-group__count {
+  padding: 0 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  color: var(--text);
+}
+
+.future-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.future-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface);
+}
+
+.future-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.future-card__head h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.future-card__summary {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.future-card__source {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.status-chip--v2 {
+  background: var(--ok-bg);
+  color: var(--ok-text);
+  border-color: transparent;
+}
+
+.status-chip--v1x,
+.status-chip--enhancement {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.status-chip--research {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.status-chip--never_v1,
+.status-chip--rejected {
+  background: var(--surface);
+  color: var(--muted);
+}
+
 .app-footer {
   display: flex;
   flex-wrap: wrap;
