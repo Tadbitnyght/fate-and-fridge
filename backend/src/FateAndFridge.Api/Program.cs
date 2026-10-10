@@ -183,6 +183,10 @@ builder.Services.Configure<FormOptions>(options =>
 // so a singleton. M8 grocery aggregation consumes it via DI.
 builder.Services.AddSingleton<UnitConversionService>();
 
+// M8-02: pure grocery aggregation over supplied recipe ingredients; stateless and
+// I/O-free, so a singleton over the conversion service above.
+builder.Services.AddSingleton<GroceryAggregationService>();
+
 // M1-09 permission model: one uncached grant reader plus the evaluator service
 // shared by GET /auth/session and the route enforcement filter.
 builder.Services.AddScoped<IPermissionGrantReader, DbPermissionGrantReader>();
