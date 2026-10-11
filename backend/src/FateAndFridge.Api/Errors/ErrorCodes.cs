@@ -125,4 +125,7 @@ public static class ErrorCodes
     // M8 grocery codes (docs/M8_PLAN.md §2.2).
     /// <summary>A resolved grocery range exceeds the 366-day cap.</summary>
     public const string GroceryRangeTooLarge = "GROCERY_RANGE_TOO_LARGE";
+
+    /// <summary>An active staple with the same normalized name already exists.</summary>
+    public const string GroceryStapleExists = "GROCERY_STAPLE_EXISTS";
 }

@@ -131,17 +131,62 @@ public sealed record GroceryPreferenceResponse(
             preference.RangeDays);
 }
 
+/// <summary>One household staple (docs/M8_PLAN.md §1.9, §2.2).</summary>
+public sealed record GroceryStapleResponse(
+    long Id,
+    string Name,
+    long? IngredientId,
+    long? DepartmentId,
+    decimal? DefaultQuantityNumeric,
+    long? UnitId,
+    bool IsActive,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt)
+{
+    public static GroceryStapleResponse From(GroceryStapleRecord staple) =>
+        new(
+            staple.Id,
+            staple.Name,
+            staple.IngredientId,
+            staple.DepartmentId,
+            staple.DefaultQuantityNumeric,
+            staple.UnitId,
+            staple.IsActive,
+            staple.CreatedAt,
+            staple.UpdatedAt);
+}
+
+/// <summary>The household staple catalog document (docs/M8_PLAN.md §2.2).</summary>
+public sealed record GroceryStaplesResponse(IReadOnlyList<GroceryStapleResponse> Staples);
+
+/// <summary>The household-shared check state of one line (docs/M8_PLAN.md §1.10, §2.2).</summary>
+public sealed record GroceryCheckStateResponse(
+    string Identity,
+    bool Checked,
+    DateTimeOffset? CheckedAt,
+    long? CheckedByUserId)
+{
+    public static GroceryCheckStateResponse From(GroceryCheckStateRecord state) =>
+        new(state.Identity, state.Checked, state.CheckedAt, state.CheckedByUserId);
+}
+
 /// <summary>
-/// Grocery routes (docs/M8_PLAN.md §2.2). M8-03 delivers the read projection and
-/// M8-04 adds range-scoped manual items plus the caller's preferences. Reads are
-/// gated by <c>groceries.view</c> and manual-item writes by <c>groceries.edit</c>;
-/// the single-user system actor has full access. Later M8 issues add staples and
-/// check state under the same group.
+/// Grocery routes (docs/M8_PLAN.md §2.2). M8-03 delivers the read projection,
+/// M8-04 adds range-scoped manual items plus the caller's preferences, M8-05 adds
+/// the household staple catalog, and M8-06 adds the household-shared check state.
+/// Reads are gated by <c>groceries.view</c> and writes by <c>groceries.edit</c>;
+/// the single-user system actor has full access.
 /// </summary>
 public static class GroceryEndpoints
 {
     private const string ManualItemNotFoundMessage =
         "The requested manual grocery item does not exist.";
+
+    private const string StapleNotFoundMessage =
+        "The requested grocery staple does not exist or is inactive.";
+
+    private const string StaplePatchNotFoundMessage =
+        "The requested grocery staple does not exist.";
 
     public static IEndpointRouteBuilder MapGroceryEndpoints(this IEndpointRouteBuilder app)
     {
@@ -161,6 +206,19 @@ public static class GroceryEndpoints
         // read and write use groceries.view (docs/M8_PLAN.md §2.2).
         group.MapGet("/preferences", GetPreferencesAsync).RequirePermission(PermissionKeys.GroceriesView);
         group.MapPatch("/preferences", UpdatePreferencesAsync).RequirePermission(PermissionKeys.GroceriesView);
+
+        // Staples are a household-wide reusable catalog that is never auto-added;
+        // reads use groceries.view and writes groceries.edit (docs/M8_PLAN.md §1.9, §2.2).
+        group.MapGet("/staples", GetStaplesAsync).RequirePermission(PermissionKeys.GroceriesView);
+        group.MapPost("/staples", CreateStapleAsync).RequirePermission(PermissionKeys.GroceriesEdit);
+        group.MapPatch("/staples/{id:long}", UpdateStapleAsync).RequirePermission(PermissionKeys.GroceriesEdit);
+        group.MapPost("/staples/{id:long}/add-to-list", AddStapleToListAsync)
+            .RequirePermission(PermissionKeys.GroceriesEdit);
+
+        // Household-shared check state keyed by the stable GroceryItemIdentity
+        // hash (docs/M8_PLAN.md §1.10, §2.2).
+        group.MapPost("/check", CheckAsync).RequirePermission(PermissionKeys.GroceriesEdit);
+        group.MapPost("/uncheck", UncheckAsync).RequirePermission(PermissionKeys.GroceriesEdit);
 
         return app;
     }
@@ -381,11 +439,259 @@ public static class GroceryEndpoints
         };
     }
 
+    // ---- Staples (M8-05) -------------------------------------------------
+
+    private static async Task<IResult> GetStaplesAsync(
+        HttpContext context,
+        ICurrentActorProvider actorProvider,
+        GroceryStapleService staples,
+        CancellationToken cancellationToken)
+    {
+        var (_, actorError) = await CalendarEndpoints
+            .ResolveActorAsync(actorProvider, cancellationToken)
+            .ConfigureAwait(false);
+        if (actorError is not null)
+        {
+            return actorError;
+        }
+
+        var includeInactive = false;
+        if (ReadQuery(context, "include_inactive") is { } raw)
+        {
+            if (!bool.TryParse(raw, out includeInactive))
+            {
+                return ApiResults.ValidationError(
+                    FieldError("include_inactive", "include_inactive must be true or false."));
+            }
+        }
+
+        var catalog = await staples.ListAsync(includeInactive, cancellationToken).ConfigureAwait(false);
+        return Results.Ok(new GroceryStaplesResponse(
+            catalog.Select(GroceryStapleResponse.From).ToArray()));
+    }
+
+    private static async Task<IResult> CreateStapleAsync(
+        HttpContext context,
+        ICurrentActorProvider actorProvider,
+        GroceryStapleService staples,
+        CancellationToken cancellationToken)
+    {
+        var (_, actorError) = await CalendarEndpoints
+            .ResolveActorAsync(actorProvider, cancellationToken)
+            .ConfigureAwait(false);
+        if (actorError is not null)
+        {
+            return actorError;
+        }
+
+        var body = await JsonBodyReader.ReadAsync(context, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        if (!body.IsSuccess)
+        {
+            return body.Error!;
+        }
+
+        GroceryStapleCreateValidation validation;
+        using (var document = body.Document!)
+        {
+            validation = GroceryStaplePayloadValidator.ValidateCreate(document.RootElement);
+        }
+
+        if (validation.Request is null)
+        {
+            return ApiResults.ValidationError(validation.FieldErrors);
+        }
+
+        var outcome = await staples.CreateAsync(validation.Request, cancellationToken).ConfigureAwait(false);
+        return outcome switch
+        {
+            GroceryStapleOutcome.Success success => Results.Json(
+                GroceryStapleResponse.From(success.Staple),
+                statusCode: StatusCodes.Status201Created),
+            GroceryStapleOutcome.ValidationFailed failed =>
+                ApiResults.ValidationError(failed.FieldErrors),
+            GroceryStapleOutcome.StapleExists exists => StapleExists(exists.ExistingId),
+            _ => Results.StatusCode(StatusCodes.Status500InternalServerError),
+        };
+    }
+
+    private static async Task<IResult> UpdateStapleAsync(
+        long id,
+        HttpContext context,
+        ICurrentActorProvider actorProvider,
+        GroceryStapleService staples,
+        CancellationToken cancellationToken)
+    {
+        var (_, actorError) = await CalendarEndpoints
+            .ResolveActorAsync(actorProvider, cancellationToken)
+            .ConfigureAwait(false);
+        if (actorError is not null)
+        {
+            return actorError;
+        }
+
+        var body = await JsonBodyReader.ReadAsync(context, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        if (!body.IsSuccess)
+        {
+            return body.Error!;
+        }
+
+        GroceryStaplePatchValidation validation;
+        using (var document = body.Document!)
+        {
+            validation = GroceryStaplePayloadValidator.ValidatePatch(document.RootElement);
+        }
+
+        if (validation.Patch is null)
+        {
+            return ApiResults.ValidationError(validation.FieldErrors);
+        }
+
+        var outcome = await staples.UpdateAsync(id, validation.Patch, cancellationToken).ConfigureAwait(false);
+        return outcome switch
+        {
+            GroceryStapleOutcome.Success success =>
+                Results.Ok(GroceryStapleResponse.From(success.Staple)),
+            GroceryStapleOutcome.ValidationFailed failed =>
+                ApiResults.ValidationError(failed.FieldErrors),
+            GroceryStapleOutcome.StapleExists exists => StapleExists(exists.ExistingId),
+            GroceryStapleOutcome.NotFound => StaplePatchNotFound(),
+            _ => Results.StatusCode(StatusCodes.Status500InternalServerError),
+        };
+    }
+
+    private static async Task<IResult> AddStapleToListAsync(
+        long id,
+        HttpContext context,
+        ICurrentActorProvider actorProvider,
+        GroceryStapleService staples,
+        CancellationToken cancellationToken)
+    {
+        var (actorUserId, actorError) = await CalendarEndpoints
+            .ResolveActorAsync(actorProvider, cancellationToken)
+            .ConfigureAwait(false);
+        if (actorError is not null)
+        {
+            return actorError;
+        }
+
+        var body = await JsonBodyReader.ReadAsync(context, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        if (!body.IsSuccess)
+        {
+            return body.Error!;
+        }
+
+        GroceryStapleAddToListValidation validation;
+        using (var document = body.Document!)
+        {
+            validation = GroceryStaplePayloadValidator.ValidateAddToList(document.RootElement);
+        }
+
+        if (validation.Request is null)
+        {
+            return ApiResults.ValidationError(validation.FieldErrors);
+        }
+
+        var outcome = await staples
+            .AddToListAsync(id, validation.Request, actorUserId, cancellationToken)
+            .ConfigureAwait(false);
+
+        return outcome switch
+        {
+            GroceryStapleAddOutcome.Success success => Results.Json(
+                GroceryManualItemResponse.From(success.Item),
+                statusCode: StatusCodes.Status201Created),
+            GroceryStapleAddOutcome.ValidationFailed failed =>
+                ApiResults.ValidationError(failed.FieldErrors),
+            GroceryStapleAddOutcome.NotFound => StapleNotFound(),
+            _ => Results.StatusCode(StatusCodes.Status500InternalServerError),
+        };
+    }
+
+    // ---- Check state (M8-06) ---------------------------------------------
+
+    private static Task<IResult> CheckAsync(
+        HttpContext context,
+        ICurrentActorProvider actorProvider,
+        GroceryCheckStateService checkState,
+        CancellationToken cancellationToken) =>
+        SetCheckedAsync(context, actorProvider, checkState, isChecked: true, cancellationToken);
+
+    private static Task<IResult> UncheckAsync(
+        HttpContext context,
+        ICurrentActorProvider actorProvider,
+        GroceryCheckStateService checkState,
+        CancellationToken cancellationToken) =>
+        SetCheckedAsync(context, actorProvider, checkState, isChecked: false, cancellationToken);
+
+    private static async Task<IResult> SetCheckedAsync(
+        HttpContext context,
+        ICurrentActorProvider actorProvider,
+        GroceryCheckStateService checkState,
+        bool isChecked,
+        CancellationToken cancellationToken)
+    {
+        var (actorUserId, actorError) = await CalendarEndpoints
+            .ResolveActorAsync(actorProvider, cancellationToken)
+            .ConfigureAwait(false);
+        if (actorError is not null)
+        {
+            return actorError;
+        }
+
+        var body = await JsonBodyReader.ReadAsync(context, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        if (!body.IsSuccess)
+        {
+            return body.Error!;
+        }
+
+        GroceryCheckPayloadValidation validation;
+        using (var document = body.Document!)
+        {
+            validation = GroceryCheckPayloadValidator.Validate(document.RootElement);
+        }
+
+        if (validation.Identity is null)
+        {
+            return ApiResults.ValidationError(validation.FieldErrors);
+        }
+
+        var state = await checkState
+            .SetCheckedAsync(validation.Identity, isChecked, actorUserId, cancellationToken)
+            .ConfigureAwait(false);
+        return Results.Ok(GroceryCheckStateResponse.From(state));
+    }
+
     private static IResult ManualItemNotFound() =>
         ApiResults.Error(
             StatusCodes.Status404NotFound,
             ErrorCodes.NotFound,
             ManualItemNotFoundMessage);
+
+    private static IResult StapleNotFound() =>
+        ApiResults.Error(
+            StatusCodes.Status404NotFound,
+            ErrorCodes.NotFound,
+            StapleNotFoundMessage);
+
+    private static IResult StaplePatchNotFound() =>
+        ApiResults.Error(
+            StatusCodes.Status404NotFound,
+            ErrorCodes.NotFound,
+            StaplePatchNotFoundMessage);
+
+    private static IResult StapleExists(long existingId) =>
+        ApiResults.Error(
+            StatusCodes.Status409Conflict,
+            ErrorCodes.GroceryStapleExists,
+            "An active staple with that normalized name already exists.",
+            new Dictionary<string, object?> { ["existing_id"] = existingId });
+
+    private static IReadOnlyDictionary<string, string[]> FieldError(string field, string message) =>
+        new Dictionary<string, string[]>(StringComparer.Ordinal) { [field] = [message] };
 
     private static string? ReadQuery(HttpContext context, string field)
     {

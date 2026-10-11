@@ -361,14 +361,24 @@ A new preview supersedes the actor's previous unapplied drafts (Try Another).
 ## 9. Groceries
 
 ### grocery_staples
+Household-wide reusable staple catalog (docs/M8_PLAN.md §1.9, §2.3; M8-05).
 - `id`
 - `name`
-- `ingredient_id` nullable
-- `department_id`
+- `ingredient_id` nullable — canonical ingredient
+- `department_id` nullable — explicit, else the ingredient's department, else `null`
 - `default_quantity_numeric` nullable
 - `unit_id` nullable
-- `is_active`
+- `is_active` — soft retirement (default `true`)
 - `created_at`
+- `updated_at`
+
+Note (M8-05): staples are never auto-added; `POST /groceries/staples/{id}/add-to-list`
+creates a range-scoped `manual_grocery_items` row and never mutates this table.
+
+Known limitation (M8-05): unique **active** staple names are enforced in
+application code only — there is no DB unique index and no `normalized_name`
+column. A rare concurrent create/promotion can therefore leave two active staples
+with the same name. No data corruption results at household scale.
 
 ### manual_grocery_items
 - `id`
@@ -384,19 +394,18 @@ A new preview supersedes the actor's previous unapplied drafts (Try Another).
 - `updated_at`
 
 ### grocery_check_state
-Checkbox persistence should key to a stable semantic identity for the active item.
-
-Possible fields:
+Household-shared checkbox state, one row per stable identity (docs/M8_PLAN.md §1.10, §2.3; M8-06).
 - `id`
-- `item_identity_hash`
+- `item_identity_hash` — unique; the `GroceryItemIdentity` hash
 - `checked`
-- `checked_by_user_id`
-- `checked_at`
+- `checked_by_user_id` nullable — the actor of the last check or uncheck
+- `checked_at` nullable — set while checked, cleared on uncheck
 - `updated_at`
 
-Exact identity strategy should be designed carefully so:
-- matching items remain checked across range expansion where reasonable
-- different quantities/variants do not accidentally collapse
+Note (M8-06): the identity is canonical ingredient + unit dimension (or `count`)
+for recipe-derived lines and the manual item id for manual lines, so a check
+survives quantity changes and range expansion and different dimensions never
+collapse into one checkbox.
 
 ### user_grocery_preferences
 Per-user grocery preferences (docs/M8_PLAN.md §1.7, §1.11): `user_id` (unique),

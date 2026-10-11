@@ -111,6 +111,7 @@ Use stable error codes.
 | `IMAGE_TOO_LARGE` | 413 | Recipe image exceeds the 5 MB file cap |
 | `IMAGE_DIMENSIONS_EXCEEDED` | 400 | Recipe image exceeds 2048 pixels on a side |
 | `INVALID_UNIT_DIMENSION_CHANGE` | 400 | Unit dimensions are immutable; retire and create a new unit |
+| `GROCERY_STAPLE_EXISTS` | 409 | An active staple with that normalized name exists; `details.existing_id` present |
 
 Clients must branch on `code`, never on `message`.
 
@@ -855,21 +856,160 @@ writes the preference). The single-user system actor's preference is stored in
 `application_settings` rather than `user_grocery_preferences` (docs/DATABASE.md
 §9).
 
-### Remaining M8 routes
+### Staples (M8-05)
 
-Check state (`groceries.edit`):
-- `POST /groceries/check`
-- `POST /groceries/uncheck`
+A household-wide reusable catalog (name, optional canonical ingredient,
+department, optional default quantity/unit) (docs/M8_PLAN.md §1.9). Staples are
+**never auto-added** to a grocery list; the user explicitly adds one, which
+creates a manual item for the active range. Reads require `groceries.view`;
+writes require `groceries.edit`. Unauthenticated requests get `401 AUTH_REQUIRED`,
+an authenticated member without the key gets `403 FORBIDDEN`, and the single-user
+system actor has full access.
 
-Staples (`groceries.view` read, `groceries.edit` writes):
-- `GET /groceries/staples`
-- `POST /groceries/staples`
-- `POST /groceries/staples/{id}/add-to-list`
+#### `GET /api/v1/groceries/staples`
+
+Optional query `include_inactive=true` includes soft-retired staples (default:
+active only). Any other value fails `400 VALIDATION_FAILED` on
+`include_inactive`.
+
+Response `200`:
+
+```json
+{
+  "staples": [
+    {
+      "id": 3,
+      "name": "Milk",
+      "ingredient_id": 42,
+      "department_id": 12,
+      "default_quantity_numeric": 1,
+      "unit_id": 7,
+      "is_active": true,
+      "created_at": "2026-10-10T00:00:00+00:00",
+      "updated_at": "2026-10-10T00:00:00+00:00"
+    }
+  ]
+}
+```
+
+Ordering is name ascending case-insensitively, then ordinal, then `id`.
+
+#### `POST /api/v1/groceries/staples`
+
+Request:
+
+```json
+{
+  "name": "Milk",
+  "ingredient_id": 42,
+  "department_id": null,
+  "default_quantity_numeric": 1,
+  "unit_id": 7
+}
+```
+
+| Field | Rules |
+|-------|-------|
+| `name` | required string, trimmed, 1–200 characters, no control characters |
+| `ingredient_id` | optional integer; must reference an existing ingredient |
+| `department_id` | optional integer; must reference an existing department |
+| `default_quantity_numeric` | optional number strictly greater than 0 |
+| `unit_id` | optional integer; must reference an existing unit |
+
+Behavior:
+
+- A merged `ingredient_id` is redirected to its canonical ingredient before it is
+  stored (the same redirect as the list and manual items).
+- Department default: explicit `department_id`, else the linked canonical
+  ingredient's `department_id`, else `null` (the trailing "Other" group).
+- The new row is `is_active = true`.
+- A second **active** staple whose normalized name (the same normalization used
+  by manual promotion) matches an existing active staple fails
+  `409 GROCERY_STAPLE_EXISTS` with `details.existing_id`.
+
+Response `201` is the staple document shown above. Validation failures return
+`400 VALIDATION_FAILED` with `details.field_errors` keyed by the offending field
+(`name`, `default_quantity_numeric`, `ingredient_id`, `department_id`,
+`unit_id`).
+
+#### `PATCH /api/v1/groceries/staples/{id}`
+
+Partial update of any subset of the create fields plus `is_active`. An explicit
+`null` clears a nullable field (`ingredient_id`, `department_id`,
+`default_quantity_numeric`, `unit_id`); `name` cannot be null or empty. Renaming
+(or reactivating) to a name that collides with **another** active staple fails
+`409 GROCERY_STAPLE_EXISTS`. Returns `200` with the updated staple, or
+`404 NOT_FOUND` when the staple does not exist.
+
+Changing `ingredient_id` does **not** recompute `department_id` (unlike `POST`,
+where the department defaults from the linked ingredient). Send `department_id`
+explicitly to set it, or `null` to clear it.
+
+#### `POST /api/v1/groceries/staples/{id}/add-to-list`
+
+Creates a range-scoped manual grocery item from the staple:
+
+```json
+{ "range_start": "2026-10-10", "range_days": 7 }
+```
+
+- `range_start` is household-local and must be **today or later**; `range_days`
+  is 1–366. A malformed range fails `400 VALIDATION_FAILED` keyed
+  `range_start`/`range_days`.
+- The manual item copies the staple's `name`, `ingredient_id`, `department_id`,
+  `quantity_numeric = default_quantity_numeric`, and `unit_id`, with
+  `save_for_future = false`; `created_by_user_id` is the acting user (null for the
+  single-user system actor).
+- A missing **or inactive** staple returns `404 NOT_FOUND`.
+- The staple row is **never modified**, and adding the same staple twice creates
+  two manual items.
+- Response `201` is the manual-item document from `POST /groceries/manual`.
+
+### Check state (M8-06)
+
+Household-shared checkbox state keyed by the stable `GroceryItemIdentity` hash
+(the `identity` field of each grocery-list line). One row per identity means any
+member's check is visible to all. Both routes require `groceries.edit`.
+
+#### `POST /api/v1/groceries/check` and `POST /api/v1/groceries/uncheck`
+
+Request:
+
+```json
+{ "identity": "<64-char lowercase hex>" }
+```
+
+- `identity` must be exactly 64 lowercase hex characters (the format produced by
+  `GroceryItemIdentity`); anything else fails `400 VALIDATION_FAILED` on
+  `identity`.
+- The single `grocery_check_state` row for that identity is upserted. Checking
+  sets `checked = true`, `checked_at = now`, and `checked_by_user_id =` the acting
+  user (null for the system actor). Unchecking sets `checked = false` and clears
+  `checked_at`; `checked_by_user_id` records the actor of the last check **or**
+  uncheck. `updated_at` is always refreshed.
+- The operation is **idempotent** and robust to a concurrent first write on the
+  unique hash (the losing writer retries as an update rather than failing).
+
+Response `200`:
+
+```json
+{
+  "identity": "<64-char lowercase hex>",
+  "checked": true,
+  "checked_at": "2026-10-10T00:00:00+00:00",
+  "checked_by_user_id": 5
+}
+```
+
+`checked_at` is `null` when the line is unchecked; `checked_by_user_id` is `null`
+for the single-user system actor. The M8-03 list reads this table for each line's
+`checked` flag.
 
 ### Errors
 
-Errors: `VALIDATION_FAILED` (range/preset/quantity/reference data),
-`GROCERY_RANGE_TOO_LARGE` (resolved range exceeds 366 days), `NOT_FOUND`, and
+Errors: `VALIDATION_FAILED` (range/preset/quantity/reference data/identity),
+`GROCERY_RANGE_TOO_LARGE` (resolved range exceeds 366 days),
+`GROCERY_STAPLE_EXISTS` (duplicate active staple name), `NOT_FOUND`, and
 `FORBIDDEN` (shared envelope).
 
 ---

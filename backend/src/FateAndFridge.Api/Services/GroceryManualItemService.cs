@@ -92,7 +92,8 @@ public sealed class GroceryManualItemService(
 
         await ValidateUnitAsync(request.UnitId, errors, cancellationToken).ConfigureAwait(false);
         await ValidateDepartmentAsync(request.DepartmentId, errors, cancellationToken).ConfigureAwait(false);
-        var ingredient = await ResolveCanonicalIngredientAsync(request.IngredientId, errors, cancellationToken)
+        var ingredient = await GroceryIngredientResolver
+            .ResolveCanonicalAsync(dbContext, request.IngredientId, errors, cancellationToken)
             .ConfigureAwait(false);
 
         if (errors.Count > 0)
@@ -168,7 +169,8 @@ public sealed class GroceryManualItemService(
 
         if (patch.IngredientProvided)
         {
-            var ingredient = await ResolveCanonicalIngredientAsync(patch.IngredientId, errors, cancellationToken)
+            var ingredient = await GroceryIngredientResolver
+                .ResolveCanonicalAsync(dbContext, patch.IngredientId, errors, cancellationToken)
                 .ConfigureAwait(false);
             item.IngredientId = ingredient?.Id;
         }
@@ -253,7 +255,7 @@ public sealed class GroceryManualItemService(
 
     private async Task PromoteStapleAsync(ManualGroceryItem item, CancellationToken cancellationToken)
     {
-        var key = StapleKey(item.Name);
+        var key = GroceryStapleName.Key(item.Name);
         var activeNames = await dbContext.GroceryStaples
             .AsNoTracking()
             .Where(staple => staple.IsActive)
@@ -261,7 +263,7 @@ public sealed class GroceryManualItemService(
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        if (activeNames.Any(name => string.Equals(StapleKey(name), key, StringComparison.Ordinal)))
+        if (activeNames.Any(name => string.Equals(GroceryStapleName.Key(name), key, StringComparison.Ordinal)))
         {
             return;
         }
@@ -279,16 +281,6 @@ public sealed class GroceryManualItemService(
             UpdatedAt = now,
         });
     }
-
-    /// <summary>
-    /// Normalized comparison key for staple de-duplication: the reference-data
-    /// normalized form when the name is normalizable, else a trimmed invariant
-    /// lowercase fallback so repeated promotion stays idempotent.
-    /// </summary>
-    private static string StapleKey(string name) =>
-        ReferenceDataNormalizer.Normalize(name) is ReferenceDataNormalizationResult.Success success
-            ? success.Normalized
-            : name.Trim().ToLowerInvariant();
 
     private async Task ValidateUnitAsync(
         long? unitId,
@@ -330,53 +322,6 @@ public sealed class GroceryManualItemService(
         }
     }
 
-    private async Task<IngredientRow?> ResolveCanonicalIngredientAsync(
-        long? ingredientId,
-        Dictionary<string, string[]> errors,
-        CancellationToken cancellationToken)
-    {
-        if (ingredientId is not { } id)
-        {
-            return null;
-        }
-
-        var current = await LoadIngredientAsync(id, cancellationToken).ConfigureAwait(false);
-        if (current is null)
-        {
-            errors["ingredient_id"] = [$"ingredient_id {id} does not exist."];
-            return null;
-        }
-
-        // Follow the merge redirect to the canonical ingredient so aliases
-        // resolve consistently with the list projection (docs/M8_PLAN.md §1.4).
-        var visited = new HashSet<long>();
-        while (current.MergedIntoIngredientId is { } target
-            && target != current.Id
-            && visited.Add(current.Id))
-        {
-            var next = await LoadIngredientAsync(target, cancellationToken).ConfigureAwait(false);
-            if (next is null)
-            {
-                break;
-            }
-
-            current = next;
-        }
-
-        return current;
-    }
-
-    private async Task<IngredientRow?> LoadIngredientAsync(long id, CancellationToken cancellationToken) =>
-        await dbContext.Ingredients
-            .AsNoTracking()
-            .Where(ingredient => ingredient.Id == id)
-            .Select(ingredient => new IngredientRow(
-                ingredient.Id,
-                ingredient.DepartmentId,
-                ingredient.MergedIntoIngredientId))
-            .FirstOrDefaultAsync(cancellationToken)
-            .ConfigureAwait(false);
-
     private static GroceryManualItemRecord ToRecord(ManualGroceryItem item) =>
         new(
             item.Id,
@@ -390,9 +335,4 @@ public sealed class GroceryManualItemService(
             item.SaveForFuture,
             item.CreatedAt,
             item.UpdatedAt);
-
-    private sealed record IngredientRow(
-        long Id,
-        long? DepartmentId,
-        long? MergedIntoIngredientId);
 }

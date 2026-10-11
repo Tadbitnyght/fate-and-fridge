@@ -196,6 +196,12 @@ builder.Services.AddScoped<GroceryListService>();
 builder.Services.AddScoped<GroceryManualItemService>();
 builder.Services.AddScoped<GroceryPreferenceService>();
 
+// M8-05/M8-06: the household staple catalog (add-to-list reuses the manual-item
+// create path) and the household-shared check state, scoped over the request
+// AppDbContext.
+builder.Services.AddScoped<GroceryStapleService>();
+builder.Services.AddScoped<GroceryCheckStateService>();
+
 // M1-09 permission model: one uncached grant reader plus the evaluator service
 // shared by GET /auth/session and the route enforcement filter.
 builder.Services.AddScoped<IPermissionGrantReader, DbPermissionGrantReader>();
