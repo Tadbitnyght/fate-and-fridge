@@ -1,7 +1,7 @@
 ---
 description: Lead developer for Fate & Fridge. Own architecture, scope, issues, and final technical decisions.
 mode: primary
-steps: 24
+steps: 80
 permissions:
   - action: subagent
     resource: "*"
