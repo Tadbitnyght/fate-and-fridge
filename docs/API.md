@@ -721,12 +721,141 @@ Response `200`:
 - `checked` is the household-shared `grocery_check_state` flag for the line's
   identity.
 
-### Routes (remaining M8 issues)
+### Manual items (M8-04)
 
-Manual items (`groceries.edit`):
-- `POST /groceries/manual`
-- `PATCH /groceries/manual/{id}`
-- `DELETE /groceries/manual/{id}`
+Range-scoped free-text or ingredient-linked items added by hand
+(docs/M8_PLAN.md §1.8). A manual item belongs to the range that begins at
+`range_start` and spans `range_days` days and is shown only while that pair
+**exactly equals** the resolved list range. All three routes require
+`groceries.edit`; unauthenticated requests get `401 AUTH_REQUIRED`, an
+authenticated member without the key gets `403 FORBIDDEN`, and the single-user
+system actor has full access.
+
+#### `POST /api/v1/groceries/manual`
+
+Request:
+
+```json
+{
+  "name": "Paper towels",
+  "quantity_numeric": 2,
+  "unit_id": null,
+  "ingredient_id": null,
+  "department_id": null,
+  "range_start": "2026-10-10",
+  "range_days": 7,
+  "save_for_future": false
+}
+```
+
+| Field | Rules |
+|-------|-------|
+| `name` | required string, trimmed, 1–200 characters, no control characters |
+| `quantity_numeric` | optional number strictly greater than 0 |
+| `unit_id` | optional integer; must reference an existing unit |
+| `ingredient_id` | optional integer; must reference an existing ingredient |
+| `department_id` | optional integer; must reference an existing department |
+| `range_start` | required `YYYY-MM-DD`, household-local, **today or later** |
+| `range_days` | required integer 1–366 |
+| `save_for_future` | optional boolean, default `false` |
+
+Behavior:
+
+- A merged `ingredient_id` is redirected to its canonical ingredient before it is
+  stored (same redirect as the list).
+- Department default: explicit `department_id`, else the linked canonical
+  ingredient's `department_id`, else `null` (the trailing "Other" group).
+- `created_by_user_id` is the acting user, or `null` for the single-user system
+  actor.
+- When `save_for_future` is `true` the item also promotes a household-wide
+  `grocery_staples` row (`name`, canonical `ingredient_id`, `department_id`,
+  `default_quantity_numeric = quantity_numeric`, `unit_id`, `is_active = true`).
+  Promotion is **idempotent**: an active staple whose normalized name already
+  matches is not duplicated. `save_for_future` is stored on the manual row.
+
+Response `201`:
+
+```json
+{
+  "id": 5,
+  "name": "Paper towels",
+  "quantity_numeric": 2,
+  "unit_id": null,
+  "ingredient_id": null,
+  "department_id": null,
+  "range_start": "2026-10-10",
+  "range_days": 7,
+  "save_for_future": false,
+  "created_at": "2026-10-10T00:00:00+00:00",
+  "updated_at": "2026-10-10T00:00:00+00:00"
+}
+```
+
+Validation failures return `400 VALIDATION_FAILED` with
+`details.field_errors` keyed by the offending field (`name`, `quantity_numeric`,
+`unit_id`, `ingredient_id`, `department_id`, `range_start`, `range_days`).
+
+#### `PATCH /api/v1/groceries/manual/{id}`
+
+Partial update of any subset of the create fields. An explicit `null` clears a
+nullable field (`quantity_numeric`, `unit_id`, `ingredient_id`, `department_id`);
+`range_start` and `range_days` cannot be cleared. Transitioning `save_for_future`
+from `false` to `true` performs the same idempotent staple promotion. Returns
+`200` with the updated item document, or `404 NOT_FOUND` when the item does not
+exist. Validation failures return `400 VALIDATION_FAILED`.
+
+#### `DELETE /api/v1/groceries/manual/{id}`
+
+Deletes the item and its household check-state row (identity `manual|{id}`), so
+no orphan check state remains. A staple the item may have promoted is
+**retained**. Returns `204`, or `404 NOT_FOUND` when the item does not exist.
+
+### Preferences (M8-04)
+
+Per-user `hide_checked` plus the remembered range (docs/M8_PLAN.md §1.7, §1.11).
+Both routes require `groceries.view` (edit implies view) — a member with only
+`groceries.view` may read **and** write preferences.
+
+#### `GET /api/v1/groceries/preferences`
+
+Response `200` (defaults when no stored row):
+
+```json
+{ "hide_checked": false, "range_preset": null, "range_start": null, "range_days": null }
+```
+
+#### `PATCH /api/v1/groceries/preferences`
+
+Body is a subset of:
+
+```json
+{ "hide_checked": true, "range_preset": "next_7_days", "range_start": null, "range_days": null }
+```
+
+Rules:
+
+- `range_preset` must be one of `next_3_days`, `next_7_days`, `next_14_days`,
+  `rest_of_month`, `custom`, or `null`.
+- `custom` requires a `range_start` (household-local, today or later) and a
+  `range_days` (1–366).
+- `range_start`/`range_days` only carry a value with `range_preset = custom`; a
+  **non-null** `range_start` or `range_days` sent without `range_preset: custom`
+  fails `400 VALIDATION_FAILED` on `range_preset`. An explicit `null` is accepted
+  as **clearing** them (a no-op when there is no remembered range), so a client
+  may echo the `GET` body verbatim — for example `range_start: null`/`range_days:
+  null` alongside a fixed preset or `range_preset: null` is valid.
+- Normalization: a fixed preset stores only `range_preset` and clears
+  `range_start`/`range_days`; `custom` stores `range_preset = "custom"` plus the
+  start and day count; clearing the range (`range_preset: null`) stores all three
+  as `null`.
+
+Response `200` is the stored preference in the `GET` shape. The remembered range
+is honored by `GET /api/v1/groceries` when no query is supplied (a read never
+writes the preference). The single-user system actor's preference is stored in
+`application_settings` rather than `user_grocery_preferences` (docs/DATABASE.md
+§9).
+
+### Remaining M8 routes
 
 Check state (`groceries.edit`):
 - `POST /groceries/check`
@@ -737,13 +866,11 @@ Staples (`groceries.view` read, `groceries.edit` writes):
 - `POST /groceries/staples`
 - `POST /groceries/staples/{id}/add-to-list`
 
-Preferences (`groceries.view`):
-- `GET /groceries/preferences`
-- `PATCH /groceries/preferences`
+### Errors
 
-Errors: `VALIDATION_FAILED` (range/preset/quantity), `GROCERY_RANGE_TOO_LARGE`
-(resolved range exceeds 366 days), `NOT_FOUND`, and `FORBIDDEN` (shared
-envelope).
+Errors: `VALIDATION_FAILED` (range/preset/quantity/reference data),
+`GROCERY_RANGE_TOO_LARGE` (resolved range exceeds 366 days), `NOT_FOUND`, and
+`FORBIDDEN` (shared envelope).
 
 ---
 

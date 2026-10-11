@@ -398,6 +398,17 @@ Exact identity strategy should be designed carefully so:
 - matching items remain checked across range expansion where reasonable
 - different quantities/variants do not accidentally collapse
 
+### user_grocery_preferences
+Per-user grocery preferences (docs/M8_PLAN.md §1.7, §1.11): `user_id` (unique),
+`hide_checked`, `range_preset`, `range_start` nullable, `range_days` nullable,
+`updated_at`. `user_id` references `users`.
+
+Note (M8-04): the single-user system actor has no `users` row, so its preference
+cannot live in `user_grocery_preferences` (the foreign key would fail). It is
+persisted instead as a JSON object under the reserved `application_settings` key
+`system_grocery_preferences`; the same four fields (`hide_checked`,
+`range_preset`, `range_start`, `range_days`) are read back from either store.
+
 ---
 
 ## 10. Audit

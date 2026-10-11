@@ -75,7 +75,8 @@ public abstract record GroceryListOutcome
 public sealed class GroceryListService(
     AppDbContext dbContext,
     HouseholdClock clock,
-    GroceryAggregationService aggregation)
+    GroceryAggregationService aggregation,
+    GroceryPreferenceService preferences)
 {
     /// <summary>Next 3 Days preset value.</summary>
     public const string PresetNext3Days = "next_3_days";
@@ -564,17 +565,13 @@ public sealed class GroceryListService(
             return ResolveExplicitCustom(request, today);
         }
 
-        if (actorUserId is { } userId)
+        // The remembered range comes from the caller's preference; the
+        // single-user system actor's row lives in application_settings, so this
+        // read is not multiuser-only. Reads never write the preference.
+        var preference = await preferences.GetAsync(actorUserId, cancellationToken).ConfigureAwait(false);
+        if (TryResolvePreference(preference, today, out var preferred))
         {
-            var preference = await dbContext.UserGroceryPreferences
-                .AsNoTracking()
-                .SingleOrDefaultAsync(candidate => candidate.UserId == userId, cancellationToken)
-                .ConfigureAwait(false);
-
-            if (preference is not null && TryResolvePreference(preference, today, out var preferred))
-            {
-                return new RangeResolutionOutcome.Success(preferred);
-            }
+            return new RangeResolutionOutcome.Success(preferred);
         }
 
         return ResolveStandardPreset(PresetNext7Days, today);
@@ -644,7 +641,7 @@ public sealed class GroceryListService(
     }
 
     private static bool TryResolvePreference(
-        UserGroceryPreference preference,
+        GroceryPreferenceSnapshot preference,
         DateOnly today,
         out GroceryRangeResolution resolution)
     {

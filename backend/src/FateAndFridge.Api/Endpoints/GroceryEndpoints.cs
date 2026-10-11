@@ -85,18 +85,82 @@ public sealed record GroceryListResponse(
 }
 
 /// <summary>
-/// Grocery routes (docs/M8_PLAN.md §2.2). M8-03 delivers the read projection;
-/// reads are gated by <c>groceries.view</c> and the single-user system actor has
-/// full access. Later M8 issues add manual items, staples, check state, and
-/// preferences under the same group.
+/// One stored manual grocery item (docs/M8_PLAN.md §1.8, §2.2). Dates are
+/// household-local <c>YYYY-MM-DD</c>; timestamps are UTC.
+/// </summary>
+public sealed record GroceryManualItemResponse(
+    long Id,
+    string Name,
+    decimal? QuantityNumeric,
+    long? UnitId,
+    long? IngredientId,
+    long? DepartmentId,
+    string RangeStart,
+    int RangeDays,
+    bool SaveForFuture,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt)
+{
+    public static GroceryManualItemResponse From(GroceryManualItemRecord item) =>
+        new(
+            item.Id,
+            item.Name,
+            item.QuantityNumeric,
+            item.UnitId,
+            item.IngredientId,
+            item.DepartmentId,
+            item.RangeStart.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            item.RangeDays,
+            item.SaveForFuture,
+            item.CreatedAt,
+            item.UpdatedAt);
+}
+
+/// <summary>Caller grocery preferences (docs/M8_PLAN.md §1.7, §1.11, §2.2).</summary>
+public sealed record GroceryPreferenceResponse(
+    bool HideChecked,
+    string? RangePreset,
+    string? RangeStart,
+    int? RangeDays)
+{
+    public static GroceryPreferenceResponse From(GroceryPreferenceSnapshot preference) =>
+        new(
+            preference.HideChecked,
+            preference.RangePreset,
+            preference.RangeStart?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            preference.RangeDays);
+}
+
+/// <summary>
+/// Grocery routes (docs/M8_PLAN.md §2.2). M8-03 delivers the read projection and
+/// M8-04 adds range-scoped manual items plus the caller's preferences. Reads are
+/// gated by <c>groceries.view</c> and manual-item writes by <c>groceries.edit</c>;
+/// the single-user system actor has full access. Later M8 issues add staples and
+/// check state under the same group.
 /// </summary>
 public static class GroceryEndpoints
 {
+    private const string ManualItemNotFoundMessage =
+        "The requested manual grocery item does not exist.";
+
     public static IEndpointRouteBuilder MapGroceryEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/v1/groceries").WithTags("Groceries");
 
         group.MapGet("", GetListAsync).RequirePermission(PermissionKeys.GroceriesView);
+
+        // Manual items are range-scoped free text with optional quantity/unit and
+        // an optional canonical ingredient (docs/M8_PLAN.md §1.8, §2.2).
+        group.MapPost("/manual", CreateManualItemAsync).RequirePermission(PermissionKeys.GroceriesEdit);
+        group.MapPatch("/manual/{id:long}", UpdateManualItemAsync)
+            .RequirePermission(PermissionKeys.GroceriesEdit);
+        group.MapDelete("/manual/{id:long}", DeleteManualItemAsync)
+            .RequirePermission(PermissionKeys.GroceriesEdit);
+
+        // Preferences are per-user hide-checked plus the remembered range; both
+        // read and write use groceries.view (docs/M8_PLAN.md §2.2).
+        group.MapGet("/preferences", GetPreferencesAsync).RequirePermission(PermissionKeys.GroceriesView);
+        group.MapPatch("/preferences", UpdatePreferencesAsync).RequirePermission(PermissionKeys.GroceriesView);
 
         return app;
     }
@@ -135,6 +199,193 @@ public static class GroceryEndpoints
             _ => Results.StatusCode(StatusCodes.Status500InternalServerError),
         };
     }
+
+    private static async Task<IResult> CreateManualItemAsync(
+        HttpContext context,
+        ICurrentActorProvider actorProvider,
+        GroceryManualItemService manualItems,
+        CancellationToken cancellationToken)
+    {
+        var (actorUserId, actorError) = await CalendarEndpoints
+            .ResolveActorAsync(actorProvider, cancellationToken)
+            .ConfigureAwait(false);
+        if (actorError is not null)
+        {
+            return actorError;
+        }
+
+        var body = await JsonBodyReader.ReadAsync(context, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        if (!body.IsSuccess)
+        {
+            return body.Error!;
+        }
+
+        GroceryManualItemCreateValidation validation;
+        using (var document = body.Document!)
+        {
+            validation = GroceryManualItemPayloadValidator.ValidateCreate(document.RootElement);
+        }
+
+        if (validation.Request is null)
+        {
+            return ApiResults.ValidationError(validation.FieldErrors);
+        }
+
+        var outcome = await manualItems
+            .CreateAsync(validation.Request, actorUserId, cancellationToken)
+            .ConfigureAwait(false);
+
+        return outcome switch
+        {
+            GroceryManualItemOutcome.Success success => Results.Json(
+                GroceryManualItemResponse.From(success.Item),
+                statusCode: StatusCodes.Status201Created),
+            GroceryManualItemOutcome.ValidationFailed failed =>
+                ApiResults.ValidationError(failed.FieldErrors),
+            _ => Results.StatusCode(StatusCodes.Status500InternalServerError),
+        };
+    }
+
+    private static async Task<IResult> UpdateManualItemAsync(
+        long id,
+        HttpContext context,
+        ICurrentActorProvider actorProvider,
+        GroceryManualItemService manualItems,
+        CancellationToken cancellationToken)
+    {
+        var (_, actorError) = await CalendarEndpoints
+            .ResolveActorAsync(actorProvider, cancellationToken)
+            .ConfigureAwait(false);
+        if (actorError is not null)
+        {
+            return actorError;
+        }
+
+        var body = await JsonBodyReader.ReadAsync(context, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        if (!body.IsSuccess)
+        {
+            return body.Error!;
+        }
+
+        GroceryManualItemPatchValidation validation;
+        using (var document = body.Document!)
+        {
+            validation = GroceryManualItemPayloadValidator.ValidatePatch(document.RootElement);
+        }
+
+        if (validation.Patch is null)
+        {
+            return ApiResults.ValidationError(validation.FieldErrors);
+        }
+
+        var outcome = await manualItems
+            .UpdateAsync(id, validation.Patch, cancellationToken)
+            .ConfigureAwait(false);
+
+        return outcome switch
+        {
+            GroceryManualItemOutcome.Success success =>
+                Results.Ok(GroceryManualItemResponse.From(success.Item)),
+            GroceryManualItemOutcome.ValidationFailed failed =>
+                ApiResults.ValidationError(failed.FieldErrors),
+            GroceryManualItemOutcome.NotFound => ManualItemNotFound(),
+            _ => Results.StatusCode(StatusCodes.Status500InternalServerError),
+        };
+    }
+
+    private static async Task<IResult> DeleteManualItemAsync(
+        long id,
+        ICurrentActorProvider actorProvider,
+        GroceryManualItemService manualItems,
+        CancellationToken cancellationToken)
+    {
+        var (_, actorError) = await CalendarEndpoints
+            .ResolveActorAsync(actorProvider, cancellationToken)
+            .ConfigureAwait(false);
+        if (actorError is not null)
+        {
+            return actorError;
+        }
+
+        var outcome = await manualItems.DeleteAsync(id, cancellationToken).ConfigureAwait(false);
+
+        return outcome switch
+        {
+            GroceryManualItemDeleteOutcome.Deleted => Results.NoContent(),
+            _ => ManualItemNotFound(),
+        };
+    }
+
+    private static async Task<IResult> GetPreferencesAsync(
+        ICurrentActorProvider actorProvider,
+        GroceryPreferenceService preferences,
+        CancellationToken cancellationToken)
+    {
+        var (actorUserId, actorError) = await CalendarEndpoints
+            .ResolveActorAsync(actorProvider, cancellationToken)
+            .ConfigureAwait(false);
+        if (actorError is not null)
+        {
+            return actorError;
+        }
+
+        var snapshot = await preferences.GetAsync(actorUserId, cancellationToken).ConfigureAwait(false);
+        return Results.Ok(GroceryPreferenceResponse.From(snapshot));
+    }
+
+    private static async Task<IResult> UpdatePreferencesAsync(
+        HttpContext context,
+        ICurrentActorProvider actorProvider,
+        GroceryPreferenceService preferences,
+        CancellationToken cancellationToken)
+    {
+        var (actorUserId, actorError) = await CalendarEndpoints
+            .ResolveActorAsync(actorProvider, cancellationToken)
+            .ConfigureAwait(false);
+        if (actorError is not null)
+        {
+            return actorError;
+        }
+
+        var body = await JsonBodyReader.ReadAsync(context, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        if (!body.IsSuccess)
+        {
+            return body.Error!;
+        }
+
+        GroceryPreferencePatchValidation validation;
+        using (var document = body.Document!)
+        {
+            validation = GroceryPreferencePayloadValidator.Validate(document.RootElement);
+        }
+
+        if (validation.Patch is null)
+        {
+            return ApiResults.ValidationError(validation.FieldErrors);
+        }
+
+        var outcome = await preferences
+            .PatchAsync(actorUserId, validation.Patch, cancellationToken)
+            .ConfigureAwait(false);
+
+        return outcome switch
+        {
+            GroceryPreferenceOutcome.Success success =>
+                Results.Ok(GroceryPreferenceResponse.From(success.Preference)),
+            GroceryPreferenceOutcome.ValidationFailed failed =>
+                ApiResults.ValidationError(failed.FieldErrors),
+            _ => Results.StatusCode(StatusCodes.Status500InternalServerError),
+        };
+    }
+
+    private static IResult ManualItemNotFound() =>
+        ApiResults.Error(
+            StatusCodes.Status404NotFound,
+            ErrorCodes.NotFound,
+            ManualItemNotFoundMessage);
 
     private static string? ReadQuery(HttpContext context, string field)
     {

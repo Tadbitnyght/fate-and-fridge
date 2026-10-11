@@ -191,6 +191,11 @@ builder.Services.AddSingleton<GroceryAggregationService>();
 // check-state rows. Scoped because it reads through the request AppDbContext.
 builder.Services.AddScoped<GroceryListService>();
 
+// M8-04: range-scoped manual grocery CRUD and the per-user (or system-actor)
+// preference store, both scoped over the request AppDbContext.
+builder.Services.AddScoped<GroceryManualItemService>();
+builder.Services.AddScoped<GroceryPreferenceService>();
+
 // M1-09 permission model: one uncached grant reader plus the evaluator service
 // shared by GET /auth/session and the route enforcement filter.
 builder.Services.AddScoped<IPermissionGrantReader, DbPermissionGrantReader>();
