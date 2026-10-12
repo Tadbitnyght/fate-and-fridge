@@ -376,4 +376,18 @@ describe('groceries page', () => {
 
     expect(await screen.findByText(/too long/i)).toBeInTheDocument()
   })
+
+  it('links to the print view once the range has items', async () => {
+    renderPage()
+    await screen.findByText('Onion')
+
+    expect(screen.getByRole('link', { name: 'Print' })).toHaveAttribute('href', '/groceries/print')
+  })
+
+  it('hides the print link when the range is empty', async () => {
+    renderPage({ departments: [] })
+    expect(await screen.findByText(/No groceries for this range/)).toBeInTheDocument()
+
+    expect(screen.queryByRole('link', { name: 'Print' })).not.toBeInTheDocument()
+  })
 })

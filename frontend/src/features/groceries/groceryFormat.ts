@@ -46,6 +46,33 @@ export function formatRangeSummary(start: string, end: string): string {
 }
 
 /**
+ * Quantity/unit text for a grocery line, e.g. `1 1/2 lb` (docs/M8_PLAN.md §1.5).
+ * A quantity-less line renders only its unit, or nothing when it has neither.
+ */
+export function formatQuantityLabel(quantityText: string, unit: string | null): string {
+  if (quantityText.length > 0) {
+    return unit !== null ? `${quantityText} ${unit}` : quantityText
+  }
+  return unit ?? ''
+}
+
+/**
+ * Print-view "generated at" stamp, e.g. `Oct 12, 2026 3:04 PM`. Built by hand
+ * from the local clock so it is deterministic under invariant globalization
+ * (no `toLocaleString`, see `AGENTS.md`).
+ */
+export function formatGeneratedAt(date: Date): string {
+  const month = MONTH_NAMES[date.getMonth()]
+  const day = date.getDate()
+  const year = date.getFullYear()
+  const hours24 = date.getHours()
+  const meridiem = hours24 < 12 ? 'AM' : 'PM'
+  const hours = hours24 % 12 === 0 ? 12 : hours24 % 12
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  return `${month} ${day}, ${year} ${hours}:${minutes} ${meridiem}`
+}
+
+/**
  * Maps a grocery error envelope to a clear, actionable message (docs/API.md
  * §13). Never returns a raw server message as the only affordance: known codes
  * get a purpose-built sentence.

@@ -2850,3 +2850,196 @@ a.recipes__import:focus-visible {
     flex: 1;
   }
 }
+
+/* ---------- groceries: print entry + print view (M8-08) ---------- */
+
+.grocery-toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.grocery-toolbar__print {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--text);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.grocery-toolbar__print:hover {
+  background: var(--bg);
+}
+
+.grocery-toolbar__print:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.grocery-print-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.grocery-print-controls__back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.grocery-print-controls__include {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0.5rem 0;
+}
+
+.grocery-print-controls button {
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+}
+
+.grocery-print__generated {
+  margin: 0 0 1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.grocery-print__departments,
+.grocery-print__items,
+.grocery-print__sources {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.grocery-print__department {
+  margin-bottom: 1rem;
+}
+
+.grocery-print__department-header {
+  margin: 0 0 0.4rem;
+  padding-bottom: 0.2rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 1.05rem;
+}
+
+.grocery-print__items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.grocery-print__item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.grocery-print__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* A decorative paper checkbox the shopper ticks by hand; hidden from AT. */
+.grocery-print__box {
+  flex: none;
+  inline-size: 0.95rem;
+  block-size: 0.95rem;
+  border: 1.5px solid var(--text);
+  border-radius: 2px;
+}
+
+.grocery-print__name {
+  font-weight: 600;
+}
+
+.grocery-print__quantity {
+  color: var(--muted);
+}
+
+.grocery-print__sources {
+  margin: 0 0 0 1.45rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* A printed grocery list is a document, not an app: drop the screen chrome,
+   force black-on-white, and keep headings with their items across page breaks. */
+@media print {
+  .app-header,
+  .app-nav,
+  .app-footer,
+  .skip-link,
+  .grocery-print-controls {
+    display: none !important;
+  }
+
+  :root {
+    color-scheme: light;
+  }
+
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  .app-shell {
+    max-width: none;
+    padding: 0;
+    gap: 0;
+  }
+
+  .grocery-print,
+  .grocery-print__name,
+  .grocery-print__quantity,
+  .grocery-print__generated,
+  .grocery-print__sources {
+    color: #000;
+  }
+
+  .grocery-print__department-header {
+    border-bottom-color: #000;
+    break-inside: avoid;
+    break-after: avoid;
+  }
+
+  .grocery-print__item {
+    break-inside: avoid;
+  }
+
+  .grocery-print__box,
+  .grocery-item__badge {
+    border-color: #000;
+  }
+
+  .grocery-print-page {
+    page: grocery-list;
+  }
+}
+
+@page {
+  margin: 12mm;
+}
+
+/* Portrait for the grocery list; the app-wide print page stays as configured. */
+@page grocery-list {
+  size: portrait;
+}

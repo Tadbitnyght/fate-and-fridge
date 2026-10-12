@@ -157,6 +157,8 @@ export interface GroceryMockOptions {
   staples?: GroceryStaple[]
   /** Force the preferences `PATCH` to fail (e.g. a range error). */
   preferencesPatchError?: MockResponse
+  /** Force `GET /groceries` (the list read) to fail (e.g. a 500). */
+  listError?: MockResponse
   /** Force `POST /groceries/check` to fail (e.g. a 403). */
   checkError?: MockResponse
   /** Force `DELETE /groceries/manual/{id}` to fail (e.g. a 404). */
@@ -624,15 +626,20 @@ export function installGroceryMocks(options: GroceryMockOptions = {}): GroceryMo
     {
       path: '/groceries',
       method: 'GET',
-      respond: () => ({
-        body: {
-          range: resolveRange(state.preferences),
-          departments: state.departments.map((department) => ({
-            ...department,
-            items: orderItems(department.items),
-          })),
-        },
-      }),
+      respond: () => {
+        if (options.listError) {
+          return options.listError
+        }
+        return {
+          body: {
+            range: resolveRange(state.preferences),
+            departments: state.departments.map((department) => ({
+              ...department,
+              items: orderItems(department.items),
+            })),
+          },
+        }
+      },
     },
   ]
 

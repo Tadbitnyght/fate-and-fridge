@@ -1,4 +1,5 @@
 import { useMemo, useState, type JSX } from 'react'
+import { Link } from 'react-router-dom'
 
 import type { GroceryItem, GroceryRangePreset } from '../api/groceries'
 import { ErrorScreen, LoadingScreen } from '../components/Screens'
@@ -79,6 +80,13 @@ export function GroceriesPage(): JSX.Element {
   }, [listQuery.data, hideChecked])
 
   const visibleItemCount = visibleDepartments.reduce(
+    (total, department) => total + department.items.length,
+    0,
+  )
+
+  // The print-entry affordance appears whenever the range has any items at all
+  // (checked lines included), even if they are all hidden by hide-checked.
+  const totalItemCount = (listQuery.data?.departments ?? []).reduce(
     (total, department) => total + department.items.length,
     0,
   )
@@ -187,19 +195,26 @@ export function GroceriesPage(): JSX.Element {
         <h2 id="groceries-heading" tabIndex={-1}>
           Groceries
         </h2>
-        {canEdit && (
-          <button
-            type="button"
-            className="button--primary"
-            disabled={range === null}
-            onClick={() => {
-              setAnnouncement('')
-              setDialog({ kind: 'create' })
-            }}
-          >
-            Add grocery item
-          </button>
-        )}
+        <div className="grocery-toolbar__actions">
+          {listQuery.data !== undefined && totalItemCount > 0 && (
+            <Link to="/groceries/print" className="grocery-toolbar__print">
+              Print
+            </Link>
+          )}
+          {canEdit && (
+            <button
+              type="button"
+              className="button--primary"
+              disabled={range === null}
+              onClick={() => {
+                setAnnouncement('')
+                setDialog({ kind: 'create' })
+              }}
+            >
+              Add grocery item
+            </button>
+          )}
+        </div>
       </div>
 
       <RangeSelector

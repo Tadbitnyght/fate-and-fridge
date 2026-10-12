@@ -1008,6 +1008,29 @@ Response `200`:
 for the single-user system actor. The M8-03 list reads this table for each line's
 `checked` flag.
 
+### Print view (M8-08)
+
+M8-08 adds **no new API endpoint**. The print-optimized grocery view is
+**client-rendered** in the web app at the client route `/groceries/print`,
+inside the session-guarded app shell, over the same `GET /api/v1/groceries` read
+(no query parameters, so the caller's remembered range applies).
+
+- Departments follow the **server-provided order** (ascending `sort_order`), with
+  the null-department **"Other"** group last.
+- Each item renders a **decorative, non-interactive checkbox** the shopper ticks
+  on paper, its name and quantity/unit text, its per-meal attribution rows, and
+  the same icon+text **"Manual"** badge as the list (never colour alone).
+- A screen-only **"Include checked items"** control (plus a Print button and a
+  "Back to grocery list" link) is hidden by `@media print`. The control is **off
+  by default**, so checked items are excluded unless the shopper opts in; it is
+  independent of the per-user `hide_checked` preference.
+- `groceries.view` gates the content; a caller without it sees a permission
+  message.
+- Print CSS (`frontend/src/index.css`) hides the app header/nav/footer, the skip
+  link, and the screen-only controls, forces black-on-white single-column output,
+  and keeps each item (`break-inside: avoid`) with its department heading
+  (`break-after: avoid`).
+
 ### Errors
 
 Errors: `VALIDATION_FAILED` (range/preset/quantity/reference data/identity),

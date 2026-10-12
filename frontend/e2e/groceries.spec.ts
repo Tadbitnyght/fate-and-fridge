@@ -590,3 +590,75 @@ test('groceries: write controls are hidden or disabled without groceries.edit', 
   await expect(staples.getByRole('button', { name: 'Add to list' })).toBeDisabled()
   await expect(page.getByRole('button', { name: 'New staple' })).toHaveCount(0)
 })
+
+test('groceries: the list offers a print entry point that opens the print view', async ({
+  page,
+}) => {
+  await mockGroceryApi(page)
+
+  await page.goto('/groceries')
+  await expect(page.getByText('Onion')).toBeVisible()
+
+  await page.getByRole('link', { name: 'Print' }).click()
+
+  await expect(page).toHaveURL(/\/groceries\/print$/)
+  await expect(page.getByRole('heading', { level: 2, name: /Grocery list/ })).toBeVisible()
+})
+
+test('groceries print: departments, attribution, manual badge, and the include-checked toggle', async ({
+  page,
+}) => {
+  await mockGroceryApi(page)
+
+  await page.goto('/groceries/print')
+  await expect(page.getByRole('heading', { level: 2, name: /Grocery list/ })).toContainText(
+    'Oct 12 – Oct 18',
+  )
+
+  const headings = await page.getByRole('heading', { level: 3 }).allTextContents()
+  expect(headings).toEqual(['Produce', 'Bakery', 'Other'])
+
+  const produce = page.getByRole('list', { name: 'Produce' })
+  await expect(produce.getByText('Onion')).toBeVisible()
+  await expect(produce.getByText(/Tacos/)).toBeVisible()
+  await expect(produce.getByText(/Tue 10\/13/)).toBeVisible()
+
+  // Manual items are included and carry the icon+text Manual badge.
+  const other = page.getByRole('list', { name: 'Other' })
+  await expect(other.getByText('Paper towels')).toBeVisible()
+  await expect(
+    other.getByRole('listitem').filter({ hasText: 'Paper towels' }).getByText('Manual'),
+  ).toBeVisible()
+
+  // A checked item is excluded by default and revealed by the toggle.
+  await expect(page.getByText('Carrot')).toHaveCount(0)
+  await page.getByLabel('Include checked items').check()
+  await expect(page.getByText('Carrot')).toBeVisible()
+})
+
+test('groceries print: print media hides app chrome and screen-only controls', async ({ page }) => {
+  await mockGroceryApi(page)
+
+  await page.goto('/groceries/print')
+  await expect(page.getByRole('list', { name: 'Produce' }).getByText('Onion')).toBeVisible()
+
+  await page.emulateMedia({ media: 'print' })
+
+  await expect(page.locator('.app-header')).toBeHidden()
+  await expect(page.locator('.app-nav')).toBeHidden()
+  await expect(page.locator('.app-footer')).toBeHidden()
+  await expect(page.locator('.skip-link')).toBeHidden()
+  await expect(page.getByRole('button', { name: 'Print' })).toBeHidden()
+  await expect(page.getByLabel('Include checked items')).toBeHidden()
+
+  // Black-on-white: the printable list drops the screen palette.
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(255, 255, 255)')
+  await expect(page.locator('body')).toHaveCSS('color', 'rgb(0, 0, 0)')
+
+  // The printable list and its paper checkboxes survive.
+  await expect(page.getByRole('heading', { level: 3, name: 'Produce' })).toBeVisible()
+  await expect(page.getByRole('list', { name: 'Produce' }).getByText('Onion')).toBeVisible()
+  const box = page.locator('.grocery-print__box').first()
+  await expect(box).toBeVisible()
+  await expect(box).toHaveCSS('border-top-color', 'rgb(0, 0, 0)')
+})

@@ -1,12 +1,5 @@
 import type { GroceryDepartment, GroceryItem } from '../../api/groceries'
-import { formatSourceDate, orderDepartments } from './groceryFormat'
-
-function quantityLabel(item: GroceryItem): string {
-  if (item.quantity_text.length > 0) {
-    return item.unit !== null ? `${item.quantity_text} ${item.unit}` : item.quantity_text
-  }
-  return item.unit ?? ''
-}
+import { formatQuantityLabel, formatSourceDate, orderDepartments } from './groceryFormat'
 
 function GroceryItemRow({
   item,
@@ -23,7 +16,7 @@ function GroceryItemRow({
   onEdit: (item: GroceryItem) => void
   onDelete: (item: GroceryItem) => void
 }) {
-  const quantity = quantityLabel(item)
+  const quantity = formatQuantityLabel(item.quantity_text, item.unit)
   const checkboxLabel = item.checked
     ? `Mark ${item.name} as not bought`
     : `Mark ${item.name} as bought`
