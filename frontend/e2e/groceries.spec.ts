@@ -636,6 +636,36 @@ test('groceries print: departments, attribution, manual badge, and the include-c
   await expect(page.getByText('Carrot')).toBeVisible()
 })
 
+test('groceries: mobile layout keeps department headers sticky and tap targets ≥44px', async ({
+  page,
+}) => {
+  await mockGroceryApi(page)
+  await page.setViewportSize({ width: 375, height: 720 })
+
+  await page.goto('/groceries')
+  await expect(page.getByText('Onion')).toBeVisible()
+
+  // The department header is sticky so the group label stays anchored while the
+  // list scrolls (docs/M8_PLAN.md §2.4).
+  await expect(page.locator('.grocery-department__header').first()).toHaveCSS('position', 'sticky')
+
+  // The primary controls expose a ≥44px tap target on a phone viewport. The
+  // row checkbox is wrapped by its label, which is the touch target.
+  const targets = [
+    page.getByRole('button', { name: 'Add grocery item' }),
+    page.getByRole('button', { name: 'Staples' }),
+    page.locator('.grocery-controls__hide'),
+    page.locator('.grocery-item__label').first(),
+  ]
+
+  for (const target of targets) {
+    await expect(target).toBeVisible()
+    const box = await target.boundingBox()
+    expect(box, 'tap target is laid out').not.toBeNull()
+    expect(box!.height).toBeGreaterThanOrEqual(44)
+  }
+})
+
 test('groceries print: print media hides app chrome and screen-only controls', async ({ page }) => {
   await mockGroceryApi(page)
 

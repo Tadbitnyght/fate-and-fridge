@@ -943,6 +943,15 @@ public sealed class M8ManualItemAndPreferenceIntegrationTests(M8GroceryListFixtu
         {
             (await anonymous.GetAsync(PreferencesPath, Ct)).StatusCode
                 .Should().Be(HttpStatusCode.Unauthorized);
+            var anonymousPatch = await SendJsonAsync(
+                anonymous,
+                HttpMethod.Patch,
+                PreferencesPath,
+                """{"hide_checked":true}""",
+                csrfToken: null);
+            anonymousPatch.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+            (await ReadErrorAsync(anonymousPatch)).GetProperty("code").GetString()
+                .Should().Be(ErrorCodes.AuthRequired);
             (await SendJsonAsync(
                 anonymous,
                 HttpMethod.Post,
