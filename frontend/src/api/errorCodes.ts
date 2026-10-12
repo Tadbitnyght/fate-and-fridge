@@ -55,6 +55,9 @@ export const ErrorCodes = {
   // M7 batch reroll codes (docs/API.md §7).
   BatchConflict: 'BATCH_CONFLICT',
   BatchDraftExpired: 'BATCH_DRAFT_EXPIRED',
+  // M8 grocery codes (docs/API.md §13).
+  GroceryRangeTooLarge: 'GROCERY_RANGE_TOO_LARGE',
+  GroceryStapleExists: 'GROCERY_STAPLE_EXISTS',
 } as const
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes]

@@ -283,8 +283,7 @@ export const MILESTONES: Milestone[] = [
       'Mobile grocery UI and printable list',
     ],
     issues: [106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116],
-    issuesNote:
-      'Tracking #106; M8-01…M8-10: #107–#116. Runbook: docs/M8_PLAN.md.',
+    issuesNote: 'Tracking #106; M8-01…M8-10: #107–#116. Runbook: docs/M8_PLAN.md.',
   },
   {
     id: 'M9',

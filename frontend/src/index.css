@@ -2588,3 +2588,265 @@ a.recipes__import:focus-visible {
   color: var(--muted);
   font-size: 0.8rem;
 }
+
+/* ---------- groceries (M8-07) ---------- */
+
+.grocery-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.grocery-range {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.grocery-range__presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.grocery-range__preset {
+  min-height: 2.75rem;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.grocery-range__preset[aria-pressed='true'] {
+  border-color: var(--text);
+  font-weight: 600;
+}
+
+.grocery-range__preset:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+
+.grocery-range__custom {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+.grocery-range__summary {
+  margin: 0;
+  color: var(--muted);
+}
+
+.grocery-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.grocery-controls__staples {
+  min-height: 2.75rem;
+}
+
+.grocery-departments,
+.grocery-items,
+.grocery-staples__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.grocery-department {
+  margin-bottom: 1.25rem;
+}
+
+.grocery-department__header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0 0 0.5rem;
+  padding: 0.35rem 0;
+  background: var(--bg);
+  border-bottom: 2px solid var(--border);
+  font-size: 1.05rem;
+}
+
+.grocery-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.grocery-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.grocery-item--checked {
+  opacity: 0.55;
+}
+
+.grocery-item--checked .grocery-item__name {
+  text-decoration: line-through;
+}
+
+.grocery-item__label {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 2.75rem;
+  cursor: pointer;
+}
+
+.grocery-item__checkbox {
+  flex: none;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  margin: 0;
+}
+
+.grocery-item__body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: baseline;
+}
+
+.grocery-item__name {
+  font-weight: 600;
+}
+
+.grocery-item__quantity {
+  color: var(--muted);
+}
+
+.grocery-item__badge,
+.grocery-staple__badge {
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.grocery-item__sources {
+  margin: 0 0 0 2.35rem;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.grocery-item__actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-left: 2.35rem;
+}
+
+.grocery-staples {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.grocery-staples__header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.grocery-staples__header h3 {
+  margin: 0;
+}
+
+.grocery-staple {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.grocery-staple__body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: baseline;
+}
+
+.grocery-staple__name {
+  font-weight: 600;
+}
+
+.grocery-staple__quantity,
+.grocery-staple__meta {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.grocery-staple__actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* Mobile tap targets (docs/M8_PLAN.md §4): every interactive grocery control
+   keeps at least a 44px (2.75rem) hit area in both dimensions at phone widths. */
+.grocery-staple__actions button,
+.grocery-item__actions button,
+.grocery-toolbar button,
+.grocery-staples__header button,
+.grocery-controls__staples {
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+}
+
+.grocery-item__actions button,
+.grocery-staple__actions button {
+  padding: 0.5rem 0.85rem;
+}
+
+.grocery-form select {
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.grocery-form select:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+
+@media (max-width: 40rem) {
+  .grocery-controls,
+  .grocery-staple {
+    align-items: stretch;
+  }
+
+  .grocery-staple__actions button,
+  .grocery-item__actions button,
+  .grocery-toolbar button,
+  .grocery-controls__staples {
+    flex: 1;
+  }
+}

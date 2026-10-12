@@ -12,8 +12,8 @@ export interface MockRoute extends MockResponse {
   /** Path substring after `/api/v1`, e.g. `/auth/session`. */
   path: string
   method?: string
-  /** Per-call override; receives the request init and the 1-based match count. */
-  respond?: (init: RequestInit, callCount: number) => MockResponse
+  /** Per-call override; receives the request init, the 1-based match count, and the URL. */
+  respond?: (init: RequestInit, callCount: number, url: string) => MockResponse
 }
 
 export interface MockFetch {
@@ -63,7 +63,7 @@ export function installMockFetch(routes: MockRoute[]): MockFetch {
       }
       const count = (counts.get(route.path) ?? 0) + 1
       counts.set(route.path, count)
-      const matched = route.respond?.(init ?? {}, count) ?? route
+      const matched = route.respond?.(init ?? {}, count, url) ?? route
       return createResponse(
         matched.status ?? 200,
         matched.body ?? null,

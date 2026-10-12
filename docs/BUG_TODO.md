@@ -17,6 +17,7 @@ Status legend: `open` (confirmed, not started) · `fixing` · `verifying` ·
 | BUG-005 | open | Recipes / UI | Saving a recipe stays on the recipe form instead of returning to the recipes list | [#118](https://github.com/Tadbitnyght/fate-and-fridge/issues/118) |
 | BUG-006 | open | Recipes / UI | Recipe cards only open from the name; the whole card should open the editor | [#119](https://github.com/Tadbitnyght/fate-and-fridge/issues/119) |
 | BUG-003 | open | Calendar / Concurrency | Concurrent single-date `PUT`/reroll racing a batch Apply on a blank target can raise an unhandled unique-violation 500 | — |
+| BUG-007 | open | Auth / Query cache | The TanStack Query cache is not cleared on logout, so a second user can briefly see the first user's cached data in the same tab | — |
 
 ---
 
@@ -186,6 +187,44 @@ Status legend: `open` (confirmed, not started) · `fixing` · `verifying` ·
   keeping keyboard access, preserving alt text, and avoiding nested interactive elements.
 - **Tests:** a card test asserting a click on the image/body (not just the name)
   navigates to `/recipes/{id}/edit`, plus keyboard activation.
+
+---
+
+## BUG-007 — Query cache is not cleared on logout, leaking the previous user's data
+
+- **Area:** Auth / TanStack Query cache (`features/auth/AuthProvider.tsx`,
+  `main.tsx`)
+- **Severity:** Medium — a privacy/correctness defect in multi-user mode
+  (cross-user data exposure after re-login in the same browser tab).
+- **Reported:** 2026-10-12 (found during the M8-07 Grocery UI independent
+  review)
+- **Status:** open
+- **Details:** `main.tsx` creates one app-wide `QueryClient` with
+  `defaultOptions.queries.staleTime = 30_000`. On logout, `AuthProvider`'s
+  `logoutMutation.onSuccess` only calls
+  `queryClient.setQueryData(sessionQueryKey, null)` and
+  `invalidateQueries({ queryKey: sessionQueryKey })` — the rest of the cache
+  (including per-user reads such as `['groceries','preferences']` and the
+  grocery list) is left in place and is not reloaded. Because the cached
+  entries are still "fresh" for up to 30s, the next user to log in in the same
+  tab can be shown the previous user's cached groceries (and any other cached
+  user-scoped data) until a refetch happens.
+- **Reproduction:** log in as user A, open `/groceries` (populating the cache),
+  log out, then log in as user B within ~30s. The grocery preferences/list can
+  briefly render user A's values before the refetch replaces them.
+- **Root cause:** logout invalidates only the session key; it never clears the
+  `QueryClient`, and the app never reloads (`window.location.reload()`), so
+  non-session queries survive the user change.
+- **Impact:** multi-user household deployments can transiently expose one
+  user's cached data to another; read-only and self-correcting on refetch, but
+  still a confidentiality leak.
+- **Fix direction:** out of M8-07 scope. Clear the cache on logout
+  (`queryClient.clear()` / `queryClient.removeQueries()`), or perform a full
+  SPA reload after logout; if the cache must persist, scope user-specific keys
+  by session/user id and/or set `staleTime: 0` for user-scoped queries.
+- **Tests:** a test that logs out and asserts no prior user's query data remains
+  in the client cache (and that a subsequent login does not render the previous
+  user's groceries before refetch).
 
 
 

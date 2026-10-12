@@ -693,8 +693,10 @@ Response `200`:
 
 - `identity` is the stable `GroceryItemIdentity` hash the check API (M8-06) keys
   on: for recipe-derived lines the aggregation identity (canonical ingredient +
-  unit dimension, quantity-independent); for manual lines `manual|{id}`.
-  `sources` has one row per contributing meal (`[]` for manual items).
+  unit dimension, quantity-independent); for manual lines the 64-char lowercase
+  SHA-256 hex hash of the canonical `manual|{id}` string (the same hashing the
+  recipe identity uses). `sources` has one row per contributing meal (`[]` for
+  manual items).
   `ingredient_id` is `null` for a free-text manual item; `department_id` is
   `null` for the "Other" group.
 - **Quantity-less lines:** `quantity` is `null` and `quantity_text` is `""`.
@@ -807,8 +809,9 @@ exist. Validation failures return `400 VALIDATION_FAILED`.
 
 #### `DELETE /api/v1/groceries/manual/{id}`
 
-Deletes the item and its household check-state row (identity `manual|{id}`), so
-no orphan check state remains. A staple the item may have promoted is
+Deletes the item and its household check-state row (identity = the 64-char
+lowercase SHA-256 hex hash of the canonical `manual|{id}` string), so no orphan
+check state remains. A staple the item may have promoted is
 **retained**. Returns `204`, or `404 NOT_FOUND` when the item does not exist.
 
 ### Preferences (M8-04)
