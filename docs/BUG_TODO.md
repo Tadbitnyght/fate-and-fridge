@@ -18,6 +18,7 @@ Status legend: `open` (confirmed, not started) · `fixing` · `verifying` ·
 | BUG-006 | open | Recipes / UI | Recipe cards only open from the name; the whole card should open the editor | [#119](https://github.com/Tadbitnyght/fate-and-fridge/issues/119) |
 | BUG-003 | open | Calendar / Concurrency | Concurrent single-date `PUT`/reroll racing a batch Apply on a blank target can raise an unhandled unique-violation 500 | — |
 | BUG-007 | open | Auth / Query cache | The TanStack Query cache is not cleared on logout, so a second user can briefly see the first user's cached data in the same tab | — |
+| BUG-008 | open | Groceries / Data | A live grocery line renders the ingredient label `Onion {owder`; likely stored/seeded data, needs a check that no code path emits a stray `{` | — |
 
 ---
 
@@ -225,6 +226,31 @@ Status legend: `open` (confirmed, not started) · `fixing` · `verifying` ·
 - **Tests:** a test that logs out and asserts no prior user's query data remains
   in the client cache (and that a subsequent login does not render the previous
   user's groceries before refetch).
+
+## BUG-008 — Live grocery line renders an ingredient label containing `{`
+
+- **Area:** Groceries / recipe ingredient data (`GET /api/v1/groceries` output;
+  source data in recipes/ingredients)
+- **Severity:** Low — cosmetic/display integrity of one ingredient name; no
+  functional impact on aggregation or check state.
+- **Reported:** 2026-10-12 (found during the M8-10 live browser verification)
+- **Status:** open
+- **Details:** On the live instance the grocery list (and the print view) show an
+  item labelled `Onion {owder` (attributed to `Hamburger — Mon 10/12`). The
+  literal stored string appears to be `Onion {owder` (a `{` replacing a `p`),
+  which is characteristic of a stray composite-format/brace substitution rather
+  than an HTML-encoding artifact.
+- **Reproduction:** open `/groceries` (or `/groceries/print`) on the live
+  instance and look for the `Onion {owder` line; the same label is returned by
+  `GET /api/v1/groceries`.
+- **Impact:** one misrendered ingredient name; the milestone's aggregation,
+  ordering, attribution, and check-state behaviour are unaffected.
+- **Fix direction:** check whether the stored recipe/ingredient name is simply
+  user-typed data (then correct the data), and audit any code that could use a
+  user-supplied name as a composite-format string (e.g. `string.Format`/`$""`
+  composition) so no code path can inject a stray `{`.
+- **Tests:** a regression test that an ingredient/recipe name containing `{`/`}`
+  round-trips unchanged through import, recipe save, and the grocery projection.
 
 
 

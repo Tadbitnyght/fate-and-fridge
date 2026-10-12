@@ -1,10 +1,9 @@
 # M8 Verification — Groceries
 
-Status: **pre-deploy gates green** (2026-10-12, branch `feature/m8-groceries`,
-HEAD `3478082`). Tracking issue: #106 (M8-01…M8-10 are #107–#116). The milestone
-is marked `complete` in the progress manifest; the `m8-complete` tag and the
-live-deployment verification are performed by the Lead/docker-admin after the
-redeploy (see **Live deployment verification** below).
+Status: **complete** (2026-10-12, tag `m8-complete`). Tracking issue: #106
+(M8-01…M8-10 are #107–#116). The milestone is marked `complete` in the progress
+manifest and the live deployment was rebuilt, redeployed, and verified (see
+**Live deployment verification** below).
 
 M8 delivers the **live grocery projection**: a read-only aggregate of the
 planned recipe ingredients in the active range plus manual items, grouped by
@@ -97,7 +96,10 @@ the M8-09 sweep. Reproduced compactly:
 
 ## Evidence at completion
 
-Recorded on the M8-10 commit (branch `feature/m8-groceries`, HEAD `3478082`).
+Recorded on the M8-10 commit chain (branch `feature/m8-groceries`, HEAD
+`3478082`). The milestone was marked `complete` in `80bc722`, which is the
+deployed/verified commit; the `m8-complete` annotated tag points at the final
+verification commit after the live checks below.
 
 | Gate | Result |
 |------|--------|
@@ -129,17 +131,61 @@ by a runtime assertion.
 
 ## Live deployment verification
 
-**Pending** — to be completed by the Lead/docker-admin after the M8 redeploy
-(`scripts/deploy.sh up` on the deploy host, applying `M8Groceries`). Expected
-content:
+Verified on 2026-10-12 after rebuilding and redeploying via `docker-admin`
+using `scripts/deploy.sh up` (`docker compose up -d --build` on the NAS).
 
-- deploy-host checkout commit and clean tree
-- `fate-and-fridge:0.1.0` image id before → after
-- `Applying migration '…_M8Groceries'` and `Database migrations applied`
-- `GET /api/v1/health` → `200 {status: ok}`
-- live route proof: at least one `GET /api/v1/groceries` response (401
-  `AUTH_REQUIRED` for an anonymous probe is sufficient evidence the route is
-  served; an unknown route returns 404 as a baseline)
-- served bundle hash containing `Groceries`/the M8 UI strings, and `/progress`
-  rendering M8 as Complete (summary 9 of 15, computed client-side)
-- PostgreSQL still unpublished; no volumes/datasets deleted
+- **Deploy-host checkout:** `/mnt/Data/calendarplanner` at `80bc722` on `main`,
+  working tree clean. `/mnt/y` is the 9p SMB export of the same NAS repository
+  (identical tree object `2443a859…`), so there is one checkout. The NAS git
+  needed a one-shot `-c safe.directory=…`; no persistent config was written.
+- **Image `fate-and-fridge:0.1.0`:** `sha256:2a114cc61c447709318c652ac1753ece672819679832ae45a5d30faf7b08f65c`,
+  created `2026-10-12T13:02:59Z`. A repeat `scripts/deploy.sh up` at 13:15Z was a
+  full cache hit with no container recreation (idempotent), so the running image
+  is the 13:02:59Z build of this commit; the served bundle independently proves
+  it carries the M8-10 manifest change (below).
+- **Migrations applied:** `Applying migration '20261010050705_M8Groceries'.` then
+  `Database migrations applied`; `__EFMigrationsHistory`'s last row is
+  `20261010050705_M8Groceries`. All four M8 tables exist
+  (`grocery_staples`, `manual_grocery_items`, `grocery_check_state`,
+  `user_grocery_preferences`).
+- **Containers:** `fate-and-fridge-app-1` `Up (healthy)` (`restarts=0`),
+  `fate-and-fridge-postgres-1` `Up (healthy)`.
+- **Health:** `GET /api/v1/health` → `200 {"status":"ok","app":"Fate & Fridge","version":"0.1.0","environment":"production"}`;
+  `GET /api/v1/health/db` → `200 {"status":"ok","database":"connected"}`.
+- **Live route proof:** `GET /api/v1/groceries` → `200` with the full projection
+  (`{"range":{"preset":"next_7_days","start":"2026-10-12","end":"2026-10-18","day_count":7},…}`;
+  the household is single-user, so the system actor is authorized). An unknown
+  route returns `404` as the baseline.
+- **Frontend bundle:** `/assets/index-lov0dLqD.js` (hash changed from M7's
+  `index-azB5w2ge.js`). It contains the M8 UI strings (`Add grocery item`,
+  `Include checked items`, `Add to list`, `next_14_days`,
+  `GROCERY_RANGE_TOO_LARGE`) and the M8 completion date `2026-10-12`.
+- **Live browser verification** (read-only Playwright, no mutations):
+  - `/progress` renders `9 of 15 milestones complete (60%).` with the
+    **M8 — Groceries** card showing **Complete** / `Completed 2026-10-12` and
+    M9–M14 as Planned.
+  - `/groceries` renders the real aggregation UI (range presets with Next 7 days
+    active, the range readout `Oct 12 – Oct 18 · 7 days`, 26 items across the 8
+    configured departments in order, per-item attribution such as
+    `Chicken Enchiladas — Fri 10/16`, item checkboxes, the hide-checked control,
+    and the Print entry point) — not a placeholder or error state, with 0
+    console errors.
+  - `/groceries/print` renders `Grocery list: Oct 12 – Oct 18`, 26 `aria-hidden`
+    paper checkboxes, departments in order, and the "Include checked items"
+    control; under print-media emulation the header, nav, footer, and
+    screen-only controls are hidden while the list stays visible.
+  - Mobile 375×667 keeps the department headers sticky (`position: sticky`,
+    pinned on scroll) with ≥44px grocery controls.
+  - Screenshots: `.playwright-mcp/m8-progress-desktop.png`,
+    `m8-groceries-desktop.png`, `m8-groceries-print-desktop.png`,
+    `m8-groceries-mobile.png`.
+- **PostgreSQL** still publishes no host port (`PortBindings {}` for the postgres
+  container); only the app is exposed on `50080`.
+- **Non-destructive:** no volumes, datasets, backups, or containers were deleted;
+  the only mutating command was the sanctioned `up`, and no M8 mutating endpoint
+  was called during verification.
+
+Observations (non-blocking): `/favicon.ico` returns `404` (pre-existing and
+cosmetic); one live grocery line reads `Onion {owder` (a stored recipe-ingredient
+label, almost certainly user/seeded data rather than an M8 rendering defect —
+recorded as `BUG-008` for a data/code check).

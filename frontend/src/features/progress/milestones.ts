@@ -283,6 +283,8 @@ export const MILESTONES: Milestone[] = [
       'Mobile grocery UI and printable list',
     ],
     completedOn: '2026-10-12',
+    tag: 'm8-complete',
+    commit: '80bc722',
     evidence: [
       { label: 'Backend tests', value: '2029' },
       { label: 'Vitest', value: '315' },

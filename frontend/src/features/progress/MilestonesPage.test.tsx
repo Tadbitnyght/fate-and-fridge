@@ -86,8 +86,8 @@ describe('progress page', () => {
     const m8Card = screen.getByRole('heading', { level: 3, name: 'M8 — Groceries' }).closest('li')!
     expect(within(m8Card).getByText('Complete', { exact: true })).toBeInTheDocument()
     expect(within(m8Card).getByText(/Completed 2026-10-12/)).toBeInTheDocument()
-    // The M8 tag is cut by the Lead after the live deploy, so it is unset here.
-    expect(within(m8Card).queryByText(/tag m8-complete/)).not.toBeInTheDocument()
+    // The tag is cut after the live redeploy is verified.
+    expect(within(m8Card).getAllByText(/m8-complete/).length).toBeGreaterThan(0)
 
     expect(screen.getByRole('heading', { level: 3, name: 'M14 — Hardening' })).toBeInTheDocument()
   })

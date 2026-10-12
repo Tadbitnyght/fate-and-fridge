@@ -197,9 +197,9 @@ describe('milestone manifest', () => {
     const m8 = MILESTONES.find((milestone) => milestone.id === 'M8')
     expect(m8?.status).toBe('complete')
     expect(m8?.completedOn).toBe('2026-10-12')
-    // The Lead cuts the tag only after the live redeploy is verified.
-    expect(m8?.tag).toBeUndefined()
-    expect(m8?.commit).toBeUndefined()
+    // The tag is cut after the live redeploy is verified.
+    expect(m8?.tag).toBe('m8-complete')
+    expect(m8?.commit).toBe('80bc722')
     for (const issue of [106, 107, 116]) {
       expect(m8?.issues).toContain(issue)
     }
