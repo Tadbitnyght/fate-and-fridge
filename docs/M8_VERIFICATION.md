@@ -179,6 +179,15 @@ using `scripts/deploy.sh up` (`docker compose up -d --build` on the NAS).
   - Screenshots: `.playwright-mcp/m8-progress-desktop.png`,
     `m8-groceries-desktop.png`, `m8-groceries-print-desktop.png`,
     `m8-groceries-mobile.png`.
+- **Second redeploy (tag metadata):** after `7537c78` added the
+  `tag: 'm8-complete'` / `commit: '80bc722'` manifest metadata (docs-only + the
+  manifest), the frontend layer was rebuilt (a real `RUN npm run build`, not a
+  cache hit) to image
+  `sha256:a773cd21318f…9c01b47` (created `2026-10-12T13:45:52Z`), replacing the
+  app container; postgres was not recreated. `GET /api/v1/health` → `200` and
+  `GET /api/v1/groceries` → `200`. The served bundle is now
+  `/assets/index-AIN_3mTH.js` (previously `index-lov0dLqD.js`) and contains the
+  string `m8-complete`, so the live `/progress` page carries the M8 tag metadata.
 - **PostgreSQL** still publishes no host port (`PortBindings {}` for the postgres
   container); only the app is exposed on `50080`.
 - **Non-destructive:** no volumes, datasets, backups, or containers were deleted;
