@@ -271,7 +271,7 @@ export const MILESTONES: Milestone[] = [
     id: 'M8',
     number: 8,
     name: 'Groceries',
-    status: 'in_progress',
+    status: 'complete',
     summary:
       'The live grocery projection: aggregation, compatible unit families, manual items and staples, department ordering, and printing.',
     features: [
@@ -281,6 +281,14 @@ export const MILESTONES: Milestone[] = [
       'Manual grocery items and reusable staples',
       'Department ordering, checkbox persistence, hide checked',
       'Mobile grocery UI and printable list',
+    ],
+    completedOn: '2026-10-12',
+    evidence: [
+      { label: 'Backend tests', value: '2029' },
+      { label: 'Vitest', value: '315' },
+      { label: 'Playwright (hermetic)', value: '47 passed / 2 pre-existing stack skips' },
+      { label: 'M8 verification', value: 'independent review + full §4 battery' },
+      { label: 'Backend gates', value: 'format/build/EF clean' },
     ],
     issues: [106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116],
     issuesNote: 'Tracking #106; M8-01…M8-10: #107–#116. Runbook: docs/M8_PLAN.md.',

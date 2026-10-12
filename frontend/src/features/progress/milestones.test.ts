@@ -193,12 +193,37 @@ describe('milestone manifest', () => {
     )
   })
 
+  it('marks M8 complete with its sub-issue links and verification evidence', () => {
+    const m8 = MILESTONES.find((milestone) => milestone.id === 'M8')
+    expect(m8?.status).toBe('complete')
+    expect(m8?.completedOn).toBe('2026-10-12')
+    // The Lead cuts the tag only after the live redeploy is verified.
+    expect(m8?.tag).toBeUndefined()
+    expect(m8?.commit).toBeUndefined()
+    for (const issue of [106, 107, 116]) {
+      expect(m8?.issues).toContain(issue)
+    }
+    expect(m8?.issuesNote).toMatch(/M8-01/)
+    expect(m8?.evidence).toEqual(
+      expect.arrayContaining([
+        { label: 'Backend tests', value: '2029' },
+        { label: 'Vitest', value: '315' },
+        {
+          label: 'Playwright (hermetic)',
+          value: '47 passed / 2 pre-existing stack skips',
+        },
+        { label: 'M8 verification', value: 'independent review + full §4 battery' },
+        { label: 'Backend gates', value: 'format/build/EF clean' },
+      ]),
+    )
+  })
+
   it('computes the progress summary from the manifest', () => {
     expect(progressSummary()).toEqual({
       total: 15,
-      completed: 8,
-      inProgress: 1,
-      percent: Math.round((8 / 15) * 100),
+      completed: 9,
+      inProgress: 0,
+      percent: Math.round((9 / 15) * 100),
     })
     expect(
       progressSummary([

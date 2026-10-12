@@ -387,7 +387,8 @@ with the same name. No data corruption results at household scale.
 - `department_id`
 - `quantity_numeric` nullable
 - `unit_id` nullable
-- `range_key` or active-list association strategy
+- `range_start` — inclusive household-local first date of the active range
+- `range_days` — number of days in the active range (cap 366)
 - `save_for_future`
 - `created_by_user_id`
 - `created_at`

@@ -148,6 +148,48 @@ versions follow [Semantic Versioning](https://semver.org/).
   (diff, Try Another, Apply, Cancel) and reuses the dismissible Undo banner for
   the batch. Schema: `calendar_reroll_drafts` and
   `calendar_entry_history.batch_operation_id` (migration `M7BatchPlanning`).
+- Milestone 8 — groceries (2026-10-12): the live grocery projection. `GET
+  /api/v1/groceries` (`groceries.view`) resolves a preset (`next_3_days`,
+  `next_7_days`, `next_14_days`, `rest_of_month`, or `custom`) or an explicit
+  `start` + `days` range against the household-local today (past start and
+  invalid `days` → `VALIDATION_FAILED`; a custom range longer than 366 days →
+  `GROCERY_RANGE_TOO_LARGE`), remembers the last-used range per user, and
+  defaults to Next 7 Days. Only `include_groceries` entries contribute (recipe
+  entries plus specials carrying a recipe; eat-out, fend-for-yourself,
+  go-to-family-dinner, and vacation contribute nothing). Recipe-derived lines
+  aggregate by canonical ingredient (aliases resolve through the M2 merge
+  redirect) plus unit dimension: compatible units merge through the existing
+  conversion factors into the largest present unit (1 lb + 8 oz → 1.5 lb),
+  incompatible dimensions stay separate, unitless/same-unit counts combine by
+  count while different count units stay separate, and preparation notes never
+  enter identity. Quantities render as the nearest exact common fraction (½, ⅓,
+  ¾, …) or up to two decimals, and each line carries one attribution row per
+  contributing meal (recipe name + short date). Items are grouped by department
+  in configured order (no department → Other last), unchecked first /
+  alphabetical then checked. Manual items (`POST/PATCH/DELETE /groceries/manual`,
+  `groceries.edit`) are range-scoped free text with an optional quantity/unit and
+  canonical ingredient, with the department defaulting from the linked
+  ingredient, and an optional Save for future that idempotently promotes a
+  staple. Staples are a
+  household-wide catalog (`GET/POST/PATCH /groceries/staples`) whose add-to-list
+  (`POST /groceries/staples/{id}/add-to-list`) creates a range-scoped manual item
+  without mutating the staple. Household-shared check state
+  (`POST /groceries/check` and `/groceries/uncheck`, `groceries.edit`) is keyed by
+  the stable `GroceryItemIdentity` hash (canonical ingredient + dimension, or the
+  manual item id) so it survives quantity changes and range expansion, and a
+  checked item moves below unchecked items within its department. Per-user
+  preferences (`GET/PATCH /groceries/preferences`, `groceries.view`) store Hide
+  Checked and the remembered range (the single-user system actor stores them
+  under the reserved `system_grocery_preferences` application setting). The
+  mobile-first UI adds a department-grouped list with sticky headers and large
+  tap targets, manual-item add/edit, and a staples panel, plus a print-optimized
+  view (`/groceries/print`) with department order, a checkbox per item,
+  attribution, manual items, and an include-checked-items option (checked
+  excluded by default). Reads require `groceries.view` and writes
+  `groceries.edit` (edit implies view; new members default to `groceries.view`,
+  and the single-user system actor has full access). Schema: `grocery_staples`,
+  `manual_grocery_items`, `grocery_check_state`, and `user_grocery_preferences`
+  (migration `M8Groceries`).
 
 ### Changed
 
