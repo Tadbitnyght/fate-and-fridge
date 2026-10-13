@@ -93,7 +93,7 @@ describe('progress page', () => {
     expect(within(m9Card).getByText('Complete', { exact: true })).toBeInTheDocument()
     expect(within(m9Card).getByText(/Completed 2026-10-13/)).toBeInTheDocument()
     // The tag is cut after the live redeploy is verified.
-    expect(within(m9Card).queryByText(/m9-complete/)).not.toBeInTheDocument()
+    expect(within(m9Card).getAllByText(/m9-complete/).length).toBeGreaterThan(0)
 
     expect(screen.getByRole('heading', { level: 3, name: 'M14 — Hardening' })).toBeInTheDocument()
   })

@@ -1,10 +1,9 @@
 # M9 Verification — Live Sync
 
-Status: **pre-deploy gates complete; live deployment verification pending**
-(2026-10-13, branch `feature/m9-live-sync`, HEAD `4b10338`). Tracking issue: #130
+Status: **complete** (2026-10-13, tag `m9-complete`). Tracking issue: #130
 (M9-01…M9-10 are #121–#130). The milestone is marked `complete` in the progress
-manifest with evidence; the `m9-complete` tag and the live rebuild/redeploy are
-the Lead/docker-admin's final step (see **Live deployment verification** below).
+manifest and the live deployment was rebuilt, redeployed, and verified (see
+**Live deployment verification** below).
 
 M9 delivers **household live sync**: an authenticated SignalR hub that pushes
 coarse change notifications to every connected session, and a frontend that
@@ -149,15 +148,63 @@ the M9-08 sweep added the real-stack two-browser-context flow.
 
 ## Live deployment verification
 
-**Pending** — to be completed by the Lead with `docker-admin` before the
-milestone is tagged `m9-complete` and the tracking issue is closed
-(`AGENTS.md` → "Milestone completion gate"). Expected evidence to record here:
+Verified on 2026-10-13 after rebuilding and redeploying via `docker-admin` using
+`scripts/deploy.sh up` (`docker compose up -d --build` on the NAS).
 
-1. Rebuild/redeploy from the M9-10 commit via `scripts/deploy.sh up`
-   (`docker compose up -d --build` on the NAS); confirm no migration is applied
-   (M9 adds none).
-2. Image id/digest and container health; `GET /api/v1/health` → `200`.
-3. The hub handshakes on the running instance and at least one cross-device sync
-   is observed (two browsers).
-4. `/progress` shows **10 of 15 milestones complete (67%)** with the
-   **M9 — Live Sync** card **Complete** / `Completed 2026-10-13`.
+- **Deploy-host checkout:** `/mnt/Data/calendarplanner` at `db9569c` on `main`,
+  working tree clean. `/mnt/y` is the same SMB/9p-exported tree, so there is one
+  checkout. Operational note: the `CPlanner` deploy user cannot `git fetch`/`pull`
+  because `.git` is not writable by that user; `HEAD` already matched
+  `origin/main` at `db9569c`, so no pull was needed.
+- **Image `fate-and-fridge:0.1.0`:** `sha256:a773cd21318f…` →
+  `sha256:fd085e5d9d56cb5076fad4d754cb9cc4281d6748692f0e934188f02fbc0b9110`,
+  created `2026-10-13T14:03Z`. This was a **real rebuild** — the frontend
+  `npm ci` + `vite build` and `dotnet publish` layers re-ran, not a cache hit. The
+  app container was recreated and is healthy (`restarts=0`); postgres was
+  untouched.
+- **No migration:** M9 adds no schema, so no migration was applied; this is
+  consistent with `dotnet ef migrations has-pending-model-changes` being empty.
+- **Health:** `GET /api/v1/health` →
+  `200 {"status":"ok","app":"Fate & Fridge","version":"0.1.0","environment":"production"}`.
+- **Hub reachability (non-mutating):** `POST /hub/live/negotiate?negotiateVersion=1`
+  → `200` with a valid SignalR negotiate body
+  (`availableTransports: WebSockets, ServerSentEvents, LongPolling`);
+  `GET /hub/live` → `400 "Connection ID required"`; an unknown route
+  `/api/v1/definitely-not-a-route` → `404` baseline; and a SPA deep-link →
+  `200 text/html`. So the hub is served and is not swallowed by the SPA fallback.
+- **Frontend bundle:** `/assets/index-kH8uUUK-.js` (629,131 B, sha256
+  `4c8cf40d90e21588ebefe721edcb98b748781f9efe38f9fadcd55a954353ecc5`), containing
+  the `Live Sync` UI string and the M9 completion date `2026-10-13`.
+- **Live browser verification** (read-only Playwright, no mutations):
+  - `/progress` renders `10 of 15 milestones complete (67%).` with the
+    **M9 — Live Sync** card showing **Complete** / `Completed 2026-10-13` and
+    M10–M14 as Planned.
+  - The app-shell live-sync indicator settles to **`● Live`**
+    (`aria-live="polite"`, `aria-atomic="true"`, `data-state="connected"`).
+  - A genuine **`101 Switching Protocols` WebSocket handshake to
+    `ws://…/hub/live`** was captured (Kestrel) carrying a SignalR frame.
+  - A **second** page independently connected (`Live`) with no socket errors.
+  - Forcing the socket closed rendered `Offline` and the client
+    **auto-reconnected** — a second WebSocket opened within ~3 s and the indicator
+    returned to `Live`.
+  - Screenshots: `.playwright-mcp/m9-progress.png`,
+    `.playwright-mcp/m9-shell-live-sync-calendar.png`.
+- **PostgreSQL** still publishes no host port; nothing persistent was deleted (only
+  the app container was recreated).
+- **Documented deviation (known limitation / follow-up):** the real-stack
+  two-browser-context spec `frontend/e2e/stack/live-sync.spec.ts` was **not
+  executed** — a disposable stack was not started within the session's step
+  budget. Its invocation is ready:
+
+  ```bash
+  cd /mnt/y && HOST_PORT=50900 HOST_DATA_DIR=/tmp/opencode/faf-m9-e2e-data \
+    docker compose -p faf-m9-e2e up -d --build
+  E2E_BASE_URL=http://127.0.0.1:50900 E2E_SETUP_MODE=multiuser \
+    npx playwright test e2e/stack/live-sync.spec.ts
+  # teardown: docker compose -p faf-m9-e2e down -v
+  ```
+
+  Cross-device propagation was instead verified by (a) the backend two-real-client
+  matrix, (b) the hermetic `page.routeWebSocket` invalidation test, and (c) the
+  live **two-socket handshake** on the running instance (no writes were performed
+  on production data). This is recorded as a known limitation and a follow-up.

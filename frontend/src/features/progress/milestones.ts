@@ -311,6 +311,8 @@ export const MILESTONES: Milestone[] = [
       'Two-device sync tests',
     ],
     completedOn: '2026-10-13',
+    tag: 'm9-complete',
+    commit: 'db9569c',
     evidence: [
       { label: 'Backend tests', value: '2114' },
       { label: 'Vitest', value: '341' },
