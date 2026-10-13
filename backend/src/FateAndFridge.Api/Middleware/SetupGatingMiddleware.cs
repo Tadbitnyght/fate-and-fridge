@@ -1,4 +1,5 @@
 using FateAndFridge.Api.Errors;
+using FateAndFridge.Api.LiveSync;
 using FateAndFridge.Api.Services;
 
 namespace FateAndFridge.Api.Middleware;
@@ -6,8 +7,9 @@ namespace FateAndFridge.Api.Middleware;
 /// <summary>
 /// Path rules for pre-setup gating (docs/API.md §21): every <c>/api/v1</c>
 /// route is gated except <c>/health</c> (and its subroutes) and
-/// <c>/setup/*</c>. Non-API paths (frontend, OpenAPI documents) are never
-/// gated.
+/// <c>/setup/*</c>. The live-sync hub is gated too, so a socket cannot be
+/// opened before setup completes; every other non-API path (frontend, OpenAPI
+/// documents) is never gated.
 /// </summary>
 public static class SetupGating
 {
@@ -17,9 +19,10 @@ public static class SetupGating
 
     /// <summary>Returns true when the request must wait for setup completion.</summary>
     public static bool ShouldGate(PathString path) =>
-        path.StartsWithSegments(ApiPrefix)
-        && !path.StartsWithSegments(HealthPrefix)
-        && !path.StartsWithSegments(SetupPrefix);
+        LiveSyncPaths.IsHubPath(path)
+        || (path.StartsWithSegments(ApiPrefix)
+            && !path.StartsWithSegments(HealthPrefix)
+            && !path.StartsWithSegments(SetupPrefix));
 }
 
 /// <summary>

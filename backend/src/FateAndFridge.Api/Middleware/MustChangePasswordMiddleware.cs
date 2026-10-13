@@ -1,13 +1,14 @@
 using FateAndFridge.Api.Auth;
 using FateAndFridge.Api.Errors;
+using FateAndFridge.Api.LiveSync;
 
 namespace FateAndFridge.Api.Middleware;
 
 /// <summary>
 /// Path and method rules for the forced-password-change gate (docs/API.md §5).
-/// The gate covers every <c>/api/v1</c> route; health and setup routes stay
-/// reachable, and a flagged session may still read its session, change the
-/// password, and log out.
+/// The gate covers every <c>/api/v1</c> route and the live-sync hub; health and
+/// setup routes stay reachable, and a flagged session may still read its
+/// session, change the password, and log out.
 /// </summary>
 public static class MustChangePasswordGate
 {
@@ -28,7 +29,8 @@ public static class MustChangePasswordGate
 
     /// <summary>True when the forced-change gate applies to this route.</summary>
     public static bool ShouldGate(PathString path, string method) =>
-        path.StartsWithSegments(ApiPrefix) && !IsAllowed(path, method);
+        LiveSyncPaths.IsHubPath(path)
+        || (path.StartsWithSegments(ApiPrefix) && !IsAllowed(path, method));
 }
 
 /// <summary>

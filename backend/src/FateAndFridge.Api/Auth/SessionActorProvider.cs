@@ -30,8 +30,26 @@ public sealed class SessionActorProvider(
             return new CurrentActor(IsSystem: true, Role: UserRole.Admin);
         }
 
-        var principal = httpContextAccessor.HttpContext?.User;
-        if (principal?.Identity?.IsAuthenticated != true)
+        return FromPrincipal(httpContextAccessor.HttpContext?.User);
+    }
+
+    /// <summary>
+    /// Maps a validated session principal to an actor, or null when it carries
+    /// no usable identity or was not authenticated by the session scheme.
+    /// Exposed so a network context that runs outside the request's
+    /// <see cref="IHttpContextAccessor"/> scope (the SignalR hub, see
+    /// <c>LiveSyncHub.OnConnectedAsync</c>) reuses the exact same mapping.
+    /// </summary>
+    public static CurrentActor? FromPrincipal(ClaimsPrincipal? principal)
+    {
+        // Mirror CsrfMiddleware.IsSessionAuthenticated / MustChangePasswordMiddleware.HasForcedChange:
+        // only the session scheme's own principal is trusted, so another
+        // authenticated identity can never be mapped onto a session actor.
+        if (principal?.Identity is not { IsAuthenticated: true } identity
+            || !string.Equals(
+                identity.AuthenticationType,
+                SessionAuthenticationDefaults.Scheme,
+                StringComparison.Ordinal))
         {
             return null;
         }

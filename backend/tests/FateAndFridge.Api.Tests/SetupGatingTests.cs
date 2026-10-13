@@ -1,3 +1,4 @@
+using FateAndFridge.Api.LiveSync;
 using FateAndFridge.Api.Middleware;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
@@ -44,4 +45,19 @@ public sealed class SetupGatingTests
     [InlineData("/ws")]
     public void Non_api_v1_paths_are_never_gated(string path) =>
         SetupGating.ShouldGate(new PathString(path)).Should().BeFalse();
+
+    /// <summary>
+    /// The hub is gated only as a whole path segment, never as a string prefix:
+    /// a typo route such as <c>/hub/liveevil</c> must not inherit the hub's
+    /// guards, while the hub's own subpaths (for example <c>/negotiate</c>)
+    /// must.
+    /// </summary>
+    [Theory]
+    [InlineData("/hub/live", true)]
+    [InlineData("/hub/live/negotiate", true)]
+    [InlineData("/hub/liveevil", false)]
+    [InlineData("/hub/liveX/negotiate", false)]
+    [InlineData("/api/v1/x", false)]
+    public void Hub_path_matching_is_segment_bounded(string path, bool expected) =>
+        LiveSyncPaths.IsHubPath(new PathString(path)).Should().Be(expected);
 }

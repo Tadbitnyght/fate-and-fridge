@@ -1,5 +1,6 @@
 using FateAndFridge.Api.Auth;
 using FateAndFridge.Api.Errors;
+using FateAndFridge.Api.LiveSync;
 using Microsoft.AspNetCore.Antiforgery;
 
 namespace FateAndFridge.Api.Middleware;
@@ -32,6 +33,18 @@ public sealed class CsrfMiddleware(RequestDelegate next)
 
     public async Task InvokeAsync(HttpContext context, IAntiforgery antiforgery)
     {
+        // M9-01: the live-sync hub is exempt from antiforgery validation. The
+        // SPA connects with skipNegotiation over WebSockets only, so the connect
+        // request is a body-less, same-origin, cookie-authenticated upgrade with
+        // no state-changing form to forge; the exemption also keeps a future
+        // /negotiate POST working. IpAllowlist, SetupGating, and
+        // MustChangePassword still apply to the connect request.
+        if (LiveSyncPaths.IsHubPath(context.Request.Path))
+        {
+            await next(context);
+            return;
+        }
+
         if (!IsSessionAuthenticated(context))
         {
             await next(context);

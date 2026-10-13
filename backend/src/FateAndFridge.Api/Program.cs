@@ -5,6 +5,7 @@ using FateAndFridge.Api.Auth.Permissions;
 using FateAndFridge.Api.Data;
 using FateAndFridge.Api.Endpoints;
 using FateAndFridge.Api.Imports;
+using FateAndFridge.Api.LiveSync;
 using FateAndFridge.Api.Middleware;
 using FateAndFridge.Api.Services;
 using Microsoft.AspNetCore.Antiforgery;
@@ -229,6 +230,27 @@ builder.Services.AddAuthentication(SessionAuthenticationDefaults.Scheme)
 builder.Services.AddAuthorization();
 builder.Services.AddScoped<ICurrentActorProvider, SessionActorProvider>();
 
+// M9-01: live sync. Server-side SignalR ships in the ASP.NET Core shared
+// framework, so no new backend package is added and no backplane is needed
+// (one household, one instance). The hub is a server-to-client-only
+// notification channel; the bounded inbound frame size and disabled detailed
+// errors are the documented guards (docs/M9_PLAN.md §1.11).
+builder.Services
+    .AddSignalR(options =>
+    {
+        options.MaximumReceiveMessageSize = LiveSyncHub.MaximumInboundMessageBytes;
+        options.EnableDetailedErrors = false;
+    })
+    .AddJsonProtocol(options =>
+    {
+        // Live sync uses SignalR's own serializer, which does not inherit the
+        // HTTP JSON options set above, so the wire envelope is snake_case here
+        // too (docs/API.md §3).
+        options.PayloadSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;
+    });
+builder.Services.AddSingleton<LiveSyncConnectionRegistry>();
+builder.Services.AddSingleton<ILiveSyncPublisher, SignalRLiveSyncPublisher>();
+
 // Argon2id hashing is stateless and thread-safe (libsodium initializes once).
 builder.Services.AddSingleton<IPasswordHasher, Argon2idPasswordHasher>();
 
@@ -287,6 +309,10 @@ app.MapCalendarEndpoints();
 app.MapGroceryEndpoints();
 app.MapOperationEndpoints();
 app.MapImportEndpoints();
+
+// M9-01: the live-sync hub must be mapped before the SPA catch-all so
+// MapFrontend's fallback cannot swallow /hub/live (docs/M9_PLAN.md §1.2).
+app.MapHub<LiveSyncHub>(LiveSyncPaths.HubPath);
 
 // Test-only permission probes (M1-09): mapped solely in the Testing
 // environment so the permission matrix can exercise server-side enforcement.
