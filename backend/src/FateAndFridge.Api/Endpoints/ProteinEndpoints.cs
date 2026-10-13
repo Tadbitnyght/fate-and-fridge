@@ -3,6 +3,7 @@ using System.Text.Json;
 using FateAndFridge.Api.Auth;
 using FateAndFridge.Api.Auth.Permissions;
 using FateAndFridge.Api.Errors;
+using FateAndFridge.Api.LiveSync;
 using FateAndFridge.Api.Services;
 
 namespace FateAndFridge.Api.Endpoints;
@@ -115,6 +116,7 @@ public static class ProteinEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         ProteinService proteins,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var (root, error) = await ReadObjectAsync(context, cancellationToken);
@@ -153,6 +155,15 @@ public static class ProteinEndpoints
         }
 
         var result = await proteins.CreateAsync(name, ipAddress, actorUserId, cancellationToken);
+        if (result is ProteinMutationResult.Success created)
+        {
+            await liveSync.SettingsUpdatedAsync(
+                LiveSyncPublisherExtensions.ProteinsEntity,
+                actorUserId,
+                created.Protein.Id,
+                cancellationToken);
+        }
+
         return result switch
         {
             ProteinMutationResult.Success success => Results.Json(
@@ -169,6 +180,7 @@ public static class ProteinEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         ProteinService proteins,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var (root, error) = await ReadObjectAsync(context, cancellationToken);
@@ -235,6 +247,15 @@ public static class ProteinEndpoints
             ipAddress,
             actorUserId,
             cancellationToken);
+        if (result is ProteinMutationResult.Success updated)
+        {
+            await liveSync.SettingsUpdatedAsync(
+                LiveSyncPublisherExtensions.ProteinsEntity,
+                actorUserId,
+                updated.Protein.Id,
+                cancellationToken);
+        }
+
         return result switch
         {
             ProteinMutationResult.Success success => Results.Ok(
@@ -250,6 +271,7 @@ public static class ProteinEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         ProteinService proteins,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var (actorUserId, ipAddress, actorError) = await ResolveActorAsync(
@@ -262,6 +284,15 @@ public static class ProteinEndpoints
         }
 
         var result = await proteins.RetireAsync(id, ipAddress, actorUserId, cancellationToken);
+        if (result is ProteinMutationResult.Success retired)
+        {
+            await liveSync.SettingsUpdatedAsync(
+                LiveSyncPublisherExtensions.ProteinsEntity,
+                actorUserId,
+                retired.Protein.Id,
+                cancellationToken);
+        }
+
         return result switch
         {
             ProteinMutationResult.Success success => Results.Ok(
@@ -275,6 +306,7 @@ public static class ProteinEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         ProteinService proteins,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var (actorUserId, ipAddress, actorError) = await ResolveActorAsync(
@@ -287,6 +319,15 @@ public static class ProteinEndpoints
         }
 
         var result = await proteins.DeleteAsync(id, ipAddress, actorUserId, cancellationToken);
+        if (result is ProteinMutationResult.Success)
+        {
+            await liveSync.SettingsUpdatedAsync(
+                LiveSyncPublisherExtensions.ProteinsEntity,
+                actorUserId,
+                id,
+                cancellationToken);
+        }
+
         return result switch
         {
             ProteinMutationResult.Success => Results.NoContent(),

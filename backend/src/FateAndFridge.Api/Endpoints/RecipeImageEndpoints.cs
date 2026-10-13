@@ -4,6 +4,7 @@ using FateAndFridge.Api.Auth;
 using FateAndFridge.Api.Auth.Permissions;
 using FateAndFridge.Api.Errors;
 using FateAndFridge.Api.Imports;
+using FateAndFridge.Api.LiveSync;
 using FateAndFridge.Api.Services;
 using Microsoft.Extensions.Primitives;
 using Microsoft.Net.Http.Headers;
@@ -65,6 +66,7 @@ public static class RecipeImageEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         RecipeImageService images,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         if (!context.Request.HasFormContentType)
@@ -157,6 +159,10 @@ public static class RecipeImageEndpoints
             ipAddress,
             actorUserId,
             cancellationToken);
+        if (result is RecipeImageMutationResult.Success)
+        {
+            await liveSync.RecipeUpdatedAsync(actorUserId, id, cancellationToken);
+        }
 
         return result switch
         {
@@ -188,6 +194,7 @@ public static class RecipeImageEndpoints
         ICurrentActorProvider actorProvider,
         RecipeImageImportService imageImport,
         IImportThrottle throttle,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var body = await JsonBodyReader.ReadAsync(context, cancellationToken: cancellationToken);
@@ -257,6 +264,10 @@ public static class RecipeImageEndpoints
             ipAddress,
             actorUserId,
             cancellationToken);
+        if (result is ImportImageResult.Success)
+        {
+            await liveSync.RecipeUpdatedAsync(actorUserId, id, cancellationToken);
+        }
 
         return result switch
         {
@@ -293,6 +304,7 @@ public static class RecipeImageEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         RecipeImageService images,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var body = await JsonBodyReader.ReadAsync(context, cancellationToken: cancellationToken);
@@ -350,6 +362,10 @@ public static class RecipeImageEndpoints
             ipAddress,
             actorUserId,
             cancellationToken);
+        if (result is RecipeImageMutationResult.Success)
+        {
+            await liveSync.RecipeUpdatedAsync(actorUserId, id, cancellationToken);
+        }
 
         return result switch
         {
@@ -366,6 +382,7 @@ public static class RecipeImageEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         RecipeImageService images,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var (actorUserId, ipAddress, actorError) = await ResolveActorAsync(
@@ -378,6 +395,11 @@ public static class RecipeImageEndpoints
         }
 
         var result = await images.RemoveAsync(id, ipAddress, actorUserId, cancellationToken);
+        if (result is RecipeImageMutationResult.Success)
+        {
+            await liveSync.RecipeUpdatedAsync(actorUserId, id, cancellationToken);
+        }
+
         return result is RecipeImageMutationResult.Success ? Results.NoContent() : NotFound();
     }
 

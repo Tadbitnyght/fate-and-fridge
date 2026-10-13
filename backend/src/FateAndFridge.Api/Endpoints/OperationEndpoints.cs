@@ -1,6 +1,7 @@
 using FateAndFridge.Api.Auth;
 using FateAndFridge.Api.Auth.Permissions;
 using FateAndFridge.Api.Errors;
+using FateAndFridge.Api.LiveSync;
 using FateAndFridge.Api.Services;
 
 namespace FateAndFridge.Api.Endpoints;
@@ -37,6 +38,7 @@ public static class OperationEndpoints
         string operation_id,
         ICurrentActorProvider actorProvider,
         CalendarRandomizer randomizer,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         if (!Guid.TryParse(operation_id, out var operationId))
@@ -59,6 +61,15 @@ public static class OperationEndpoints
         var result = await randomizer
             .UndoAsync(operationId, actorUserId, cancellationToken)
             .ConfigureAwait(false);
+        if (result is CalendarUndoOutcome.Success undone)
+        {
+            await liveSync.CalendarUpdatedAsync(
+                actorUserId,
+                undone.Day.Entry?.Id,
+                operationId.ToString(),
+                cancellationToken);
+        }
+
         return result switch
         {
             CalendarUndoOutcome.Success success => Results.Ok(CalendarDayResponse.From(success.Day)),
@@ -74,6 +85,7 @@ public static class OperationEndpoints
         string batch_operation_id,
         ICurrentActorProvider actorProvider,
         BatchRerollService batch,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         if (!Guid.TryParse(batch_operation_id, out var batchOperationId))
@@ -96,6 +108,14 @@ public static class OperationEndpoints
         var result = await batch
             .UndoBatchAsync(batchOperationId, actorUserId, cancellationToken)
             .ConfigureAwait(false);
+        if (result is BatchUndoOutcome.Success)
+        {
+            await liveSync.CalendarUpdatedAsync(
+                actorUserId,
+                operationId: batchOperationId.ToString(),
+                cancellationToken: cancellationToken);
+        }
+
         return result switch
         {
             // The handle echoes the batch operation that was undone (the frozen

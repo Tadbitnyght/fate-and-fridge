@@ -3,6 +3,7 @@ using System.Text.Json;
 using FateAndFridge.Api.Auth;
 using FateAndFridge.Api.Auth.Permissions;
 using FateAndFridge.Api.Errors;
+using FateAndFridge.Api.LiveSync;
 using FateAndFridge.Api.Services;
 
 namespace FateAndFridge.Api.Endpoints;
@@ -113,6 +114,7 @@ public static class TagEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         TagService tags,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var (root, error) = await ReadObjectAsync(context, cancellationToken);
@@ -151,6 +153,15 @@ public static class TagEndpoints
         }
 
         var result = await tags.CreateAsync(name, ipAddress, actorUserId, cancellationToken);
+        if (result is TagMutationResult.Success created)
+        {
+            await liveSync.SettingsUpdatedAsync(
+                LiveSyncPublisherExtensions.TagsEntity,
+                actorUserId,
+                created.Tag.Id,
+                cancellationToken);
+        }
+
         return result switch
         {
             TagMutationResult.Success success => Results.Json(
@@ -167,6 +178,7 @@ public static class TagEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         TagService tags,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var (root, error) = await ReadObjectAsync(context, cancellationToken);
@@ -216,6 +228,15 @@ public static class TagEndpoints
             ipAddress,
             actorUserId,
             cancellationToken);
+        if (result is TagMutationResult.Success updated)
+        {
+            await liveSync.SettingsUpdatedAsync(
+                LiveSyncPublisherExtensions.TagsEntity,
+                actorUserId,
+                updated.Tag.Id,
+                cancellationToken);
+        }
+
         return result switch
         {
             TagMutationResult.Success success => Results.Ok(
@@ -231,6 +252,7 @@ public static class TagEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         TagService tags,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var (actorUserId, ipAddress, actorError) = await ResolveActorAsync(
@@ -243,6 +265,15 @@ public static class TagEndpoints
         }
 
         var result = await tags.DeleteAsync(id, ipAddress, actorUserId, cancellationToken);
+        if (result is TagMutationResult.Success)
+        {
+            await liveSync.SettingsUpdatedAsync(
+                LiveSyncPublisherExtensions.TagsEntity,
+                actorUserId,
+                id,
+                cancellationToken);
+        }
+
         return result switch
         {
             TagMutationResult.Success => Results.NoContent(),

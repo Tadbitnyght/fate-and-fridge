@@ -3,6 +3,7 @@ using System.Text.Json;
 using FateAndFridge.Api.Auth;
 using FateAndFridge.Api.Auth.Permissions;
 using FateAndFridge.Api.Errors;
+using FateAndFridge.Api.LiveSync;
 using FateAndFridge.Api.Services;
 
 namespace FateAndFridge.Api.Endpoints;
@@ -147,6 +148,7 @@ public static class IngredientEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         IngredientService ingredients,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var (root, error) = await ReadObjectAsync(context, cancellationToken);
@@ -235,6 +237,15 @@ public static class IngredientEndpoints
             ipAddress,
             actorUserId,
             cancellationToken);
+        if (result is IngredientMutationResult.Success created)
+        {
+            await liveSync.SettingsUpdatedAsync(
+                LiveSyncPublisherExtensions.IngredientsEntity,
+                actorUserId,
+                created.Ingredient.Id,
+                cancellationToken);
+        }
+
         return result switch
         {
             IngredientMutationResult.Success success => Results.Json(
@@ -251,6 +262,7 @@ public static class IngredientEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         IngredientService ingredients,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var (root, bodyError) = await ReadObjectAsync(context, cancellationToken);
@@ -282,6 +294,15 @@ public static class IngredientEndpoints
             ipAddress,
             actorUserId,
             cancellationToken);
+        if (result is IngredientMergeResult.Success merged)
+        {
+            await liveSync.SettingsUpdatedAsync(
+                LiveSyncPublisherExtensions.IngredientsEntity,
+                actorUserId,
+                merged.Target.Id,
+                cancellationToken);
+        }
+
         return result switch
         {
             IngredientMergeResult.Success success => Results.Ok(IngredientMergeResponse.From(success)),
@@ -315,6 +336,7 @@ public static class IngredientEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         IngredientService ingredients,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var (root, error) = await ReadObjectAsync(context, cancellationToken);
@@ -382,6 +404,15 @@ public static class IngredientEndpoints
             ipAddress,
             actorUserId,
             cancellationToken);
+        if (result is IngredientMutationResult.Success updated)
+        {
+            await liveSync.SettingsUpdatedAsync(
+                LiveSyncPublisherExtensions.IngredientsEntity,
+                actorUserId,
+                updated.Ingredient.Id,
+                cancellationToken);
+        }
+
         return result switch
         {
             IngredientMutationResult.Success success => Results.Ok(IngredientResponse.From(success.Ingredient)),
@@ -396,6 +427,7 @@ public static class IngredientEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         IngredientService ingredients,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var (root, error) = await ReadObjectAsync(context, cancellationToken);
@@ -439,6 +471,15 @@ public static class IngredientEndpoints
             ipAddress,
             actorUserId,
             cancellationToken);
+        if (result is IngredientAliasMutationResult.Success)
+        {
+            await liveSync.SettingsUpdatedAsync(
+                LiveSyncPublisherExtensions.IngredientsEntity,
+                actorUserId,
+                id,
+                cancellationToken);
+        }
+
         return result switch
         {
             IngredientAliasMutationResult.Success success => Results.Json(
@@ -456,6 +497,7 @@ public static class IngredientEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         IngredientService ingredients,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var (actorUserId, ipAddress, actorError) = await ResolveActorAsync(
@@ -473,6 +515,15 @@ public static class IngredientEndpoints
             ipAddress,
             actorUserId,
             cancellationToken);
+        if (result is IngredientAliasMutationResult.Success)
+        {
+            await liveSync.SettingsUpdatedAsync(
+                LiveSyncPublisherExtensions.IngredientsEntity,
+                actorUserId,
+                id,
+                cancellationToken);
+        }
+
         return result switch
         {
             IngredientAliasMutationResult.Success => Results.NoContent(),
@@ -485,6 +536,7 @@ public static class IngredientEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         IngredientService ingredients,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var (actorUserId, ipAddress, actorError) = await ResolveActorAsync(
@@ -497,6 +549,15 @@ public static class IngredientEndpoints
         }
 
         var result = await ingredients.RetireAsync(id, ipAddress, actorUserId, cancellationToken);
+        if (result is IngredientMutationResult.Success retired)
+        {
+            await liveSync.SettingsUpdatedAsync(
+                LiveSyncPublisherExtensions.IngredientsEntity,
+                actorUserId,
+                retired.Ingredient.Id,
+                cancellationToken);
+        }
+
         return result switch
         {
             IngredientMutationResult.Success success => Results.Ok(IngredientResponse.From(success.Ingredient)),
@@ -509,6 +570,7 @@ public static class IngredientEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         IngredientService ingredients,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var (actorUserId, ipAddress, actorError) = await ResolveActorAsync(
@@ -521,6 +583,15 @@ public static class IngredientEndpoints
         }
 
         var result = await ingredients.DeleteAsync(id, ipAddress, actorUserId, cancellationToken);
+        if (result is IngredientMutationResult.Success)
+        {
+            await liveSync.SettingsUpdatedAsync(
+                LiveSyncPublisherExtensions.IngredientsEntity,
+                actorUserId,
+                id,
+                cancellationToken);
+        }
+
         return result switch
         {
             IngredientMutationResult.Success => Results.NoContent(),

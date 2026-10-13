@@ -1,6 +1,7 @@
 using System.Data;
 using FateAndFridge.Api.Data;
 using FateAndFridge.Api.Domain;
+using FateAndFridge.Api.LiveSync;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
@@ -89,6 +90,7 @@ public sealed class AuthService(
     ILoginAttemptPolicy loginAttemptPolicy,
     ILoginIpThrottle loginIpThrottle,
     ILoginAttemptDelayer loginAttemptDelayer,
+    ILiveSyncPublisher liveSync,
     TimeProvider timeProvider,
     ILogger<AuthService> logger)
 {
@@ -261,11 +263,20 @@ public sealed class AuthService(
     }
 
     /// <summary>
-    /// Revokes one session server-side. The caller deletes the cookie. Returns
-    /// false when the session id does not exist.
+    /// Revokes one session server-side and notifies that session's live-sync
+    /// connections (docs/M9_PLAN.md §1.13). The caller deletes the cookie.
+    /// Returns false when the session id does not exist.
     /// </summary>
-    public Task<bool> LogoutAsync(long sessionId, CancellationToken cancellationToken = default) =>
-        sessionService.RevokeAsync(sessionId, LogoutRevocationReason, cancellationToken);
+    public async Task<bool> LogoutAsync(long sessionId, CancellationToken cancellationToken = default)
+    {
+        var revoked = await sessionService.RevokeAsync(sessionId, LogoutRevocationReason, cancellationToken);
+        if (revoked)
+        {
+            await liveSync.PublishSessionRevokedAsync(sessionId, cancellationToken);
+        }
+
+        return revoked;
+    }
 
     /// <summary>
     /// Changes the signed-in user's password (docs/API.md §5): verifies the
@@ -348,6 +359,11 @@ public sealed class AuthService(
 
         await transaction.CommitAsync(cancellationToken);
 
+        // Only after the commit: notify the revoked sibling sessions' live-sync
+        // connections and abort them (the rotating current session is excluded
+        // via exceptSessionId, docs/M9_PLAN.md §1.13).
+        await liveSync.PublishSessionRevokedForUserAsync(userId, sessionId, cancellationToken);
+
         // The cookie expiry is a client-side hint; the database idle window
         // (refreshed by the rotation) remains authoritative.
         return new ChangePasswordResult.Success(rotatedToken, now + SessionService.IdleTimeout);
@@ -410,6 +426,10 @@ public sealed class AuthService(
             cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
+
+        // Only after the commit: tell every revoked session's live-sync
+        // connections and abort them (docs/M9_PLAN.md §1.13).
+        await liveSync.PublishSessionRevokedForUserAsync(user.Id, exceptSessionId: null, cancellationToken);
 
         return new ResetPasswordResult.Success(temporaryPassword);
     }

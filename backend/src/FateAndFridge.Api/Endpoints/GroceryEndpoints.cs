@@ -2,6 +2,7 @@ using System.Globalization;
 using FateAndFridge.Api.Auth;
 using FateAndFridge.Api.Auth.Permissions;
 using FateAndFridge.Api.Errors;
+using FateAndFridge.Api.LiveSync;
 using FateAndFridge.Api.Services;
 
 namespace FateAndFridge.Api.Endpoints;
@@ -262,6 +263,7 @@ public static class GroceryEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         GroceryManualItemService manualItems,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var (actorUserId, actorError) = await CalendarEndpoints
@@ -293,6 +295,10 @@ public static class GroceryEndpoints
         var outcome = await manualItems
             .CreateAsync(validation.Request, actorUserId, cancellationToken)
             .ConfigureAwait(false);
+        if (outcome is GroceryManualItemOutcome.Success created)
+        {
+            await liveSync.GroceriesUpdatedAsync(actorUserId, created.Item.Id, cancellationToken);
+        }
 
         return outcome switch
         {
@@ -310,9 +316,10 @@ public static class GroceryEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         GroceryManualItemService manualItems,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
-        var (_, actorError) = await CalendarEndpoints
+        var (actorUserId, actorError) = await CalendarEndpoints
             .ResolveActorAsync(actorProvider, cancellationToken)
             .ConfigureAwait(false);
         if (actorError is not null)
@@ -341,6 +348,10 @@ public static class GroceryEndpoints
         var outcome = await manualItems
             .UpdateAsync(id, validation.Patch, cancellationToken)
             .ConfigureAwait(false);
+        if (outcome is GroceryManualItemOutcome.Success updated)
+        {
+            await liveSync.GroceriesUpdatedAsync(actorUserId, updated.Item.Id, cancellationToken);
+        }
 
         return outcome switch
         {
@@ -357,9 +368,10 @@ public static class GroceryEndpoints
         long id,
         ICurrentActorProvider actorProvider,
         GroceryManualItemService manualItems,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
-        var (_, actorError) = await CalendarEndpoints
+        var (actorUserId, actorError) = await CalendarEndpoints
             .ResolveActorAsync(actorProvider, cancellationToken)
             .ConfigureAwait(false);
         if (actorError is not null)
@@ -368,6 +380,10 @@ public static class GroceryEndpoints
         }
 
         var outcome = await manualItems.DeleteAsync(id, cancellationToken).ConfigureAwait(false);
+        if (outcome is GroceryManualItemDeleteOutcome.Deleted)
+        {
+            await liveSync.GroceriesUpdatedAsync(actorUserId, id, cancellationToken);
+        }
 
         return outcome switch
         {
@@ -474,9 +490,10 @@ public static class GroceryEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         GroceryStapleService staples,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
-        var (_, actorError) = await CalendarEndpoints
+        var (actorUserId, actorError) = await CalendarEndpoints
             .ResolveActorAsync(actorProvider, cancellationToken)
             .ConfigureAwait(false);
         if (actorError is not null)
@@ -503,6 +520,11 @@ public static class GroceryEndpoints
         }
 
         var outcome = await staples.CreateAsync(validation.Request, cancellationToken).ConfigureAwait(false);
+        if (outcome is GroceryStapleOutcome.Success created)
+        {
+            await liveSync.GroceriesUpdatedAsync(actorUserId, created.Staple.Id, cancellationToken);
+        }
+
         return outcome switch
         {
             GroceryStapleOutcome.Success success => Results.Json(
@@ -520,9 +542,10 @@ public static class GroceryEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         GroceryStapleService staples,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
-        var (_, actorError) = await CalendarEndpoints
+        var (actorUserId, actorError) = await CalendarEndpoints
             .ResolveActorAsync(actorProvider, cancellationToken)
             .ConfigureAwait(false);
         if (actorError is not null)
@@ -549,6 +572,11 @@ public static class GroceryEndpoints
         }
 
         var outcome = await staples.UpdateAsync(id, validation.Patch, cancellationToken).ConfigureAwait(false);
+        if (outcome is GroceryStapleOutcome.Success updated)
+        {
+            await liveSync.GroceriesUpdatedAsync(actorUserId, updated.Staple.Id, cancellationToken);
+        }
+
         return outcome switch
         {
             GroceryStapleOutcome.Success success =>
@@ -566,6 +594,7 @@ public static class GroceryEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         GroceryStapleService staples,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var (actorUserId, actorError) = await CalendarEndpoints
@@ -597,6 +626,10 @@ public static class GroceryEndpoints
         var outcome = await staples
             .AddToListAsync(id, validation.Request, actorUserId, cancellationToken)
             .ConfigureAwait(false);
+        if (outcome is GroceryStapleAddOutcome.Success added)
+        {
+            await liveSync.GroceriesUpdatedAsync(actorUserId, added.Item.Id, cancellationToken);
+        }
 
         return outcome switch
         {
@@ -616,21 +649,24 @@ public static class GroceryEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         GroceryCheckStateService checkState,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken) =>
-        SetCheckedAsync(context, actorProvider, checkState, isChecked: true, cancellationToken);
+        SetCheckedAsync(context, actorProvider, checkState, isChecked: true, liveSync, cancellationToken);
 
     private static Task<IResult> UncheckAsync(
         HttpContext context,
         ICurrentActorProvider actorProvider,
         GroceryCheckStateService checkState,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken) =>
-        SetCheckedAsync(context, actorProvider, checkState, isChecked: false, cancellationToken);
+        SetCheckedAsync(context, actorProvider, checkState, isChecked: false, liveSync, cancellationToken);
 
     private static async Task<IResult> SetCheckedAsync(
         HttpContext context,
         ICurrentActorProvider actorProvider,
         GroceryCheckStateService checkState,
         bool isChecked,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var (actorUserId, actorError) = await CalendarEndpoints
@@ -662,6 +698,7 @@ public static class GroceryEndpoints
         var state = await checkState
             .SetCheckedAsync(validation.Identity, isChecked, actorUserId, cancellationToken)
             .ConfigureAwait(false);
+        await liveSync.GroceriesUpdatedAsync(actorUserId, state.Identity, cancellationToken);
         return Results.Ok(GroceryCheckStateResponse.From(state));
     }
 

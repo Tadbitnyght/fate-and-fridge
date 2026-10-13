@@ -1,7 +1,9 @@
+using FateAndFridge.Api.LiveSync;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace FateAndFridge.Api.Tests.Support;
 
@@ -14,10 +16,18 @@ public sealed class ApiFactory(
     string connectionString = ApiFactory.DummyConnectionString,
     bool migrateOnStartup = false,
     string? dataDir = null,
-    Action<IServiceCollection>? configureServices = null) : WebApplicationFactory<Program>
+    Action<IServiceCollection>? configureServices = null,
+    RecordingLiveSyncPublisher? liveSyncPublisher = null) : WebApplicationFactory<Program>
 {
     public const string DummyConnectionString =
         "Host=localhost;Port=5432;Database=fatefridge_tests;Username=fatefridge;Password=fatefridge";
+
+    /// <summary>
+    /// When supplied, the recording <see cref="ILiveSyncPublisher"/> registered
+    /// into the test host so a test can assert the exact events a committed
+    /// write emitted (M9-02…M9-05) without opening a socket.
+    /// </summary>
+    public RecordingLiveSyncPublisher? LiveSyncPublisher { get; } = liveSyncPublisher;
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -37,11 +47,21 @@ public sealed class ApiFactory(
             builder.UseSetting("DataDir", dataDir);
         }
 
-        // Tests inject counting IReferenceUsageChecker fakes (M2-06 seam) and
-        // other overrides without replacing the whole factory.
-        if (configureServices is not null)
+        // Tests inject counting IReferenceUsageChecker fakes (M2-06 seam), the
+        // recording live-sync publisher, and other overrides without replacing
+        // the whole factory.
+        if (LiveSyncPublisher is not null || configureServices is not null)
         {
-            builder.ConfigureTestServices(configureServices);
+            builder.ConfigureTestServices(services =>
+            {
+                if (LiveSyncPublisher is not null)
+                {
+                    services.RemoveAll<ILiveSyncPublisher>();
+                    services.AddSingleton<ILiveSyncPublisher>(LiveSyncPublisher);
+                }
+
+                configureServices?.Invoke(services);
+            });
         }
     }
 }

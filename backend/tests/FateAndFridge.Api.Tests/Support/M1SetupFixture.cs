@@ -42,8 +42,9 @@ public sealed class M1SetupFixture : IAsyncLifetime
 
     public ApiFactory CreateFactory(
         string? dataDir = null,
-        Action<IServiceCollection>? configureServices = null) =>
-        new(ConnectionString, migrateOnStartup: false, dataDir, configureServices);
+        Action<IServiceCollection>? configureServices = null,
+        RecordingLiveSyncPublisher? liveSyncPublisher = null) =>
+        new(ConnectionString, migrateOnStartup: false, dataDir, configureServices, liveSyncPublisher);
 
     /// <summary>
     /// Removes setup state, M1 authentication rows, M3 recipe rows, M5 calendar
@@ -57,6 +58,10 @@ public sealed class M1SetupFixture : IAsyncLifetime
         await using var context = CreateContext();
         await context.Database.ExecuteSqlRawAsync(
             """
+            DELETE FROM grocery_check_state;
+            DELETE FROM manual_grocery_items;
+            DELETE FROM grocery_staples;
+            DELETE FROM user_grocery_preferences;
             DELETE FROM calendar_entry_history;
             DELETE FROM calendar_entries;
             DELETE FROM recipe_tags;

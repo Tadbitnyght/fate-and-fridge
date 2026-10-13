@@ -242,6 +242,7 @@ public sealed class AuthServiceTests(M1SetupFixture fixture) : IAsyncLifetime
             new LockoutLoginAttemptPolicy(),
             throttle ?? new LoginIpThrottle(clock, Options.Create(new LoginThrottleOptions())),
             delayer ?? new RecordingLoginAttemptDelayer(),
+            new RecordingLiveSyncPublisher(),
             clock,
             logger ?? NullLogger<AuthService>.Instance);
 

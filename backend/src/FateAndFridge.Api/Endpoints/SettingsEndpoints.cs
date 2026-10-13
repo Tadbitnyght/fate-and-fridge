@@ -4,6 +4,7 @@ using FateAndFridge.Api.Auth.Permissions;
 using FateAndFridge.Api.Data.Configurations;
 using FateAndFridge.Api.Domain;
 using FateAndFridge.Api.Errors;
+using FateAndFridge.Api.LiveSync;
 using FateAndFridge.Api.Services;
 using Microsoft.AspNetCore.Antiforgery;
 
@@ -48,7 +49,9 @@ public static class SettingsEndpoints
     /// </summary>
     private static async Task<IResult> PatchSecuritySettingsAsync(
         HttpContext context,
+        ICurrentActorProvider actorProvider,
         SecuritySettingsService securitySettings,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var parsed = await ReadObjectAsync(context, cancellationToken);
@@ -146,6 +149,23 @@ public static class SettingsEndpoints
 
         var updated = new SecuritySettings(resultingEnabled, resultingRanges, resultingProxies);
         await securitySettings.SaveAsync(updated, cancellationToken);
+
+        // Resolve the actor only after the write has committed, then fail closed
+        // when it cannot be resolved rather than silently emitting a null actor
+        // (RequireAdmin makes this defensive, but a null actor would misattribute
+        // the event to the single-user system actor).
+        var (actorUserId, actorError) = await CalendarEndpoints
+            .ResolveActorAsync(actorProvider, cancellationToken)
+            .ConfigureAwait(false);
+        if (actorError is not null)
+        {
+            return actorError;
+        }
+
+        await liveSync.SettingsUpdatedAsync(
+            LiveSyncPublisherExtensions.SettingsEntity,
+            actorUserId,
+            cancellationToken: cancellationToken);
         return Results.Ok(updated);
     }
 
@@ -214,7 +234,9 @@ public static class SettingsEndpoints
 
     private static async Task<IResult> PatchHouseholdSettingsAsync(
         HttpContext context,
+        ICurrentActorProvider actorProvider,
         HouseholdSettingsService settingsService,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var body = await JsonBodyReader.ReadAsync(context, cancellationToken: cancellationToken);
@@ -249,6 +271,23 @@ public static class SettingsEndpoints
         }
 
         var settings = await settingsService.ApplyPatchAsync(validation.Patch, cancellationToken);
+
+        // Resolve the actor only after the write has committed, then fail closed
+        // when it cannot be resolved rather than silently emitting a null actor
+        // (RequireAdmin makes this defensive, but a null actor would misattribute
+        // the event to the single-user system actor).
+        var (actorUserId, actorError) = await CalendarEndpoints
+            .ResolveActorAsync(actorProvider, cancellationToken)
+            .ConfigureAwait(false);
+        if (actorError is not null)
+        {
+            return actorError;
+        }
+
+        await liveSync.SettingsUpdatedAsync(
+            LiveSyncPublisherExtensions.SettingsEntity,
+            actorUserId,
+            cancellationToken: cancellationToken);
         return Results.Ok(HouseholdSettingsResponse.From(settings));
     }
 
@@ -266,6 +305,7 @@ public static class SettingsEndpoints
         HouseholdSettingsService householdSettings,
         PermissionService permissionService,
         IAntiforgery antiforgery,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         ResponseCache.NoStore(context);
@@ -349,6 +389,20 @@ public static class SettingsEndpoints
                 context.Connection.RemoteIpAddress?.ToString(),
                 UserAgent(context),
                 cancellationToken);
+
+            if (result is AuthModeSwitchResult.Success)
+            {
+                // The caller is the single-user system actor: this route only ever
+                // succeeds during the single→multiuser transition, and it returns
+                // 409 AUTH_MODE_ALREADY_MULTIUSER before this point when the
+                // household is already multiuser. There is therefore no session
+                // user to attribute, so actor_user_id is intentionally null (the
+                // system-actor envelope, docs/M9_PLAN.md §2.2).
+                await liveSync.SettingsUpdatedAsync(
+                    LiveSyncPublisherExtensions.SettingsEntity,
+                    actorUserId: null,
+                    cancellationToken: cancellationToken);
+            }
 
             return result switch
             {

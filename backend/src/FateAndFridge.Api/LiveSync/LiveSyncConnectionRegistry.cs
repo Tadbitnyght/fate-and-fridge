@@ -116,4 +116,21 @@ public sealed class LiveSyncConnectionRegistry
         _bySession.TryGetValue(sessionId, out var sessionConnections)
             ? sessionConnections.Values.ToList()
             : [];
+
+    /// <summary>
+    /// Snapshot of every registered connection, used by the publisher's
+    /// per-broadcast session re-validation (docs/M9_PLAN.md §1.13).
+    /// </summary>
+    public IReadOnlyList<LiveSyncConnection> GetAll() => _connections.Values.ToList();
+
+    /// <summary>
+    /// Snapshot of every registered connection belonging to
+    /// <paramref name="userId"/>, optionally excluding one session id (the
+    /// password-change "revoke others" case). Used for user-scoped revocation.
+    /// </summary>
+    public IReadOnlyList<LiveSyncConnection> GetConnectionsForUser(long userId, long? exceptSessionId = null) =>
+        _connections.Values
+            .Where(connection => connection.ActorUserId == userId
+                && (exceptSessionId is null || connection.SessionId != exceptSessionId.Value))
+            .ToList();
 }

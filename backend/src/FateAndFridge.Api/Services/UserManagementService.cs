@@ -3,6 +3,7 @@ using FateAndFridge.Api.Auth.Permissions;
 using FateAndFridge.Api.Data;
 using FateAndFridge.Api.Data.Configurations;
 using FateAndFridge.Api.Domain;
+using FateAndFridge.Api.LiveSync;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -54,6 +55,7 @@ public sealed class UserManagementService(
     AppDbContext dbContext,
     IPasswordHasher passwordHasher,
     SessionService sessionService,
+    ILiveSyncPublisher liveSync,
     TimeProvider timeProvider,
     ILogger<UserManagementService> logger)
 {
@@ -349,6 +351,13 @@ public sealed class UserManagementService(
 
         await transaction.CommitAsync(cancellationToken);
 
+        if (roleChanged)
+        {
+            // Only after the commit: notify the revoked sessions' live-sync
+            // connections and abort them (docs/M9_PLAN.md §1.13).
+            await liveSync.PublishSessionRevokedForUserAsync(id, exceptSessionId: null, cancellationToken);
+        }
+
         return new UserMutationResult.Success(
             await GetAsync(id, cancellationToken) ?? throw new InvalidOperationException("User disappeared."),
             SessionsRevoked: roleChanged);
@@ -468,6 +477,13 @@ public sealed class UserManagementService(
         }
 
         await transaction.CommitAsync(cancellationToken);
+
+        if (!activate)
+        {
+            // Only after the commit: notify the revoked sessions' live-sync
+            // connections and abort them (docs/M9_PLAN.md §1.13).
+            await liveSync.PublishSessionRevokedForUserAsync(id, exceptSessionId: null, cancellationToken);
+        }
 
         logger.LogInformation(
             "{Action} user {UserId}",

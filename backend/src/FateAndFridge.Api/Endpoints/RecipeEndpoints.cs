@@ -5,6 +5,7 @@ using FateAndFridge.Api.Auth.Permissions;
 using FateAndFridge.Api.Data.Configurations;
 using FateAndFridge.Api.Domain;
 using FateAndFridge.Api.Errors;
+using FateAndFridge.Api.LiveSync;
 using FateAndFridge.Api.Services;
 
 namespace FateAndFridge.Api.Endpoints;
@@ -427,6 +428,7 @@ public static class RecipeEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         RecipeService recipes,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var (root, error) = await ReadObjectAsync(context, cancellationToken);
@@ -452,6 +454,11 @@ public static class RecipeEndpoints
         }
 
         var result = await recipes.CreateAsync(request, ipAddress, actorUserId, cancellationToken);
+        if (result is RecipeMutationResult.Success created)
+        {
+            await liveSync.RecipeUpdatedAsync(actorUserId, created.Recipe.Id, cancellationToken);
+        }
+
         return result switch
         {
             RecipeMutationResult.Success success => Results.Json(
@@ -477,6 +484,7 @@ public static class RecipeEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         RecipeService recipes,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var (root, error) = await ReadObjectAsync(context, cancellationToken);
@@ -502,6 +510,11 @@ public static class RecipeEndpoints
         }
 
         var result = await recipes.UpdateAsync(id, request, ipAddress, actorUserId, cancellationToken);
+        if (result is RecipeMutationResult.Success updated)
+        {
+            await liveSync.RecipeUpdatedAsync(actorUserId, updated.Recipe.Id, cancellationToken);
+        }
+
         return result switch
         {
             RecipeMutationResult.Success success => Results.Ok(RecipeDetailResponse.From(success.Recipe)),

@@ -3,6 +3,7 @@ using System.Text.Json;
 using FateAndFridge.Api.Auth;
 using FateAndFridge.Api.Auth.Permissions;
 using FateAndFridge.Api.Errors;
+using FateAndFridge.Api.LiveSync;
 using FateAndFridge.Api.Services;
 
 namespace FateAndFridge.Api.Endpoints;
@@ -123,6 +124,7 @@ public static class DepartmentEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         DepartmentService departments,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var (root, error) = await ReadObjectAsync(context, cancellationToken);
@@ -161,6 +163,15 @@ public static class DepartmentEndpoints
         }
 
         var result = await departments.CreateAsync(name, ipAddress, actorUserId, cancellationToken);
+        if (result is DepartmentMutationResult.Success created)
+        {
+            await liveSync.SettingsUpdatedAsync(
+                LiveSyncPublisherExtensions.DepartmentsEntity,
+                actorUserId,
+                created.Department.Id,
+                cancellationToken);
+        }
+
         return result switch
         {
             DepartmentMutationResult.Success success => Results.Json(
@@ -176,6 +187,7 @@ public static class DepartmentEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         DepartmentService departments,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var (root, error) = await ReadObjectAsync(context, cancellationToken);
@@ -242,6 +254,15 @@ public static class DepartmentEndpoints
             ipAddress,
             actorUserId,
             cancellationToken);
+        if (result is DepartmentMutationResult.Success updated)
+        {
+            await liveSync.SettingsUpdatedAsync(
+                LiveSyncPublisherExtensions.DepartmentsEntity,
+                actorUserId,
+                updated.Department.Id,
+                cancellationToken);
+        }
+
         return result switch
         {
             DepartmentMutationResult.Success success => Results.Ok(
@@ -256,6 +277,7 @@ public static class DepartmentEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         DepartmentService departments,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var (actorUserId, ipAddress, actorError) = await ResolveActorAsync(
@@ -268,6 +290,15 @@ public static class DepartmentEndpoints
         }
 
         var result = await departments.RetireAsync(id, ipAddress, actorUserId, cancellationToken);
+        if (result is DepartmentMutationResult.Success retired)
+        {
+            await liveSync.SettingsUpdatedAsync(
+                LiveSyncPublisherExtensions.DepartmentsEntity,
+                actorUserId,
+                retired.Department.Id,
+                cancellationToken);
+        }
+
         return result switch
         {
             DepartmentMutationResult.Success success => Results.Ok(
@@ -281,6 +312,7 @@ public static class DepartmentEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         DepartmentService departments,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var (actorUserId, ipAddress, actorError) = await ResolveActorAsync(
@@ -293,6 +325,15 @@ public static class DepartmentEndpoints
         }
 
         var result = await departments.DeleteAsync(id, ipAddress, actorUserId, cancellationToken);
+        if (result is DepartmentMutationResult.Success)
+        {
+            await liveSync.SettingsUpdatedAsync(
+                LiveSyncPublisherExtensions.DepartmentsEntity,
+                actorUserId,
+                id,
+                cancellationToken);
+        }
+
         return result switch
         {
             DepartmentMutationResult.Success => Results.NoContent(),
@@ -305,6 +346,7 @@ public static class DepartmentEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         DepartmentService departments,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var (root, error) = await ReadObjectAsync(context, cancellationToken);
@@ -361,6 +403,10 @@ public static class DepartmentEndpoints
         }
 
         var success = (DepartmentReorderResult.Success)result;
+        await liveSync.SettingsUpdatedAsync(
+            LiveSyncPublisherExtensions.DepartmentsEntity,
+            actorUserId,
+            cancellationToken: cancellationToken);
         return Results.Ok(success.Departments.Select(DepartmentResponse.From).ToArray());
     }
 

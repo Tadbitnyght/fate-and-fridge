@@ -21,4 +21,17 @@ public interface ILiveSyncPublisher
     /// call sites; M9-01 only provides the method.
     /// </summary>
     Task PublishSessionRevokedAsync(long sessionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Sends <see cref="LiveSyncEventType.SessionRevoked"/> to every connection
+    /// belonging to <paramref name="userId"/> and then aborts them, excluding the
+    /// session <paramref name="exceptSessionId"/> when supplied (docs/M9_PLAN.md
+    /// §1.13). Used by password reset, user disable, privilege change, and the
+    /// password-change "revoke others" path; the per-connection user id comes
+    /// from the registry metadata.
+    /// </summary>
+    Task PublishSessionRevokedForUserAsync(
+        long userId,
+        long? exceptSessionId = null,
+        CancellationToken cancellationToken = default);
 }

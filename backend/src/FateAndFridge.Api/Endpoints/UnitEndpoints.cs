@@ -5,6 +5,7 @@ using FateAndFridge.Api.Auth.Permissions;
 using FateAndFridge.Api.Data.Configurations;
 using FateAndFridge.Api.Domain;
 using FateAndFridge.Api.Errors;
+using FateAndFridge.Api.LiveSync;
 using FateAndFridge.Api.Services;
 
 namespace FateAndFridge.Api.Endpoints;
@@ -137,6 +138,7 @@ public static class UnitEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         UnitService units,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var (root, error) = await ReadObjectAsync(context, cancellationToken);
@@ -215,6 +217,15 @@ public static class UnitEndpoints
             ipAddress,
             actorUserId,
             cancellationToken);
+        if (result is UnitMutationResult.Success created)
+        {
+            await liveSync.SettingsUpdatedAsync(
+                LiveSyncPublisherExtensions.UnitsEntity,
+                actorUserId,
+                created.Unit.Id,
+                cancellationToken);
+        }
+
         return result switch
         {
             UnitMutationResult.Success success => Results.Json(
@@ -231,6 +242,7 @@ public static class UnitEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         UnitService units,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var (root, error) = await ReadObjectAsync(context, cancellationToken);
@@ -311,6 +323,15 @@ public static class UnitEndpoints
             ipAddress,
             actorUserId,
             cancellationToken);
+        if (result is UnitMutationResult.Success updated)
+        {
+            await liveSync.SettingsUpdatedAsync(
+                LiveSyncPublisherExtensions.UnitsEntity,
+                actorUserId,
+                updated.Unit.Id,
+                cancellationToken);
+        }
+
         return result switch
         {
             UnitMutationResult.Success success => Results.Ok(UnitResponse.From(success.Unit)),
@@ -325,6 +346,7 @@ public static class UnitEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         UnitService units,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var (root, error) = await ReadObjectAsync(context, cancellationToken);
@@ -368,6 +390,15 @@ public static class UnitEndpoints
             ipAddress,
             actorUserId,
             cancellationToken);
+        if (result is UnitAliasMutationResult.Success)
+        {
+            await liveSync.SettingsUpdatedAsync(
+                LiveSyncPublisherExtensions.UnitsEntity,
+                actorUserId,
+                id,
+                cancellationToken);
+        }
+
         return result switch
         {
             UnitAliasMutationResult.Success success => Results.Json(
@@ -385,6 +416,7 @@ public static class UnitEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         UnitService units,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var (actorUserId, ipAddress, actorError) = await ResolveActorAsync(
@@ -402,6 +434,15 @@ public static class UnitEndpoints
             ipAddress,
             actorUserId,
             cancellationToken);
+        if (result is UnitAliasMutationResult.Success)
+        {
+            await liveSync.SettingsUpdatedAsync(
+                LiveSyncPublisherExtensions.UnitsEntity,
+                actorUserId,
+                id,
+                cancellationToken);
+        }
+
         return result switch
         {
             UnitAliasMutationResult.Success => Results.NoContent(),
@@ -414,6 +455,7 @@ public static class UnitEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         UnitService units,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var (actorUserId, ipAddress, actorError) = await ResolveActorAsync(
@@ -426,6 +468,15 @@ public static class UnitEndpoints
         }
 
         var result = await units.RetireAsync(id, ipAddress, actorUserId, cancellationToken);
+        if (result is UnitMutationResult.Success retired)
+        {
+            await liveSync.SettingsUpdatedAsync(
+                LiveSyncPublisherExtensions.UnitsEntity,
+                actorUserId,
+                retired.Unit.Id,
+                cancellationToken);
+        }
+
         return result switch
         {
             UnitMutationResult.Success success => Results.Ok(UnitResponse.From(success.Unit)),
@@ -438,6 +489,7 @@ public static class UnitEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         UnitService units,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var (actorUserId, ipAddress, actorError) = await ResolveActorAsync(
@@ -450,6 +502,15 @@ public static class UnitEndpoints
         }
 
         var result = await units.DeleteAsync(id, ipAddress, actorUserId, cancellationToken);
+        if (result is UnitMutationResult.Success)
+        {
+            await liveSync.SettingsUpdatedAsync(
+                LiveSyncPublisherExtensions.UnitsEntity,
+                actorUserId,
+                id,
+                cancellationToken);
+        }
+
         return result switch
         {
             UnitMutationResult.Success => Results.NoContent(),

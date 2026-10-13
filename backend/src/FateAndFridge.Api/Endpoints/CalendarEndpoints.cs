@@ -3,6 +3,7 @@ using System.Text.Json;
 using FateAndFridge.Api.Auth;
 using FateAndFridge.Api.Auth.Permissions;
 using FateAndFridge.Api.Errors;
+using FateAndFridge.Api.LiveSync;
 using FateAndFridge.Api.Services;
 
 namespace FateAndFridge.Api.Endpoints;
@@ -302,6 +303,7 @@ public static class CalendarEndpoints
         ICurrentActorProvider actorProvider,
         HouseholdClock clock,
         CalendarService calendar,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         if (!TryReadDate(date, out var parsedDate, out var error))
@@ -336,6 +338,14 @@ public static class CalendarEndpoints
         }
 
         var result = await calendar.UpsertAsync(parsedDate, request, actorUserId, cancellationToken);
+        if (result is CalendarMutationResult.Success upserted)
+        {
+            await liveSync.CalendarUpdatedAsync(
+                actorUserId,
+                upserted.Day.Entry?.Id,
+                cancellationToken: cancellationToken);
+        }
+
         return Map(result);
     }
 
@@ -344,6 +354,7 @@ public static class CalendarEndpoints
         HouseholdClock clock,
         ICurrentActorProvider actorProvider,
         CalendarService calendar,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         if (!TryReadDate(date, out var parsedDate, out var error))
@@ -366,6 +377,14 @@ public static class CalendarEndpoints
         }
 
         var result = await calendar.DeleteAsync(parsedDate, actorUserId, cancellationToken);
+        if (result is CalendarMutationResult.Success deleted)
+        {
+            await liveSync.CalendarUpdatedAsync(
+                actorUserId,
+                deleted.Day.Entry?.Id,
+                cancellationToken: cancellationToken);
+        }
+
         return result is CalendarMutationResult.Success ? Results.NoContent() : Map(result);
     }
 
@@ -375,8 +394,9 @@ public static class CalendarEndpoints
         ICurrentActorProvider actorProvider,
         HouseholdClock clock,
         CalendarService calendar,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken) =>
-        SetLockAsync(date, locked: true, actorProvider, clock, calendar, cancellationToken);
+        SetLockAsync(date, locked: true, actorProvider, clock, calendar, liveSync, cancellationToken);
 
     private static Task<IResult> UnlockAsync(
         string date,
@@ -384,8 +404,9 @@ public static class CalendarEndpoints
         ICurrentActorProvider actorProvider,
         HouseholdClock clock,
         CalendarService calendar,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken) =>
-        SetLockAsync(date, locked: false, actorProvider, clock, calendar, cancellationToken);
+        SetLockAsync(date, locked: false, actorProvider, clock, calendar, liveSync, cancellationToken);
 
     private static async Task<IResult> SetLockAsync(
         string date,
@@ -393,6 +414,7 @@ public static class CalendarEndpoints
         ICurrentActorProvider actorProvider,
         HouseholdClock clock,
         CalendarService calendar,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         if (!TryReadDate(date, out var parsedDate, out var error))
@@ -415,6 +437,14 @@ public static class CalendarEndpoints
         }
 
         var result = await calendar.SetLockAsync(parsedDate, locked, actorUserId, cancellationToken);
+        if (result is CalendarMutationResult.Success lockedDay)
+        {
+            await liveSync.CalendarLockChangedAsync(
+                actorUserId,
+                lockedDay.Day.Entry?.Id,
+                cancellationToken);
+        }
+
         return Map(result);
     }
 
@@ -423,6 +453,7 @@ public static class CalendarEndpoints
         ICurrentActorProvider actorProvider,
         HouseholdClock clock,
         CalendarRandomizer randomizer,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         if (!TryReadDate(date, out var parsedDate, out var error))
@@ -445,6 +476,15 @@ public static class CalendarEndpoints
         }
 
         var result = await randomizer.RerollAsync(parsedDate, actorUserId, cancellationToken);
+        if (result is CalendarRerollOutcome.Success rerolled)
+        {
+            await liveSync.CalendarUpdatedAsync(
+                actorUserId,
+                rerolled.Day.Entry?.Id,
+                rerolled.OperationId.ToString(),
+                cancellationToken);
+        }
+
         return result switch
         {
             CalendarRerollOutcome.Success success => Results.Ok(new CalendarRerollResponse(
@@ -524,6 +564,7 @@ public static class CalendarEndpoints
         HttpContext context,
         ICurrentActorProvider actorProvider,
         BatchRerollService batch,
+        ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken)
     {
         var (root, bodyError) = await ReadObjectAsync(context, cancellationToken);
@@ -549,6 +590,14 @@ public static class CalendarEndpoints
         }
 
         var result = await batch.ApplyAsync(token, actorUserId, cancellationToken);
+        if (result is BatchApplyOutcome.Success applied)
+        {
+            await liveSync.CalendarUpdatedAsync(
+                actorUserId,
+                operationId: applied.BatchOperationId.ToString(),
+                cancellationToken: cancellationToken);
+        }
+
         return result switch
         {
             BatchApplyOutcome.Success success => Results.Ok(new BatchApplyResponse(
