@@ -299,18 +299,19 @@ export const MILESTONES: Milestone[] = [
     id: 'M9',
     number: 9,
     name: 'Live Sync',
-    status: 'planned',
+    status: 'in_progress',
     summary:
-      'Multi-device updates over WebSockets with authenticated connections and query invalidation.',
+      'Multi-device updates over an authenticated SignalR hub with coarse events and client query invalidation.',
     features: [
       'WebSocket authentication',
       'Calendar, grocery, and lock update events',
+      'Recipe, settings, and reference-data update events',
+      'Session revocation and socket teardown',
       'Query invalidation on events',
       'Two-device sync tests',
     ],
-    issues: [],
-    issuesNote:
-      'Planned in docs/MILESTONES.md; GitHub issues are created when the milestone starts.',
+    issues: [120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130],
+    issuesNote: 'Tracking #120; M9-01…M9-10: #121–#130. Runbook: docs/M9_PLAN.md.',
   },
   {
     id: 'M10',
