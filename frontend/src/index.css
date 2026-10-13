@@ -202,6 +202,35 @@ body {
   font-size: 0.9rem;
 }
 
+/* Live-sync indicator (docs/M9_PLAN.md §1.9): non-blocking, colour-independent
+   because the glyph and label carry the state. */
+.live-sync-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.live-sync-status__icon {
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
+.live-sync-status--connected {
+  background: var(--ok-bg);
+  color: var(--ok-text);
+}
+
+.live-sync-status--disconnected {
+  background: var(--bad-bg);
+  color: var(--bad-text);
+}
+
 .app-nav__list {
   display: flex;
   flex-wrap: wrap;

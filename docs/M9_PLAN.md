@@ -82,7 +82,11 @@ to the Lead before implementing.
     re-validated per broadcast; logging out, an admin revoking sessions,
     disabling the user, or the session expiring emits `session.revoked` to that
     session's connections and **aborts** them. A revoked session cannot keep
-    receiving household events.
+    receiving household events. If the per-broadcast re-validation read itself
+    fails, the broadcast **fails closed**: that event is skipped for every
+    connection (bounded staleness — it self-heals on the next event or a client
+    reconnect) rather than delivered to unvalidated sockets; the connections are
+    not aborted, since a read failure is not proof of revocation.
 14. **Scope.** M9 is live-sync notifications + client invalidation + the guards
     and tests around them. It is **not** a persisted event log, presence/typing
     indicators, collaborative editing, RPC over sockets, or optimistic

@@ -684,6 +684,54 @@ public sealed class M9LiveSyncHubTests(M1SetupFixture fixture) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Broadcast_skips_delivery_when_revalidation_fails_and_does_not_abort_connections()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        await MarkSetupCompletedAsync(cancellationToken);
+
+        using var factory = fixture.CreateFactory();
+        var user = await SeedUserWithPasswordAsync("unvalidated", UserPassword, cancellationToken);
+        var sessionA = await CreateSessionAsync(factory, user, cancellationToken);
+        var sessionB = await CreateSessionAsync(factory, user, cancellationToken);
+
+        await using var connectionA = CreateConnection(factory, sessionA);
+        await using var connectionB = CreateConnection(factory, sessionB);
+        var collectorA = Track(connectionA);
+        var collectorB = Track(connectionB);
+        await StartAndWaitAsync(factory, connectionA, sessionA.SessionId, cancellationToken);
+        await StartAndWaitAsync(factory, connectionB, sessionB.SessionId, cancellationToken);
+
+        // Fail closed (docs/M9_PLAN.md §1.13): when the per-broadcast
+        // re-validation read cannot complete, the event is skipped for every
+        // connection instead of being delivered to sockets whose sessions could
+        // not be re-validated. A read failure is not proof of revocation, so the
+        // connections must also stay open.
+        var publisher = new SignalRLiveSyncPublisher(
+            factory.Services.GetRequiredService<IHubContext<LiveSyncHub>>(),
+            GetRegistry(factory),
+            new ThrowingScopeFactory(),
+            NullLogger<SignalRLiveSyncPublisher>.Instance);
+
+        await publisher.PublishAsync(
+            LiveSyncEvent.Create(
+                LiveSyncEventType.GroceriesUpdated,
+                entity: "groceries",
+                actorUserId: user.Id),
+            cancellationToken);
+
+        await Task.Delay(500, cancellationToken);
+
+        collectorA.Events.Should().BeEmpty();
+        collectorB.Events.Should().BeEmpty();
+        collectorA.Closed.Task.IsCompleted.Should().BeFalse();
+        collectorB.Closed.Task.IsCompleted.Should().BeFalse();
+        connectionA.State.Should().Be(HubConnectionState.Connected);
+        connectionB.State.Should().Be(HubConnectionState.Connected);
+        GetRegistry(factory).Count.Should().Be(2);
+    }
+
+    [Fact]
     public async Task A_revoked_session_receives_no_further_events()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -1206,5 +1254,15 @@ public sealed class M9LiveSyncHubTests(M1SetupFixture fixture) : IAsyncLifetime
     {
         public Task<CurrentActor?> GetCurrentActorAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult<CurrentActor?>(actor);
+    }
+
+    /// <summary>
+    /// Fails every scope creation, simulating an unavailable database during the
+    /// per-broadcast session re-validation (docs/M9_PLAN.md §1.13).
+    /// </summary>
+    private sealed class ThrowingScopeFactory : IServiceScopeFactory
+    {
+        public IServiceScope CreateScope() =>
+            throw new InvalidOperationException("simulated session re-validation read failure");
     }
 }

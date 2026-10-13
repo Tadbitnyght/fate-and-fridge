@@ -23,7 +23,7 @@ import {
 import { listDepartments, listIngredients, listUnits } from '../../api/referenceData'
 
 /** Root query key for every grocery read (broad invalidation target). */
-const groceriesQueryKey = ['groceries'] as const
+export const groceriesQueryKey = ['groceries'] as const
 
 export const groceriesListQueryKey = [...groceriesQueryKey, 'list'] as const
 export const groceriesPreferencesQueryKey = [...groceriesQueryKey, 'preferences'] as const

@@ -4,6 +4,7 @@ import { AppShell } from './components/AppShell'
 import { RequireSession } from './components/RequireSession'
 import { StandaloneLayout } from './components/StandaloneLayout'
 import { AuthProvider } from './features/auth/AuthProvider'
+import { LiveSyncProvider } from './features/live-sync/LiveSyncProvider'
 import { DepartmentsTab } from './features/reference-data/DepartmentsTab'
 import { IngredientsTab } from './features/reference-data/IngredientsTab'
 import { ProteinsTab } from './features/reference-data/ProteinsTab'
@@ -32,43 +33,45 @@ import { StatisticsPage } from './pages/StatisticsPage'
 export function App() {
   return (
     <AuthProvider>
-      <Routes>
-        <Route element={<StandaloneLayout />}>
-          <Route path="/setup" element={<SetupPage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/change-password" element={<ChangePasswordPage />} />
-        </Route>
-
-        <Route element={<RequireSession />}>
-          <Route element={<AppShell />}>
-            <Route index element={<StartupRedirect />} />
-            <Route path="calendar" element={<CalendarPage />} />
-            <Route path="dashboard" element={<DashboardPage />} />
-            <Route path="recipes" element={<RecipesBrowser />} />
-            <Route path="recipes/new" element={<RecipeFormPage />} />
-            <Route path="recipes/import" element={<ImportPage />} />
-            <Route path="recipes/:id/edit" element={<RecipeFormPage />} />
-            <Route path="groceries" element={<GroceriesPage />} />
-            <Route path="groceries/print" element={<GroceryPrintPage />} />
-            <Route path="statistics" element={<StatisticsPage />} />
-            <Route path="progress" element={<MilestonesPage />} />
-            <Route path="settings" element={<SettingsPage />}>
-              <Route index element={<HouseholdSection />} />
-              <Route path="reference-data" element={<ReferenceDataPage />}>
-                <Route index element={<DepartmentsTab />} />
-                <Route path="units" element={<UnitsTab />} />
-                <Route path="ingredients" element={<IngredientsTab />} />
-                <Route path="proteins" element={<ProteinsTab />} />
-                <Route path="tags" element={<TagsTab />} />
-              </Route>
-              <Route path="users" element={<UsersSection />} />
-              <Route path="security" element={<SecuritySection />} />
-              <Route path="account" element={<AccountSection />} />
-            </Route>
-            <Route path="*" element={<Navigate to="/" replace />} />
+      <LiveSyncProvider>
+        <Routes>
+          <Route element={<StandaloneLayout />}>
+            <Route path="/setup" element={<SetupPage />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/change-password" element={<ChangePasswordPage />} />
           </Route>
-        </Route>
-      </Routes>
+
+          <Route element={<RequireSession />}>
+            <Route element={<AppShell />}>
+              <Route index element={<StartupRedirect />} />
+              <Route path="calendar" element={<CalendarPage />} />
+              <Route path="dashboard" element={<DashboardPage />} />
+              <Route path="recipes" element={<RecipesBrowser />} />
+              <Route path="recipes/new" element={<RecipeFormPage />} />
+              <Route path="recipes/import" element={<ImportPage />} />
+              <Route path="recipes/:id/edit" element={<RecipeFormPage />} />
+              <Route path="groceries" element={<GroceriesPage />} />
+              <Route path="groceries/print" element={<GroceryPrintPage />} />
+              <Route path="statistics" element={<StatisticsPage />} />
+              <Route path="progress" element={<MilestonesPage />} />
+              <Route path="settings" element={<SettingsPage />}>
+                <Route index element={<HouseholdSection />} />
+                <Route path="reference-data" element={<ReferenceDataPage />}>
+                  <Route index element={<DepartmentsTab />} />
+                  <Route path="units" element={<UnitsTab />} />
+                  <Route path="ingredients" element={<IngredientsTab />} />
+                  <Route path="proteins" element={<ProteinsTab />} />
+                  <Route path="tags" element={<TagsTab />} />
+                </Route>
+                <Route path="users" element={<UsersSection />} />
+                <Route path="security" element={<SecuritySection />} />
+                <Route path="account" element={<AccountSection />} />
+              </Route>
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Route>
+          </Route>
+        </Routes>
+      </LiveSyncProvider>
     </AuthProvider>
   )
 }

@@ -17,6 +17,13 @@ export default defineConfig(({ mode }) => {
           target: apiProxyTarget,
           changeOrigin: true,
         },
+        // SignalR hub (docs/M9_PLAN.md §1.2): the SPA upgrades the socket
+        // directly, so the dev proxy must forward WebSocket traffic too.
+        '/hub/live': {
+          target: apiProxyTarget,
+          changeOrigin: true,
+          ws: true,
+        },
       },
     },
     build: {

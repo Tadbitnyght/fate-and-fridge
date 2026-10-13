@@ -17,8 +17,11 @@ namespace FateAndFridge.Api.LiveSync;
 /// Every broadcast re-validates the target connections' sessions against
 /// <c>user_sessions</c> before delivering (docs/M9_PLAN.md §1.13): a session
 /// revoked or expired out-of-band receives <c>session.revoked</c>, is aborted,
-/// and is excluded from the broadcast. The publisher is a singleton, so it
-/// creates a fresh <see cref="IServiceScope"/> per broadcast for the scoped
+/// and is excluded from the broadcast. If that re-validation cannot be completed
+/// the broadcast fails closed: the event is skipped for every connection rather
+/// than delivered to unvalidated sockets, and delivery resumes on the next event
+/// or client reconnect. The publisher is a singleton, so it creates a fresh
+/// <see cref="IServiceScope"/> per broadcast for the scoped
 /// <see cref="AppDbContext"/>/<see cref="TimeProvider"/>.
 /// </remarks>
 public sealed class SignalRLiveSyncPublisher(
@@ -43,7 +46,8 @@ public sealed class SignalRLiveSyncPublisher(
         {
             // Re-validate before delivering: invalid connections are told and
             // aborted here and excluded from the broadcast, so a revoked session
-            // can never keep receiving household events.
+            // can never keep receiving household events. If validation cannot be
+            // completed the partition is empty, so nothing is delivered.
             var (valid, invalid) = await PartitionBySessionValidityAsync(connections, cancellationToken);
             await RevokeConnectionsAsync(invalid, cancellationToken);
 
@@ -169,12 +173,16 @@ public sealed class SignalRLiveSyncPublisher(
         }
         catch (Exception exception)
         {
-            // Fail open for delivery: a validation read failure must not silence
-            // live sync. The next broadcast re-validates.
+            // Fail closed (docs/M9_PLAN.md §1.13): a validation read failure
+            // must never deliver household events to connections whose sessions
+            // could not be re-validated. Skip this event for every connection;
+            // delivery self-heals on the next event or client reconnect once the
+            // read succeeds. The connections are not aborted — a read failure is
+            // not proof of revocation.
             logger.LogWarning(
                 exception,
-                "Live-sync session re-validation failed; delivering to all connections.");
-            valid.AddRange(connections);
+                "Live-sync session re-validation failed; skipping the event for {ConnectionCount} connection(s).",
+                connections.Count);
             return (valid, invalid);
         }
 

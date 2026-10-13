@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 
 import { useAuth } from '../features/auth/AuthContext'
+import { LiveSyncStatus } from '../features/live-sync/LiveSyncStatus'
 import { useFocusOnRouteChange } from '../hooks/useFocusOnRouteChange'
 import { MAIN_CONTENT_ID, SkipLink } from './SkipLink'
 
@@ -54,6 +55,7 @@ export function AppShell() {
             <p className="app-subtitle">What&rsquo;s for dinner?</p>
           </div>
           <div className="app-account">
+            <LiveSyncStatus />
             {user && (
               <span className="app-account__name">
                 {user.username}
