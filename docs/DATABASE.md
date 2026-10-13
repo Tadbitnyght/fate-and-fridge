@@ -419,6 +419,10 @@ persisted instead as a JSON object under the reserved `application_settings` key
 `system_grocery_preferences`; the same four fields (`hide_checked`,
 `range_preset`, `range_start`, `range_days`) are read back from either store.
 
+Note (M9): live sync introduces **no schema change** — it is stateless, with no
+event log, table, sequence, or migration — so M9 has no entry in this section
+list (see `docs/M9_VERIFICATION.md`).
+
 ---
 
 ## 10. Audit

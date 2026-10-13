@@ -195,14 +195,33 @@ Security:
 ---
 
 ## 10. Live Sync Tests
-At least two browser sessions.
+Two-device behaviour is covered at three levels (M9-08/M9-09,
+`docs/M9_TEST_MATRIX.md`):
 
-Verify:
-- grocery checked on A updates B
-- manual grocery added on A updates B
-- calendar meal change updates B
-- lock state updates B
-- stale client cannot overwrite without expected conflict handling
+- **Backend two-real-client matrix** — the M9 hub/event-matrix suites open two
+  real `HubConnection`s over the in-process TestServer (LongPolling) and assert
+  every broadcast type reaches both clients (the originator included) and that
+  revocation closes only the target session. Run:
+  `$ARTIFACTS -class "*M9LiveSync*" -class "*M9SessionRevocation*"`.
+- **Hermetic frontend** — `frontend/e2e/live-sync.spec.ts` stubs the socket with
+  Playwright's `page.routeWebSocket` (no backend) and asserts an inbound
+  `groceries.updated` frame refetches the list, the status indicator shows
+  `Live`, and REST keeps working while the socket is down. Runs in the default
+  `npx playwright test`.
+- **Real-stack two-browser-context flow** — `frontend/e2e/stack/live-sync.spec.ts`
+  drives two real browser contexts (Admin A, view-only Member B) against a live,
+  fresh/unconfigured multiuser stack and verifies a grocery check on A updates B,
+  a manual grocery added on A updates B, a calendar meal change updates B, and a
+  lock change updates B. Skipped unless a stack is provided:
+
+  ```bash
+  E2E_BASE_URL=http://127.0.0.1:50900 E2E_SETUP_MODE=multiuser \
+    npx playwright test e2e/stack/live-sync.spec.ts
+  ```
+
+A stale client's write is handled by the existing conflict paths
+(`UNDO_CONFLICT`, `BATCH_CONFLICT`, `BATCH_DRAFT_EXPIRED`, historical
+immutability); M9 adds no version/ETag token.
 
 ---
 

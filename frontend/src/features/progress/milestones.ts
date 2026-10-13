@@ -299,7 +299,7 @@ export const MILESTONES: Milestone[] = [
     id: 'M9',
     number: 9,
     name: 'Live Sync',
-    status: 'in_progress',
+    status: 'complete',
     summary:
       'Multi-device updates over an authenticated SignalR hub with coarse events and client query invalidation.',
     features: [
@@ -309,6 +309,14 @@ export const MILESTONES: Milestone[] = [
       'Session revocation and socket teardown',
       'Query invalidation on events',
       'Two-device sync tests',
+    ],
+    completedOn: '2026-10-13',
+    evidence: [
+      { label: 'Backend tests', value: '2114' },
+      { label: 'Vitest', value: '341' },
+      { label: 'Playwright (hermetic)', value: '49 passed / 3 pre-existing stack skips' },
+      { label: 'M9 verification', value: 'independent review + full §4 battery' },
+      { label: 'Backend gates', value: 'format/build/EF clean' },
     ],
     issues: [120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130],
     issuesNote: 'Tracking #120; M9-01…M9-10: #121–#130. Runbook: docs/M9_PLAN.md.',

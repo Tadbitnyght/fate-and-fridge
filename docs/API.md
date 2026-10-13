@@ -1323,26 +1323,89 @@ Exact download mechanism may use streamed responses.
 
 ---
 
-## 19. WebSocket
-Suggested endpoint:
+## 19. WebSocket (live sync)
 
-```text
-/ws
+Implemented contract (M9; this **supersedes** the earlier `/ws` suggestion). The
+household live-sync channel is a **SignalR hub mapped at `/hub/live`**, mapped
+before the SPA catch-all so the frontend fallback cannot swallow it.
+
+### Connection and authentication
+- The hub is reached over the **WebSockets transport only** with
+  `skipNegotiation: true`, so no `/negotiate` POST is made. The hub path is
+  exempt from `CsrfMiddleware` (a body-less, same-origin, cookie-authenticated
+  upgrade); `SetupGatingMiddleware` and `MustChangePasswordMiddleware` still
+  apply to the connect request.
+- **Multiuser:** the upgrade requires the existing opaque `faf_session` cookie;
+  no valid session → the connection is refused (no anonymous socket). **No
+  tokens in query strings or URLs.**
+- **Single-user:** there is no cookie, so the socket acts as the **system
+  actor** (`actor_user_id` is `null`).
+- Connect guards: a **same-origin** `Origin` check (an absent `Origin`, e.g. a
+  non-browser client, is allowed; a foreign origin is refused), the existing
+  `IpAllowlistMiddleware` (health/loopback exemptions unchanged), a bounded
+  inbound message size (**32 KiB**, `MaximumReceiveMessageSize`), and a
+  per-session (**8**) / per-household (**32**) connection cap.
+  `EnableDetailedErrors = false`.
+
+### Direction and client method
+- **Server → client notifications only.** The hub exposes **no client-invokable
+  methods**; all writes stay on the REST API, which enforces permissions, CSRF,
+  and historical rules (docs/SECURITY.md §16).
+- Every notification is delivered through the single client method **`event`**
+  (`connection.on('event', …)`), with `type` as the discriminator, so a new
+  event type never needs a new client method. Notifications are broadcast to
+  every connected session of the household (group `household`), including the
+  originating one.
+
+### Envelope
+Coarse and stable (snake_case wire fields; no entity bodies, no diffs):
+
+```json
+{
+  "type": "groceries.updated",
+  "entity": "groceries",
+  "id": null,
+  "operation_id": null,
+  "actor_user_id": 3,
+  "timestamp": "2026-10-12T13:20:41.000Z"
+}
 ```
 
-Event examples:
-- `calendar.updated`
-- `groceries.updated`
-- `recipe.updated`
-- `settings.updated`
+`type` is required; the rest are nullable as applicable. `timestamp` is an
+ISO-8601 instant (UTC offset). `actor_user_id` is the acting user, or `null`
+for the system actor.
 
-Payloads should carry:
-- event type
-- resource identity
-- operation id
-- timestamp
+### Event types
+| Type | Emitted by |
+|------|-----------|
+| `calendar.updated` | calendar entry create/update/delete; single reroll apply + undo; batch apply + batch undo |
+| `calendar.lock_changed` | lock/unlock of a date, and only that (a lock toggle does **not** also emit `calendar.updated`) |
+| `groceries.updated` | manual item create/update/delete; staple create/update; add-to-list; check/uncheck (per-user preferences never broadcast) |
+| `recipe.updated` | recipe create/update (name, ingredients, units/quantities, proteins, tags, diet, status); image set/replace/remove; delete |
+| `settings.updated` | household settings; security settings; reference-data writes (departments incl. name/`sort_order`, units, ingredients + merges, proteins, tags) |
+| `session.revoked` | logout, admin session revocation, user disable, session expiry |
 
-Clients can invalidate/refetch relevant queries.
+An event is emitted only after a **successful, committed** write — never on a
+failed/rolled-back operation or a validation error.
+
+### Revocation
+A valid session is required at connect **and** re-validated per broadcast.
+Logout, an admin revocation, disabling the user, or session expiry sends
+`session.revoked` to that session's connections and **aborts** them. If the
+per-broadcast re-validation read itself fails, the broadcast **fails closed**
+(that event is skipped for every connection) rather than delivering to
+unvalidated sockets.
+
+### Client behaviour
+- One connection per tab; automatic reconnect with exponential backoff (1 s,
+  2 s, 4 s … capped at 30 s).
+- On **every** (re)connect the client runs one full live-sync
+  query-invalidation pass, reconciling anything missed while offline. There is
+  **no server-side event log, sequence numbers, or replay**.
+- Each event invalidates the mapped TanStack Query keys; the client
+  invalidates/refetches and never applies an entity body. `session.revoked`
+  forces a sign-out and stops reconnecting.
+- The connection closes on logout.
 
 ---
 

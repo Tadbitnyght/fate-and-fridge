@@ -395,14 +395,18 @@ Imported content is never auto-persisted before review.
 
 ---
 
-## 17. WebSockets
-Use WebSockets for household live sync.
+## 17. WebSockets (live sync)
+Use a SignalR hub at **`/hub/live`** for household live sync — server-to-client
+notifications only, with no client-invokable methods (docs/API.md §19,
+docs/SECURITY.md §16).
 
-Events should be coarse and stable, e.g.:
+Events are coarse and stable:
 - `calendar.updated`
+- `calendar.lock_changed`
 - `groceries.updated`
 - `recipe.updated`
-- `settings.updated`
+- `settings.updated` (household/security settings **and** reference-data writes)
+- `session.revoked`
 
 Prefer client query invalidation/refetch over duplicating entire application state through socket payloads.
 

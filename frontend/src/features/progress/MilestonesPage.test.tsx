@@ -29,15 +29,15 @@ describe('progress page', () => {
     renderWithProviders(<App />, { route: '/progress' })
 
     expect(await screen.findByRole('heading', { level: 2, name: 'Progress' })).toBeInTheDocument()
-    expect(screen.getByText('9 of 15 milestones complete (60%).')).toBeInTheDocument()
+    expect(screen.getByText('10 of 15 milestones complete (67%).')).toBeInTheDocument()
 
     const progressbar = screen.getByRole('progressbar', { name: 'Milestones complete' })
-    expect(progressbar).toHaveAttribute('aria-valuenow', '60')
-    expect(progressbar).toHaveAttribute('aria-valuetext', '60%')
+    expect(progressbar).toHaveAttribute('aria-valuenow', '67')
+    expect(progressbar).toHaveAttribute('aria-valuetext', '67%')
 
-    expect(screen.getAllByText('Complete', { exact: true })).toHaveLength(9)
+    expect(screen.getAllByText('Complete', { exact: true })).toHaveLength(10)
     // Each of the five planned milestones renders "Planned" twice: the status
-    // chip and the dates line. M9 is in progress.
+    // chip and the dates line. M9 is complete.
     expect(screen.getAllByText('Planned', { exact: true })).toHaveLength(10)
 
     const m1Card = screen
@@ -88,6 +88,12 @@ describe('progress page', () => {
     expect(within(m8Card).getByText(/Completed 2026-10-12/)).toBeInTheDocument()
     // The tag is cut after the live redeploy is verified.
     expect(within(m8Card).getAllByText(/m8-complete/).length).toBeGreaterThan(0)
+
+    const m9Card = screen.getByRole('heading', { level: 3, name: 'M9 — Live Sync' }).closest('li')!
+    expect(within(m9Card).getByText('Complete', { exact: true })).toBeInTheDocument()
+    expect(within(m9Card).getByText(/Completed 2026-10-13/)).toBeInTheDocument()
+    // The tag is cut after the live redeploy is verified.
+    expect(within(m9Card).queryByText(/m9-complete/)).not.toBeInTheDocument()
 
     expect(screen.getByRole('heading', { level: 3, name: 'M14 — Hardening' })).toBeInTheDocument()
   })
@@ -150,7 +156,7 @@ describe('progress page', () => {
     expect(milestonesTab).toHaveAttribute('tabindex', '0')
     expect(futureTab).toHaveAttribute('aria-selected', 'false')
     expect(futureTab).toHaveAttribute('tabindex', '-1')
-    expect(screen.getByText('9 of 15 milestones complete (60%).')).toBeInTheDocument()
+    expect(screen.getByText('10 of 15 milestones complete (67%).')).toBeInTheDocument()
     expect(
       screen.queryByRole('heading', { level: 4, name: 'Pantry / inventory' }),
     ).not.toBeInTheDocument()
@@ -170,7 +176,7 @@ describe('progress page', () => {
     expect(
       screen.queryByRole('heading', { level: 3, name: 'M1 — Setup and Authentication' }),
     ).not.toBeInTheDocument()
-    expect(screen.queryByText('9 of 15 milestones complete (60%).')).not.toBeInTheDocument()
+    expect(screen.queryByText('10 of 15 milestones complete (67%).')).not.toBeInTheDocument()
   })
 
   it('supports Left/Right/Home/End keyboard navigation with roving focus', async () => {

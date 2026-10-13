@@ -190,6 +190,30 @@ versions follow [Semantic Versioning](https://semver.org/).
   and the single-user system actor has full access). Schema: `grocery_staples`,
   `manual_grocery_items`, `grocery_check_state`, and `user_grocery_preferences`
   (migration `M8Groceries`).
+- Milestone 9 — live sync (2026-10-13): multi-device updates over an
+  authenticated SignalR hub at `/hub/live` (mapped before the SPA catch-all; the
+  earlier `/ws` suggestion is superseded). The hub is server-to-client
+  notifications only — no client-invokable methods, so all writes stay on the
+  REST API — and authenticates with the existing opaque `faf_session` cookie in
+  multiuser mode (no anonymous socket, no token in the URL) or, in single-user
+  mode, as the system actor. Every notification arrives through one client
+  method (`event`) carrying a coarse, snake_case envelope (`type`, `entity`,
+  `id`, `operation_id`, `actor_user_id`, `timestamp`) with no entity bodies:
+  `calendar.updated`, `calendar.lock_changed` (lock toggles only, no double
+  invalidation), `groceries.updated` (per-user preferences never broadcast),
+  `recipe.updated`, `settings.updated` (household/security settings and
+  reference-data writes), and `session.revoked`. Events are emitted only after a
+  committed write. Guards: a same-origin `Origin` check, the existing IP
+  allowlist on the upgrade, a 32 KiB inbound frame cap, `EnableDetailedErrors =
+  false`, and bounded per-session (8) / per-household (32) connections; the hub
+  path is CSRF exempt. A valid session is required at connect and re-validated
+  per broadcast; logout, admin revocation, user disable, and session expiry emit
+  `session.revoked` and abort those sockets (a re-validation read failure fails
+  closed). The frontend adds one connection per tab with automatic reconnect and
+  backoff, a full query-invalidation pass on every (re)connect (no event log or
+  replay), the documented event → query-key mapping, an accessible non-blocking
+  `Live`/`Reconnecting…` indicator, and socket teardown on logout. Schema: none —
+  live sync is stateless (no table or migration).
 
 ### Changed
 
