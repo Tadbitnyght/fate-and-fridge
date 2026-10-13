@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net;
+using System.Reflection;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
@@ -25,11 +26,14 @@ using Microsoft.Extensions.Options;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// M9-01 hub foundation (docs/M9_PLAN.md §1.1–§1.4, §1.11–§1.13, §2.1, §2.2):
+/// M9-01 hub foundation and the M9-09 security/limits battery
+/// (docs/M9_PLAN.md §1.1–§1.4, §1.11–§1.13, §2.1, §2.2):
 /// connection gating for multiuser and single-user modes, the same-origin check,
 /// the IP allowlist on the upgrade, the documented guards, the bounded
 /// per-session connection cap, and the household broadcast plus session
-/// revocation. Requires a Docker daemon; run with
+/// revocation. The M9-09 additions cover the configured transport limits, the
+/// no-RPC surface, an oversized inbound frame, revocation isolation, and a
+/// reconnect storm. Requires a Docker daemon; run with
 /// <c>dotnet test --filter "Category!=Integration"</c> to skip locally.
 /// </summary>
 [Trait("Category", "Integration")]
@@ -798,6 +802,299 @@ public sealed class M9LiveSyncHubTests(M1SetupFixture fixture) : IAsyncLifetime
         collector.Events.Should().NotContain(evt => evt.Type == LiveSyncEventType.SessionRevoked);
         collector.Closed.Task.IsCompleted.Should().BeFalse();
     }
+
+    // ---- M9-09 security and limits ---------------------------------------
+
+    [Fact]
+    public void Transport_limits_are_configured_as_documented()
+    {
+        using var factory = fixture.CreateFactory();
+        var options = factory.Services.GetRequiredService<IOptions<HubOptions>>().Value;
+
+        options.MaximumReceiveMessageSize.Should().Be(LiveSyncHub.MaximumInboundMessageBytes);
+        options.EnableDetailedErrors.Should().BeFalse();
+        options.KeepAliveInterval.Should().Be(TimeSpan.FromSeconds(15));
+        // Left unset, so SignalR's documented 30-second default applies.
+        options.ClientTimeoutInterval.Should().BeNull();
+        options.HandshakeTimeout.Should().Be(TimeSpan.FromSeconds(15));
+    }
+
+    [Fact]
+    public void Hub_exposes_no_client_invokable_methods()
+    {
+        // Live sync is server-to-client only (docs/M9_PLAN.md §1.4,
+        // docs/SECURITY.md §16). The only public methods the hub may declare are
+        // Hub's own lifecycle overrides; any other public method would be a
+        // client-invokable RPC surface.
+        var declared = typeof(LiveSyncHub)
+            .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+            .Select(method => method.Name)
+            .ToArray();
+
+        declared.Should().BeEquivalentTo(["OnConnectedAsync", "OnDisconnectedAsync"]);
+
+        typeof(LiveSyncHub)
+            .GetMethods(BindingFlags.Public | BindingFlags.Instance)
+            .Should().NotContain(method =>
+                method.GetCustomAttribute<HubMethodNameAttribute>() != null);
+    }
+
+    [Fact]
+    public async Task A_client_invocation_of_an_unknown_method_errors_and_changes_nothing()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        await MarkSetupCompletedAsync(cancellationToken);
+
+        using var factory = fixture.CreateFactory();
+        var user = await SeedUserAsync("no-rpc", mustChangePassword: false, cancellationToken);
+        var session = await CreateSessionAsync(factory, user, cancellationToken);
+
+        await using var connection = CreateConnection(factory, session);
+        var collector = Track(connection);
+        await StartAndWaitAsync(factory, connection, session.SessionId, cancellationToken);
+
+        var registry = GetRegistry(factory);
+        var registeredBefore = registry.Count;
+
+        await Assert.ThrowsAnyAsync<Exception>(
+            () => connection.InvokeAsync("DeleteEverything", cancellationToken));
+
+        // The rejected invocation changed nothing: the socket is still up, the
+        // registry is untouched, and a real broadcast still reaches the client.
+        connection.State.Should().Be(HubConnectionState.Connected);
+        registry.Count.Should().Be(registeredBefore);
+        collector.Events.Should().BeEmpty();
+
+        var publisher = factory.Services.GetRequiredService<ILiveSyncPublisher>();
+        await publisher.PublishAsync(
+            LiveSyncEvent.Create(LiveSyncEventType.GroceriesUpdated, entity: "groceries"),
+            cancellationToken);
+
+        var received = await WaitForEventAsync(
+            collector,
+            evt => evt.Type == LiveSyncEventType.GroceriesUpdated,
+            cancellationToken);
+        received.Type.Should().Be(LiveSyncEventType.GroceriesUpdated);
+        connection.State.Should().Be(HubConnectionState.Connected);
+    }
+
+    [Fact]
+    public async Task Oversized_inbound_frame_is_rejected_and_the_server_survives()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        await MarkSetupCompletedAsync(cancellationToken);
+
+        using var factory = fixture.CreateFactory();
+        var user = await SeedUserAsync("oversized", mustChangePassword: false, cancellationToken);
+        var session = await CreateSessionAsync(factory, user, cancellationToken);
+
+        await using var connection = CreateConnection(factory, session);
+        var closed = new TaskCompletionSource<Exception?>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.Closed += exception =>
+        {
+            closed.TrySetResult(exception);
+            return Task.CompletedTask;
+        };
+
+        await connection.StartAsync(cancellationToken);
+        await WaitForConnectionsAsync(factory, session.SessionId, 1, cancellationToken);
+
+        var oversized = new string('x', LiveSyncHub.MaximumInboundMessageBytes + 1024);
+        try
+        {
+            await connection.SendAsync("not_a_hub_method", oversized, cancellationToken);
+        }
+        catch (Exception) when (cancellationToken.IsCancellationRequested is false)
+        {
+            // A refusal may surface as a send error; the closed event is the assertion.
+        }
+
+        var closeException = await closed.Task.WaitAsync(TimeSpan.FromSeconds(15), cancellationToken);
+        closeException.Should().NotBeNull("an oversized frame aborts the connection with an error");
+        connection.State.Should().Be(HubConnectionState.Disconnected);
+
+        // The aborted connection is unregistered, so the cap is not leaked.
+        await WaitForRegistryCountAsync(factory, 0, cancellationToken);
+
+        // The server is unharmed: a fresh connection and a broadcast still work.
+        await using var survivor = CreateConnection(factory, session);
+        var collector = Track(survivor);
+        await survivor.StartAsync(cancellationToken);
+        await WaitForConnectionsAsync(factory, session.SessionId, 1, cancellationToken);
+
+        var publisher = factory.Services.GetRequiredService<ILiveSyncPublisher>();
+        await publisher.PublishAsync(
+            LiveSyncEvent.Create(LiveSyncEventType.GroceriesUpdated, entity: "groceries"),
+            cancellationToken);
+        var received = await WaitForEventAsync(
+            collector,
+            evt => evt.Type == LiveSyncEventType.GroceriesUpdated,
+            cancellationToken);
+        received.Type.Should().Be(LiveSyncEventType.GroceriesUpdated);
+    }
+
+    [Fact]
+    public async Task Session_revoked_reaches_only_the_target_session_and_others_keep_working()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        await MarkSetupCompletedAsync(cancellationToken);
+
+        using var factory = fixture.CreateFactory();
+        var user = await SeedUserAsync("isolation", mustChangePassword: false, cancellationToken);
+        var sessionA = await CreateSessionAsync(factory, user, cancellationToken);
+        var sessionB = await CreateSessionAsync(factory, user, cancellationToken);
+        var sessionC = await CreateSessionAsync(factory, user, cancellationToken);
+
+        await using var connectionA = CreateConnection(factory, sessionA);
+        await using var connectionB = CreateConnection(factory, sessionB);
+        await using var connectionC = CreateConnection(factory, sessionC);
+        var collectorA = Track(connectionA);
+        var collectorB = Track(connectionB);
+        var collectorC = Track(connectionC);
+        await StartAndWaitAsync(factory, connectionA, sessionA.SessionId, cancellationToken);
+        await StartAndWaitAsync(factory, connectionB, sessionB.SessionId, cancellationToken);
+        await StartAndWaitAsync(factory, connectionC, sessionC.SessionId, cancellationToken);
+
+        var publisher = factory.Services.GetRequiredService<ILiveSyncPublisher>();
+        await publisher.PublishSessionRevokedAsync(sessionA.SessionId, cancellationToken);
+
+        await AssertRevokedAndClosedAsync(collectorA, connectionA, cancellationToken);
+
+        // The other sessions are untouched by the revocation...
+        await Task.Delay(300, cancellationToken);
+        connectionB.State.Should().Be(HubConnectionState.Connected);
+        connectionC.State.Should().Be(HubConnectionState.Connected);
+        collectorB.Events.Should().NotContain(evt => evt.Type == LiveSyncEventType.SessionRevoked);
+        collectorC.Events.Should().NotContain(evt => evt.Type == LiveSyncEventType.SessionRevoked);
+
+        // ...and keep receiving normal household events afterwards.
+        await publisher.PublishAsync(
+            LiveSyncEvent.Create(LiveSyncEventType.GroceriesUpdated, entity: "groceries"),
+            cancellationToken);
+        await WaitForEventAsync(
+            collectorB,
+            evt => evt.Type == LiveSyncEventType.GroceriesUpdated,
+            cancellationToken);
+        await WaitForEventAsync(
+            collectorC,
+            evt => evt.Type == LiveSyncEventType.GroceriesUpdated,
+            cancellationToken);
+        collectorA.Events.Should().OnlyContain(evt => evt.Type == LiveSyncEventType.SessionRevoked);
+    }
+
+    [Fact]
+    public async Task Reconnect_storm_drains_the_registry_and_keeps_the_caps()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        await MarkSetupCompletedAsync(cancellationToken);
+
+        using var factory = fixture.CreateFactory();
+        var user = await SeedUserAsync("storm", mustChangePassword: false, cancellationToken);
+        var sessions = new List<TestSession>();
+        for (var index = 0; index < 4; index++)
+        {
+            sessions.Add(await CreateSessionAsync(factory, user, cancellationToken));
+        }
+
+        // Session 0 is opened at the per-session cap; the rest stay below it, so
+        // the whole storm fits under the household cap too.
+        int[] perSession = [LiveSyncConnectionRegistry.MaxConnectionsPerSession, 5, 5, 5];
+        var expected = perSession.Sum();
+        var registry = GetRegistry(factory);
+        var closedExceptions = new ConcurrentQueue<Exception?>();
+
+        async Task<HubConnection> OpenAsync(TestSession session)
+        {
+            var connection = CreateConnection(factory, session);
+            connection.Closed += exception =>
+            {
+                closedExceptions.Enqueue(exception);
+                return Task.CompletedTask;
+            };
+            await connection.StartAsync(cancellationToken);
+            return connection;
+        }
+
+        // Three open/close rounds across four sessions: 69 concurrent connection
+        // lifetimes, so a burst of reconnects cannot leak or wedge the server.
+        for (var round = 0; round < 3; round++)
+        {
+            var opened = new List<HubConnection>();
+            try
+            {
+                var opens = new List<Task<HubConnection>>();
+                for (var sessionIndex = 0; sessionIndex < sessions.Count; sessionIndex++)
+                {
+                    for (var index = 0; index < perSession[sessionIndex]; index++)
+                    {
+                        opens.Add(OpenAsync(sessions[sessionIndex]));
+                    }
+                }
+
+                opened.AddRange(await Task.WhenAll(opens));
+
+                await WaitForRegistryCountAsync(factory, expected, cancellationToken);
+                registry.CountForSession(sessions[0].SessionId)
+                    .Should().Be(LiveSyncConnectionRegistry.MaxConnectionsPerSession);
+                registry.Count.Should()
+                    .BeLessThanOrEqualTo(LiveSyncConnectionRegistry.MaxConnectionsPerHousehold);
+
+                // The per-session cap still refuses an extra connection mid-storm.
+                if (round == 0)
+                {
+                    await using var extra = CreateConnection(factory, sessions[0]);
+                    (await TryStartAsync(extra, cancellationToken)).Should().BeFalse();
+                    registry.CountForSession(sessions[0].SessionId)
+                        .Should().Be(LiveSyncConnectionRegistry.MaxConnectionsPerSession);
+                    registry.Count.Should().Be(expected);
+                }
+            }
+            finally
+            {
+                await Task.WhenAll(opened.Select(connection => connection.DisposeAsync().AsTask()));
+            }
+
+            // Every connection is unregistered: the storm leaked none.
+            await WaitForRegistryCountAsync(factory, 0, cancellationToken);
+            foreach (var session in sessions)
+            {
+                registry.CountForSession(session.SessionId).Should().Be(0);
+            }
+        }
+
+        // The server is unharmed and still accepts connections.
+        await using var fresh = CreateConnection(factory, sessions[0]);
+        await fresh.StartAsync(cancellationToken);
+        await WaitForRegistryCountAsync(factory, 1, cancellationToken);
+
+        closedExceptions.Should().OnlyContain(exception => exception == null);
+    }
+
+    private static async Task WaitForRegistryCountAsync(
+        WebApplicationFactory<Program> factory,
+        int expected,
+        CancellationToken cancellationToken)
+    {
+        var registry = GetRegistry(factory);
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(30);
+        while (registry.Count != expected)
+        {
+            if (DateTimeOffset.UtcNow > deadline)
+            {
+                throw new TimeoutException(
+                    $"Expected the live-sync registry to hold {expected} connection(s) "
+                    + $"but held {registry.Count}.");
+            }
+
+            await Task.Delay(20, cancellationToken);
+        }
+    }
+
 
     private static void AssertSessionRevokedEnvelope(LiveSyncEventDto evt)
     {
