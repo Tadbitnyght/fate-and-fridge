@@ -8,9 +8,16 @@ import { expect, test, type Locator, type Page } from '@playwright/test'
  * skipped unless E2E_BASE_URL points at that stack, so the hermetic default
  * `npx playwright test` run is unaffected.
  *
- * Invocation:
+ * It is also gated behind E2E_STACK_LIVE_SYNC=1: like the M1-15 acceptance spec
+ * (`stack.spec.ts`) it consumes the single-shot first-run setup, and the two
+ * suites cannot share one stack. Gating keeps it out of the default
+ * `npm run test:e2e` run so the acceptance spec always sees a fresh install; CI
+ * gives this flow its own reset stack before running it (see
+ * `.github/workflows/ci.yml` and docs/TESTING.md §10).
+ *
+ * Invocation (needs its own fresh/unconfigured multiuser stack):
  *   E2E_BASE_URL=http://127.0.0.1:50900 E2E_SETUP_MODE=multiuser \
- *     npx playwright test e2e/stack/live-sync.spec.ts
+ *     E2E_STACK_LIVE_SYNC=1 npx playwright test e2e/stack/live-sync.spec.ts
  *
  * The stack must be fresh/unconfigured (multiuser): setup is single-shot, so a
  * reset is required before a second run. One test owns the whole flow because
@@ -27,6 +34,10 @@ const baseURL = process.env.E2E_BASE_URL
 const setupMode = process.env.E2E_SETUP_MODE ?? 'multiuser'
 
 test.skip(!baseURL, 'Set E2E_BASE_URL to run the real-stack suite (disposable stack required)')
+test.skip(
+  process.env.E2E_STACK_LIVE_SYNC !== '1',
+  'Set E2E_STACK_LIVE_SYNC=1 to run the live-sync flow (it consumes its own fresh stack)',
+)
 
 const RECOVERY_KEY_PATTERN = /^[A-Za-z0-9_-]{43}$/ // 32 bytes, base64url, unpadded
 

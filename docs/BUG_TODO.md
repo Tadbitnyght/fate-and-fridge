@@ -20,6 +20,7 @@ Status legend: `open` (confirmed, not started) · `fixing` · `verifying` ·
 | BUG-007 | open | Auth / Query cache | The TanStack Query cache is not cleared on logout, so a second user can briefly see the first user's cached data in the same tab | — |
 | BUG-008 | open | Groceries / Data | A live grocery line renders the ingredient label `Onion {owder`; likely stored/seeded data, needs a check that no code path emits a stray `{` | — |
 | BUG-009 | verifying | CI / Dependencies | CI red on `main` since the M9 completion commits because the M9 test-only `Microsoft.AspNetCore.SignalR.Client 10.0.12` pulled the vulnerable `Microsoft.AspNetCore.SignalR.Common 10.0.12` (CVE-2026-70159) | [#139](https://github.com/Tadbitnyght/fate-and-fridge/issues/139) |
+| BUG-010 | fixing | CI / E2E | Stack acceptance job red since the M9 completion commits: the M9-08 real-stack live-sync spec ran before the acceptance spec and consumed the single-shot first-run setup | [#139](https://github.com/Tadbitnyght/fate-and-fridge/issues/139) |
 
 ---
 
@@ -298,5 +299,52 @@ Status legend: `open` (confirmed, not started) · `fixing` · `verifying` ·
   CI job went unnoticed; a green CI run on the completion commit must be part of
   the milestone completion gate.
 
+---
 
+## BUG-010 — Stack acceptance job red because the live-sync spec consumed the one-time setup
+
+- **Area:** CI / E2E (`frontend/e2e/stack/live-sync.spec.ts`,
+  `.github/workflows/ci.yml` `stack` job)
+- **Severity:** High — the `main` "Docker stack acceptance + Playwright" job
+  failed on every push/PR since the M9 completion commits (no production/data
+  impact).
+- **Reported:** 2026-10-14 (CI job "Docker stack acceptance + Playwright")
+- **Status:** fixing (fix committed; awaiting a green CI run on `main`)
+- **Fix commit:** `fix(ci): give the real-stack live-sync flow its own fresh stack (#139)`, on `main`.
+- **GitHub:** [#139](https://github.com/Tadbitnyght/fate-and-fridge/issues/139)
+- **Reproduction:** push any commit to `main` (or open a PR) and watch the
+  "Docker stack acceptance + Playwright" job fail at
+  `frontend/e2e/stack/stack.spec.ts:45`.
+- **Observed:**
+  `Expected pattern /\/setup$/ … Received "http://localhost:50080/login"` in the
+  M1-15 acceptance spec, after the M9-08 live-sync spec had already configured
+  the stack.
+- **Root cause:** the job ran `npm run test:e2e` (`playwright test`) with
+  `E2E_BASE_URL=http://localhost:50080` against one fresh compose stack. Two
+  stack specs each require and **consume** the single-shot first-run setup:
+  `stack.spec.ts` (M1-15 acceptance, asserts a fresh install routes to `/setup`)
+  and `live-sync.spec.ts` (M9-08, performs first-run setup to create the Admin
+  and the view-only Member). Playwright executes
+  `e2e/stack/live-sync.spec.ts` **before** `e2e/stack/stack.spec.ts`
+  (alphabetical within the directory), so the M9-08 spec configured the stack
+  first and the acceptance spec then found `/login` instead of `/setup`.
+- **Impact:** CI has been red on `main` since the M9 completion commits. The
+  application and data were unaffected; only the E2E acceptance signal was lost.
+- **Fix direction:** gate the M9-08 stack spec behind a dedicated
+  `E2E_STACK_LIVE_SYNC=1` env var (keeping its `E2E_BASE_URL`/`E2E_SETUP_MODE`
+  gates) so it stays out of the default `npm run test:e2e` run, and give it its
+  own fresh stack in CI: a reset step (`docker compose down -v` then `up -d`,
+  wait for `/api/v1/health`) followed by a step that runs
+  `npx playwright test e2e/stack/live-sync.spec.ts`.
+- **Verification:** `npx playwright test --list --reporter=json` shows the
+  `stack/live-sync.spec.ts` test carrying a `skip` annotation whenever
+  `E2E_STACK_LIVE_SYNC` is unset (while `stack/stack.spec.ts`'s multiuser
+  acceptance test stays unskipped), and unskipped when
+  `E2E_STACK_LIVE_SYNC=1`; with `E2E_BASE_URL` unset both stack specs are
+  skipped and the hermetic `npx playwright test` run stays green (65 passed,
+  3 skipped). Note `--list` still enumerates skipped tests — it reports the
+  `skip` annotation rather than omitting the test.
+- **Process lesson:** a milestone was marked complete while CI was red. As with
+  BUG-009, **CI must be green before a milestone is marked complete** — the
+  completion gate must include a green CI run on the completion commit.
 

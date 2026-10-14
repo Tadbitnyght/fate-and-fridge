@@ -216,8 +216,15 @@ Two-device behaviour is covered at three levels (M9-08/M9-09,
 
   ```bash
   E2E_BASE_URL=http://127.0.0.1:50900 E2E_SETUP_MODE=multiuser \
-    npx playwright test e2e/stack/live-sync.spec.ts
+    E2E_STACK_LIVE_SYNC=1 npx playwright test e2e/stack/live-sync.spec.ts
   ```
+
+  Both stack suites (`stack.spec.ts` and `stack/live-sync.spec.ts`) consume the
+  single-shot first-run setup, so they cannot share one stack. The live-sync spec
+  is therefore gated behind `E2E_STACK_LIVE_SYNC=1` and excluded from the default
+  `npm run test:e2e` run; CI resets the stack (`docker compose down -v` then
+  `up -d`, wait for health) and runs it as its own step after the acceptance
+  suite, so each suite gets a fresh install.
 
 A stale client's write is handled by the existing conflict paths
 (`UNDO_CONFLICT`, `BATCH_CONFLICT`, `BATCH_DRAFT_EXPIRED`, historical

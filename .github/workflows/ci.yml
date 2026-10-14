@@ -123,6 +123,30 @@ jobs:
         env:
           E2E_BASE_URL: http://localhost:50080
         run: npm run test:e2e
+      - name: Reset stack for the real-stack live-sync flow
+        run: |
+          docker compose down -v
+          docker compose up -d
+          for i in $(seq 1 90); do
+            if curl -fsS http://localhost:50080/api/v1/health >/dev/null; then
+              echo "Application is healthy."
+              break
+            fi
+            if [ "$i" -eq 90 ]; then
+              echo "Application did not become healthy in time."
+              docker compose logs
+              exit 1
+            fi
+            sleep 5
+          done
+          curl -fsS http://localhost:50080/api/v1/health
+          curl -fsS http://localhost:50080/api/v1/health/db
+      - name: Playwright real-stack live-sync flow
+        working-directory: frontend
+        env:
+          E2E_BASE_URL: http://localhost:50080
+          E2E_STACK_LIVE_SYNC: '1'
+        run: npx playwright test e2e/stack/live-sync.spec.ts
       - name: Stop stack
         if: always()
         run: docker compose down -v
