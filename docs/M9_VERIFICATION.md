@@ -229,3 +229,28 @@ Verified on 2026-10-13 after rebuilding and redeploying via `docker-admin` using
   lint/format/typecheck were green in the mirror. The disposable stack was then
   torn down (`docker compose -p faf-m9-e2e down -v`, data dir removed); the
   production NAS stack was untouched.
+
+## CI status after completion
+
+`main`'s CI was **red** when this milestone was marked complete. Both failures
+were diagnosed and fixed after the fact on `main`:
+
+- **BUG-009** — the M9 test-only `Microsoft.AspNetCore.SignalR.Client 10.0.12`
+  pulled `Microsoft.AspNetCore.SignalR.Common 10.0.12`, affected by
+  CVE-2026-70159 / GHSA-334f-vvp4-7g6p (High). Because the repository treats
+  NuGet audit warnings as errors, the Backend job failed at `Restore` (`NU1903`).
+  Fixed in `d8b09ef` by bumping the test dependency to `10.0.13`. The production
+  API project never referenced SignalR NuGet packages, so it was not affected.
+- **BUG-010** — the M9-08 real-stack spec (`frontend/e2e/stack/live-sync.spec.ts`)
+  requires and consumes the single-shot first-run setup, and ran before the
+  pre-existing acceptance spec, so the "Docker stack acceptance + Playwright" job
+  failed at `stack.spec.ts:45` (landing on `/login` instead of `/setup`). Fixed in
+  `3913ad6` (gate the spec behind `E2E_STACK_LIVE_SYNC=1` and give it its own
+  fresh stack in CI) and `8c9f994` (the reset must also clear the **bind-mounted**
+  data directory, because `docker compose down -v` removes no named volumes in
+  this stack).
+
+Process lesson recorded in `docs/BUG_TODO.md`: **CI must be green before a
+milestone is marked complete or tagged.** The verification above was performed on
+the completion commits; these CI fixes landed on `main` afterwards and do not
+change the milestone's product scope or contracts.
