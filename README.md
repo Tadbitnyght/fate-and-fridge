@@ -76,6 +76,8 @@ npm run typecheck
 npm run test        # Vitest unit tests
 npm run test:e2e    # hermetic Playwright smoke tests (set E2E_BASE_URL for a real stack)
 E2E_BASE_URL=http://127.0.0.1:50900 E2E_SETUP_MODE=multiuser npm run test:e2e:stack  # live stack (fresh install; consumes it)
+E2E_BASE_URL=http://127.0.0.1:50900 E2E_SETUP_MODE=multiuser E2E_STACK_LIVE_SYNC=1 \
+  npx playwright test e2e/stack/live-sync.spec.ts  # two-device live-sync flow (own fresh stack)
 ```
 
 The dev proxy targets `http://localhost:50080` (the Compose host port) by

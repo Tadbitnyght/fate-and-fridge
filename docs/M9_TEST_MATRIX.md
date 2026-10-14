@@ -34,11 +34,12 @@ npx playwright test e2e/live-sync.spec.ts e2e/app.spec.ts e2e/groceries.spec.ts
 ```
 
 The real-stack two-device suite is skipped unless `E2E_BASE_URL` points at a
-fresh/unconfigured multiuser stack:
+fresh/unconfigured multiuser stack **and** the `E2E_STACK_LIVE_SYNC=1` opt-in is
+set (both stack suites consume the single-shot first-run setup; see `BUG-010`):
 
 ```bash
 E2E_BASE_URL=http://127.0.0.1:50900 E2E_SETUP_MODE=multiuser \
-  npx playwright test e2e/stack/live-sync.spec.ts
+  E2E_STACK_LIVE_SYNC=1 npx playwright test e2e/stack/live-sync.spec.ts
 ```
 
 It has been **executed and passed** against a disposable stack (**1 test, 19.6 s**,
