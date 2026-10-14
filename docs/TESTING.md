@@ -222,9 +222,13 @@ Two-device behaviour is covered at three levels (M9-08/M9-09,
   Both stack suites (`stack.spec.ts` and `stack/live-sync.spec.ts`) consume the
   single-shot first-run setup, so they cannot share one stack. The live-sync spec
   is therefore gated behind `E2E_STACK_LIVE_SYNC=1` and excluded from the default
-  `npm run test:e2e` run; CI resets the stack (`docker compose down -v` then
-  `up -d`, wait for health) and runs it as its own step after the acceptance
-  suite, so each suite gets a fresh install.
+  `npm run test:e2e` run; CI resets the stack (`docker compose down -v`, remove
+  the bind-mounted data directory, then `up -d`, wait for health) and runs it as
+  its own step after the acceptance suite, so each suite gets a fresh install.
+  Note the reset must also delete the bind-mounted data directory (from the
+  configured `HOST_DATA_DIR`): the stack persists state in bind mounts rather
+  than named volumes, so `docker compose down -v` alone leaves the configured
+  database in place and the stack is **not** fresh.
 
 A stale client's write is handled by the existing conflict paths
 (`UNDO_CONFLICT`, `BATCH_CONFLICT`, `BATCH_DRAFT_EXPIRED`, historical

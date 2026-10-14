@@ -126,6 +126,12 @@ jobs:
       - name: Reset stack for the real-stack live-sync flow
         run: |
           docker compose down -v
+          # The stack persists state in bind mounts, not named volumes, so
+          # `down -v` leaves the configured database in place. Remove the
+          # bind-mounted data directory (from the configured HOST_DATA_DIR) to
+          # reproduce a fresh install; Docker recreates it on `up`.
+          data_dir="$(grep -E '^HOST_DATA_DIR=' .env | cut -d= -f2- || true)"
+          rm -rf "${data_dir:-./data}"
           docker compose up -d
           for i in $(seq 1 90); do
             if curl -fsS http://localhost:50080/api/v1/health >/dev/null; then

@@ -333,9 +333,13 @@ Status legend: `open` (confirmed, not started) · `fixing` · `verifying` ·
 - **Fix direction:** gate the M9-08 stack spec behind a dedicated
   `E2E_STACK_LIVE_SYNC=1` env var (keeping its `E2E_BASE_URL`/`E2E_SETUP_MODE`
   gates) so it stays out of the default `npm run test:e2e` run, and give it its
-  own fresh stack in CI: a reset step (`docker compose down -v` then `up -d`,
-  wait for `/api/v1/health`) followed by a step that runs
-  `npx playwright test e2e/stack/live-sync.spec.ts`.
+  own fresh stack in CI: a reset step (`docker compose down -v`, remove the
+  bind-mounted data directory, then `up -d`, wait for `/api/v1/health`) followed
+  by a step that runs `npx playwright test e2e/stack/live-sync.spec.ts`. The
+  reset must clear the bind-mounted data directory (from the configured
+  `HOST_DATA_DIR`), because the stack has no named volumes — `docker compose
+  down -v` alone leaves the bind-mounted database in place, so the stack is not
+  actually fresh and the acceptance spec would see `/login` instead of `/setup`.
 - **Verification:** `npx playwright test --list --reporter=json` shows the
   `stack/live-sync.spec.ts` test carrying a `skip` annotation whenever
   `E2E_STACK_LIVE_SYNC` is unset (while `stack/stack.spec.ts`'s multiuser
