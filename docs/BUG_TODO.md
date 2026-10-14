@@ -19,6 +19,7 @@ Status legend: `open` (confirmed, not started) · `fixing` · `verifying` ·
 | BUG-003 | open | Calendar / Concurrency | Concurrent single-date `PUT`/reroll racing a batch Apply on a blank target can raise an unhandled unique-violation 500 | — |
 | BUG-007 | open | Auth / Query cache | The TanStack Query cache is not cleared on logout, so a second user can briefly see the first user's cached data in the same tab | — |
 | BUG-008 | open | Groceries / Data | A live grocery line renders the ingredient label `Onion {owder`; likely stored/seeded data, needs a check that no code path emits a stray `{` | — |
+| BUG-009 | verifying | CI / Dependencies | CI red on `main` since the M9 completion commits because the M9 test-only `Microsoft.AspNetCore.SignalR.Client 10.0.12` pulled the vulnerable `Microsoft.AspNetCore.SignalR.Common 10.0.12` (CVE-2026-70159) | [#139](https://github.com/Tadbitnyght/fate-and-fridge/issues/139) |
 
 ---
 
@@ -251,6 +252,51 @@ Status legend: `open` (confirmed, not started) · `fixing` · `verifying` ·
   composition) so no code path can inject a stray `{`.
 - **Tests:** a regression test that an ingredient/recipe name containing `{`/`}`
   round-trips unchanged through import, recipe save, and the grocery projection.
+
+---
+
+## BUG-009 — CI red on `main` since the M9 completion commits (vulnerable SignalR test dependency)
+
+- **Area:** CI / Dependencies
+  (`backend/tests/FateAndFridge.Api.Tests/FateAndFridge.Api.Tests.csproj`)
+- **Severity:** High — `main` cannot build; every push and PR fails the backend
+  job (no production/data impact).
+- **Reported:** 2026-10-14 (CI job "Backend (format, build, migrations, tests)")
+- **Status:** verifying (fix committed; awaiting a green CI run on `main`)
+- **Fix commit:** `fix(deps): bump SignalR client test dependency to 10.0.13 (CVE-2026-70159) (#139)`, on `main`.
+- **GitHub:** [#139](https://github.com/Tadbitnyght/fate-and-fridge/issues/139)
+- **Reproduction:** push any commit to `main` (or open a PR) and watch the
+  "Backend (format, build, migrations, tests)" job fail at the **Restore** step.
+- **Observed:**
+  `error NU1903: Warning As Error: Package 'Microsoft.AspNetCore.SignalR.Common' 10.0.12 has a known high severity vulnerability, https://github.com/advisories/GHSA-334f-vvp4-7g6p`
+- **Root cause:** the M9-01 work added `Microsoft.AspNetCore.SignalR.Client`
+  **10.0.12** to the test project to drive the live-sync integration suites. Its
+  transitive `Microsoft.AspNetCore.SignalR.Common` 10.0.12 is affected by
+  **CVE-2026-70159 / GHSA-334f-vvp4-7g6p** (High, CVSS 7.5; SignalR
+  stateful-reconnect `MessageBuffer.ResendAsync` backpressure DoS), affected range
+  `>= 10.0.0 <= 10.0.12`, patched in 10.0.13. The repository sets
+  `TreatWarningsAsErrors=true`, so the NuGet audit warning (NU1903) is promoted to
+  an error and fails restore in CI.
+- **Impact:** CI has been red on `main` since the M9 completion commits. The
+  API/production project (`backend/src/FateAndFridge.Api`) was **never affected** —
+  it carries no SignalR NuGet reference (server-side SignalR comes from the
+  ASP.NET Core shared framework), and
+  `dotnet list src/FateAndFridge.Api/... --vulnerable --include-transitive`
+  reports it clean.
+- **Fix direction:** bump the test-only `Microsoft.AspNetCore.SignalR.Client`
+  reference from 10.0.12 to **10.0.13** so the transitive
+  `Microsoft.AspNetCore.SignalR.Common` resolves to the patched version. Do not add
+  SignalR packages to the API project.
+- **Verification:** both
+  `dotnet list ... --vulnerable --include-transitive` invocations report no
+  vulnerable packages; `dotnet restore --force-evaluate` (the CI restore path)
+  exits 0 with no NU1903; the M9 live-sync suites (`M9LiveSyncHubTests`,
+  `M9LiveSyncEventMatrixTests`, `M9SessionRevocation*`) pass 76/76 against the
+  bumped client.
+- **Process lesson:** **CI must be green before a milestone is marked complete.**
+  The M9 completion gate verified tests/build/deploy locally, but the red `main`
+  CI job went unnoticed; a green CI run on the completion commit must be part of
+  the milestone completion gate.
 
 
 
