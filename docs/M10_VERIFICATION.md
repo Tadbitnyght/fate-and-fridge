@@ -1,11 +1,9 @@
 # M10 Verification — Printing
 
-Status: **complete — live deployment verification pending** (2026-10-14, branch
-`feature/m10-printing`). Tracking issue: #139 (M10-01…M10-08 are #132–#139). The
-milestone is marked `complete` in the progress manifest; the **live deployment
-verification** below (rebuild/redeploy, live print check, `/progress` proof) and
-the `m10-complete` tag are the remaining **M10-10 Phase 2** step and are
-explicitly **pending**.
+Status: **complete** (2026-10-14, tag `m10-complete`). Tracking issue: #139
+(M10-01…M10-08 are #132–#139). The milestone is marked `complete` in the progress
+manifest and the live deployment was rebuilt, redeployed, and verified (see
+**Live deployment verification** below).
 
 M10 delivers **printing**: a dedicated, deep-linkable **calendar print view** at
 `/calendar/print` (start month + 1–12 months, one month per page, long-name
@@ -106,7 +104,7 @@ with `page.route` and run against the local Vite dev server. `page.pdf({
 preferCSSPageSize: true })` makes Chromium honour the CSS `@page` size, so the
 PDF `/MediaBox` and `/Type /Page` counts prove the printed geometry. The
 **real-stack print check** (deployed instance, PDF/screenshot evidence) is the
-M10-10 gate, not a hermetic assertion (`docs/M10_PLAN.md` §1.14); it is pending
+M10-10 gate, not a hermetic assertion (`docs/M10_PLAN.md` §1.14); it is recorded
 below.
 
 ## §4 battery → coverage
@@ -132,10 +130,10 @@ records the gaps closed in the M10-05 / M10-07 sweeps. Reproduced compactly:
 
 ## Evidence at completion
 
-Recorded on the M10-08 commit chain (branch `feature/m10-printing`, base HEAD
-`4d3170c` plus the M10-08 docs/manifest/test changes). The milestone is marked
-`complete` in the progress manifest; the `m10-complete` tag is cut only after the
-live checks below pass (Phase 2).
+Recorded on the M10-08 commit chain (base HEAD `4d3170c` plus the M10-08
+docs/manifest/test changes). The milestone is marked `complete` in the progress
+manifest; the `m10-complete` tag points at the final verification commit after
+the live checks below.
 
 | Gate | Result |
 |------|--------|
@@ -161,21 +159,62 @@ battery found **no §4 battery failure**; both sweeps added only tests
 
 ## Live deployment verification
 
-**Pending — M10-10 Phase 2.** This is the milestone completion gate from
-`AGENTS.md`: the working project must be rebuilt and redeployed **from the
-completed commit** (`scripts/deploy.sh up` via `docker-admin`), and the live
-instance verified, before the manifest `complete` change is pushed and the
-`m10-complete` tag is cut. The required evidence, to be recorded here, is:
+Verified on 2026-10-14 after rebuilding and redeploying via `docker-admin` using
+`scripts/deploy.sh up` (`docker compose up -d --build` on the NAS).
 
-- deploy-host checkout commit and image id/digest (a real rebuild, not a cache
-  hit), and app health (`GET /api/v1/health` → `200`);
-- **no migration applied** (M10 adds no schema; consistent with the empty
-  `has-pending-model-changes`);
-- the `/calendar/print` and `/groceries/print` views reachable on the running
-  instance;
-- a **real-stack print check** producing a **landscape** calendar PDF with **one
-  month per page** and a **portrait** grocery PDF (PDF/screenshot evidence);
-- `/progress` shows **M10 — Printing** as **Complete** with `11 of 15 milestones
-  complete (73%)`.
-
-No tag, branch, push, or GitHub issue action has been taken in Phase 1.
+- **Deploy-host checkout:** `/mnt/Data/calendarplanner` at `ee6729d` on `main`,
+  working tree clean. `/mnt/y` is the same SMB/9p-exported tree, so there is one
+  checkout. Operational note: the `CPlanner` deploy user cannot `git fetch`/`pull`
+  because `.git` is not writable by that user; `HEAD` already matched
+  `origin/main` at `ee6729d`, so no pull was needed.
+- **Image `fate-and-fridge:0.1.0`:** `sha256:fd085e5d9d56…` →
+  `sha256:1cfda8f702d94724ccca202538cc4f6b9adc3fe129602cebdbf99d492e26f922`,
+  created `2026-10-14T13:36:34-05:00`. This was a **real frontend rebuild** — the
+  `npm run build` layer re-ran and emitted new `dist/assets` hashes, not a cache
+  hit. Only the app container was recreated; postgres was untouched.
+- **No migration:** M10 adds no schema, so the app startup logged
+  `No migrations were applied. The database is already up to date.`; this is
+  consistent with `dotnet ef migrations has-pending-model-changes` being empty.
+- **Health:** `GET /api/v1/health` →
+  `200 {"status":"ok","app":"Fate & Fridge","version":"0.1.0","environment":"production"}`.
+- **Served assets:** JS `/assets/index-BIqtPxq_.js` (636,773 B, sha256
+  `fb8ffe0fccfabe810f845bce38367b423885440d38ad254f5ce948a3afb2ea9c`); CSS
+  `/assets/index-C8jfaYXT.css` (43,830 B). The JS bundle contains the
+  `calendar-print`, `print-scale`, and `Printing` strings and the M10 completion
+  date `2026-10-14`.
+- **Served CSS page-size ownership proof:** the deployed CSS carries exactly
+  **two** `@page` rules —
+  `@page calendar-print{size:A4 landscape;margin:10mm}` and
+  `@page grocery-list{size:A4 portrait;margin:12mm}` — and **no unnamed `@page`**
+  rule carrying a size or margin; `.calendar-print-page{page:calendar-print}` is
+  present. So the M5 app-wide landscape rule and the M8 global margin rule are
+  gone from the live bundle.
+- **Live browser verification** (read-only Playwright, no mutations):
+  - `/progress` renders `11 of 15 milestones complete (73%).` with the
+    **M10 — Printing** card showing **Complete** / `Completed 2026-10-14`, and
+    M11–M14 as Planned.
+  - `/calendar/print?month=2026-10` renders the `October 2026` heading, the
+    weekday headers, day numbers, real meal cells, and the screen-only controls
+    (`Back to calendar`, `Start month` = `2026-10`, `Months` = `1`, `Print`);
+    with no `?month` param it defaults to the current month (2026-10).
+  - Under print-media emulation the app header/nav/footer, the skip link, the
+    screen-only controls, the `Back` link, and the `h2` are hidden while the
+    month heading and the grid remain visible.
+  - Screenshots: `.playwright-mcp/m10-progress.png`,
+    `.playwright-mcp/m10-print-screen.png`.
+- **Real-stack PDF checks** (`page.pdf({ preferCSSPageSize: true })`):
+  - calendar **1 month** → **1 page**, MediaBox **841.92 × 594.96 pt (A4
+    landscape)**;
+  - calendar **3 months** → **3 pages**, landscape each, with the DOM headings
+    `October 2026` / `November 2026` / `December 2026`;
+  - `/groceries/print` → **594.96 × 841.92 pt (A4 portrait)**;
+  - non-print `/calendar` → **612 × 792 pt (US Letter portrait)**, proving there
+    is **no app-wide landscape rule** left.
+- **Expected observation (not a defect):** the live `/groceries/print` job spans
+  **3 pages** because the household's current list is long (8 departments, 20+
+  items); a printed grocery list flows naturally across pages. The hermetic
+  one-page assertion applies to a small mocked list. The plan requirement is a
+  **portrait** grocery PDF, which holds.
+- **PostgreSQL** still publishes no host port; nothing persistent
+  (volumes/datasets/data dirs) was deleted — only the app container was
+  recreated.

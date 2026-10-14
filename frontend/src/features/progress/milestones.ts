@@ -338,7 +338,8 @@ export const MILESTONES: Milestone[] = [
       'Browser print CSS testing (print media + PDF geometry)',
     ],
     completedOn: '2026-10-14',
-    // The tag is cut after the live redeploy is verified.
+    tag: 'm10-complete',
+    commit: 'ee6729d',
     evidence: [
       { label: 'Backend tests', value: '2114' },
       { label: 'Vitest', value: '378' },

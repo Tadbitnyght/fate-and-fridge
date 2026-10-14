@@ -98,8 +98,8 @@ describe('progress page', () => {
     const m10Card = screen.getByRole('heading', { level: 3, name: 'M10 — Printing' }).closest('li')!
     expect(within(m10Card).getByText('Complete', { exact: true })).toBeInTheDocument()
     expect(within(m10Card).getByText(/Completed 2026-10-14/)).toBeInTheDocument()
-    // The tag and commit are recorded only after the live redeploy is verified.
-    expect(within(m10Card).queryByText(/m10-complete/)).not.toBeInTheDocument()
+    // The tag is cut after the live redeploy is verified.
+    expect(within(m10Card).getAllByText(/m10-complete/).length).toBeGreaterThan(0)
 
     expect(screen.getByRole('heading', { level: 3, name: 'M14 — Hardening' })).toBeInTheDocument()
   })

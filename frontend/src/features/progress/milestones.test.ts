@@ -247,9 +247,9 @@ describe('milestone manifest', () => {
     const m10 = MILESTONES.find((milestone) => milestone.id === 'M10')
     expect(m10?.status).toBe('complete')
     expect(m10?.completedOn).toBe('2026-10-14')
-    // The tag and commit are recorded only after the live redeploy is verified.
-    expect(m10?.tag).toBeUndefined()
-    expect(m10?.commit).toBeUndefined()
+    // The tag is cut after the live redeploy is verified.
+    expect(m10?.tag).toBe('m10-complete')
+    expect(m10?.commit).toBe('ee6729d')
     for (const issue of [131, 132, 139]) {
       expect(m10?.issues).toContain(issue)
     }
