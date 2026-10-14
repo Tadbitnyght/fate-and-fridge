@@ -310,7 +310,7 @@ Status legend: `open` (confirmed, not started) · `fixing` · `verifying` ·
   impact).
 - **Reported:** 2026-10-14 (CI job "Docker stack acceptance + Playwright")
 - **Status:** fixing (fix committed; awaiting a green CI run on `main`)
-- **Fix commit:** `fix(ci): give the real-stack live-sync flow its own fresh stack (#139)`, on `main`.
+- **Fix commits:** `3913ad6` (gate the spec behind `E2E_STACK_LIVE_SYNC` + its own CI step), `8c9f994` (clear the bind-mounted data directory on reset), `10e80f5` (`sudo` for that removal), on `main`.
 - **GitHub:** [#139](https://github.com/Tadbitnyght/fate-and-fridge/issues/139)
 - **Reproduction:** push any commit to `main` (or open a PR) and watch the
   "Docker stack acceptance + Playwright" job fail at
@@ -340,6 +340,9 @@ Status legend: `open` (confirmed, not started) · `fixing` · `verifying` ·
   `HOST_DATA_DIR`), because the stack has no named volumes — `docker compose
   down -v` alone leaves the bind-mounted database in place, so the stack is not
   actually fresh and the acceptance spec would see `/login` instead of `/setup`.
+  The removal needs **`sudo`**: the containers create root-owned files (the
+  postgres data directory is owned by uid 70), so the non-root runner user cannot
+  delete them (`rm: cannot remove './data/…': Permission denied`).
 - **Verification:** `npx playwright test --list --reporter=json` shows the
   `stack/live-sync.spec.ts` test carrying a `skip` annotation whenever
   `E2E_STACK_LIVE_SYNC` is unset (while `stack/stack.spec.ts`'s multiuser
