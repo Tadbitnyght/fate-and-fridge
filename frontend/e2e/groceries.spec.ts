@@ -680,10 +680,21 @@ test('groceries print: print media hides app chrome and screen-only controls', a
   await expect(page.locator('.skip-link')).toBeHidden()
   await expect(page.getByRole('button', { name: 'Print' })).toBeHidden()
   await expect(page.getByLabel('Include checked items')).toBeHidden()
+  await expect(page.getByRole('link', { name: 'Back to grocery list' })).toBeHidden()
 
   // Black-on-white: the printable list drops the screen palette.
   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(255, 255, 255)')
   await expect(page.locator('body')).toHaveCSS('color', 'rgb(0, 0, 0)')
+
+  // No background fills: every printed element is transparent ink on paper.
+  for (const selector of [
+    '.grocery-print__department',
+    '.grocery-print__item',
+    '.grocery-print__line',
+    '.grocery-item__badge',
+  ]) {
+    await expect(page.locator(selector).first()).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+  }
 
   // The printable list and its paper checkboxes survive.
   await expect(page.getByRole('heading', { level: 3, name: 'Produce' })).toBeVisible()
@@ -691,4 +702,34 @@ test('groceries print: print media hides app chrome and screen-only controls', a
   const box = page.locator('.grocery-print__box').first()
   await expect(box).toBeVisible()
   await expect(box).toHaveCSS('border-top-color', 'rgb(0, 0, 0)')
+
+  // Every printed item carries exactly one decorative, AT-hidden paper checkbox.
+  const items = page.locator('.grocery-print__item')
+  const boxes = page.locator('.grocery-print__box')
+  expect(await items.count()).toBeGreaterThan(0)
+  expect(await boxes.count()).toBe(await items.count())
+  for (const each of await boxes.all()) {
+    await expect(each).toHaveAttribute('aria-hidden', 'true')
+  }
+})
+
+test('groceries print: the include-checked control is labelled and keyboard-operable', async ({
+  page,
+}) => {
+  await mockGroceryApi(page)
+
+  await page.goto('/groceries/print')
+  await expect(page.getByText('Onion')).toBeVisible()
+  await expect(page.getByText('Carrot')).toHaveCount(0)
+
+  // The only control is labelled and toggles from the keyboard alone.
+  const include = page.getByLabel('Include checked items')
+  await expect(include).not.toBeChecked()
+  await include.focus()
+  await page.keyboard.press('Space')
+  await expect(include).toBeChecked()
+  await expect(page.getByText('Carrot')).toBeVisible()
+
+  // The decorative paper checkbox stays out of the accessibility tree.
+  await expect(page.locator('.grocery-print__box').first()).toHaveAttribute('aria-hidden', 'true')
 })

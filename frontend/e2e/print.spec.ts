@@ -89,6 +89,15 @@ const OCTOBER_ENTRIES: Record<string, CalendarEntry> = {
   }),
 }
 
+/** A past month (relative to `today` 2026-10-14) with one stored recipe. */
+const PAST_ENTRIES: Record<string, CalendarEntry> = {
+  '2026-08-12': entry({
+    id: 7,
+    display_text: 'Zucchini boats',
+    recipe: { id: 9, name: 'Zucchini boats', image_url: null, status: 'normal' },
+  }),
+}
+
 function dayFor(date: string, value: CalendarEntry | null) {
   return {
     date,
@@ -280,6 +289,54 @@ function summarizePdf(pdf: Buffer): PdfSummary {
 const A4_LONG_PT = 841.89
 const A4_SHORT_PT = 595.28
 
+/** CSS reference resolution: 96 px per inch, so 1pt = 96/72 px. */
+const PT_TO_PX = 96 / 72
+
+/** Converts points to the CSS pixels a computed font-size reports. */
+function ptToPx(pt: number): number {
+  return pt * PT_TO_PX
+}
+
+interface AppliedPrintScale {
+  /** The month's applied auto-shrink multiplier (`--calendar-print-scale`). */
+  scale: number
+  /** The month's computed font size in CSS pixels. */
+  fontSizePx: number
+  /** The legibility floor in pt (`--calendar-print-floor-font-pt`). */
+  floorFontPt: number
+  /** The unshrunk month font in pt (`--calendar-print-base-font-pt`). */
+  baseFontPt: number
+  /** Whether the month released its height cap and spills onto another page. */
+  spill: boolean
+}
+
+/**
+ * Reads the first printed month's applied auto-shrink scale and computed font
+ * size from the CSS custom properties `index.css` publishes, so the test can
+ * assert the shrink never drops below the ≈10pt legibility floor (M10-03).
+ */
+async function readAppliedPrintScale(page: Page): Promise<AppliedPrintScale> {
+  return page.evaluate(() => {
+    const month = document.querySelector('.calendar-print-month')
+    if (month === null) {
+      throw new Error('no .calendar-print-month in the DOM')
+    }
+    const monthStyle = getComputedStyle(month)
+    const rootStyle = getComputedStyle(document.documentElement)
+    return {
+      scale: Number.parseFloat(monthStyle.getPropertyValue('--calendar-print-scale').trim() || '1'),
+      fontSizePx: Number.parseFloat(monthStyle.fontSize),
+      floorFontPt: Number.parseFloat(
+        rootStyle.getPropertyValue('--calendar-print-floor-font-pt').trim(),
+      ),
+      baseFontPt: Number.parseFloat(
+        rootStyle.getPropertyValue('--calendar-print-base-font-pt').trim(),
+      ),
+      spill: month.getAttribute('data-spill') === 'true',
+    }
+  })
+}
+
 interface PageRule {
   selector: string
   size: string
@@ -351,6 +408,7 @@ test('print: the calendar print view renders a month and hides chrome in print',
   await expect(page.locator('.skip-link')).toBeHidden()
   await expect(page.locator('.calendar-print-controls')).toBeHidden()
   await expect(page.getByRole('button', { name: 'Print' })).toBeHidden()
+  await expect(page.getByRole('link', { name: 'Back to calendar' })).toBeHidden()
 
   // The printable month and its heading survive, black on white.
   await expect(page.getByRole('heading', { level: 3, name: 'October 2026' })).toBeVisible()
@@ -361,6 +419,41 @@ test('print: the calendar print view renders a month and hides chrome in print',
     'color',
     'rgb(0, 0, 0)',
   )
+})
+
+test('print: the printed month shows allowed content and none of the excluded data', async ({
+  page,
+}) => {
+  await mockPrintApi(page)
+
+  await page.goto('/calendar/print?month=2026-10')
+  await expect(page.getByRole('heading', { level: 3, name: 'October 2026' })).toBeVisible()
+
+  const month = page.locator('.calendar-print-month')
+
+  // Allowed: the day number plus the recipe / special-event / eat-out text.
+  const lasagnaCell = month.locator('.calendar-print-month__cell').filter({ hasText: 'Lasagna' })
+  await expect(lasagnaCell.locator('.calendar-print-month__day')).toHaveText('5')
+  await expect(month.getByText('Thanksgiving')).toBeVisible()
+  await expect(month.getByText('Eat out')).toBeVisible()
+
+  // Allowed: the curated special-event icon, rendered black (currentColor) and
+  // decorative for assistive tech.
+  const icon = month.locator('.calendar-print-month__icon')
+  await expect(icon).toHaveCount(1)
+  await expect(icon.first()).toHaveAttribute('stroke', 'currentColor')
+  await expect(icon.first()).toHaveAttribute('aria-hidden', 'true')
+  await page.emulateMedia({ media: 'print' })
+  await expect(icon.first()).toHaveCSS('color', 'rgb(0, 0, 0)')
+
+  // Excluded: meal photos, lock icons, notes, diner count, restaurant/location.
+  await expect(month.locator('img')).toHaveCount(0)
+  await expect(month.locator('.calendar-grid__lock')).toHaveCount(0)
+  await expect(month.getByText('🔒')).toHaveCount(0)
+  await expect(month.getByText('Reservation at 7')).toHaveCount(0)
+  await expect(month.getByText(/diner/i)).toHaveCount(0)
+  await expect(month.getByText('Pizza Place')).toHaveCount(0)
+  await expect(month.getByText('Downtown')).toHaveCount(0)
 })
 
 test('print: page-size ownership is named with no unnamed @page rule', async ({ page }) => {
@@ -428,7 +521,91 @@ test('print: a 3-month calendar job is three landscape pages', async ({ page }) 
   expect(pdf.widthPt).toBeCloseTo(A4_LONG_PT, 0)
 })
 
-test('print: a busy month (every day a long name) fits one page', async ({ page }) => {
+test('print: a year-boundary multi-month job prints one page per month', async ({ page }) => {
+  await mockPrintApi(page)
+
+  await page.goto('/calendar/print?month=2026-11')
+  await expect(page.getByRole('heading', { level: 3, name: 'November 2026' })).toBeVisible()
+
+  await page.getByLabel('Months').fill('3')
+  await expect(page.getByRole('heading', { level: 3, name: 'January 2027' })).toBeVisible()
+
+  // The months roll across the year boundary in order, one heading per page.
+  expect(await page.getByRole('heading', { level: 3 }).allTextContents()).toEqual([
+    'November 2026',
+    'December 2026',
+    'January 2027',
+  ])
+
+  const pdf = summarizePdf(await page.pdf({ preferCSSPageSize: true }))
+  expect(pdf.pages).toBe(3)
+  expect(pdf.orientation).toBe('landscape')
+})
+
+test('print: the month count is bounded to twelve pages', async ({ page }) => {
+  await mockPrintApi(page)
+
+  await page.goto('/calendar/print?month=2026-10')
+  await expect(page.getByRole('heading', { level: 3, name: 'October 2026' })).toBeVisible()
+
+  // The control advertises and enforces the 1–12 bound, clamping an
+  // out-of-range entry rather than resolving an unbounded list.
+  const months = page.getByLabel('Months')
+  await expect(months).toHaveAttribute('max', '12')
+  await expect(months).toHaveAttribute('min', '1')
+  await months.fill('99')
+  await expect(months).toHaveValue('12')
+  await expect(page.getByRole('heading', { level: 3 })).toHaveCount(12)
+
+  const pdf = summarizePdf(await page.pdf({ preferCSSPageSize: true }))
+  expect(pdf.pages).toBe(12)
+  expect(pdf.orientation).toBe('landscape')
+})
+
+test('print: a past month prints and renders its stored data', async ({ page }) => {
+  await mockPrintApi(page, { entries: PAST_ENTRIES })
+
+  await page.goto('/calendar/print?month=2026-08')
+  await expect(page.getByRole('heading', { level: 3, name: 'August 2026' })).toBeVisible()
+  await expect(page.locator('.calendar-print-month').getByText('Zucchini boats')).toBeVisible()
+
+  const pdf = summarizePdf(await page.pdf({ preferCSSPageSize: true }))
+  expect(pdf.pages).toBe(1)
+  expect(pdf.orientation).toBe('landscape')
+})
+
+test('print: the calendar print view is keyboard-operable with a sane heading order', async ({
+  page,
+}) => {
+  await mockPrintApi(page)
+
+  await page.goto('/calendar/print?month=2026-10')
+  await expect(page.getByRole('heading', { level: 2, name: 'Print calendar' })).toBeVisible()
+
+  // Sane heading order: the page h2 precedes the month h3s.
+  const order = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('.calendar-print-page h2, .calendar-print-page h3')).map(
+      (node) => `${node.tagName}:${node.textContent?.trim()}`,
+    ),
+  )
+  expect(order[0]).toBe('H2:Print calendar')
+  expect(order.slice(1)).toEqual(['H3:October 2026'])
+
+  // The labelled month control is operable from the keyboard alone.
+  const months = page.getByLabel('Months')
+  await months.focus()
+  await page.keyboard.press('ArrowUp')
+  await page.keyboard.press('ArrowUp')
+  await expect(months).toHaveValue('3')
+  await expect(page.getByRole('heading', { level: 3, name: 'December 2026' })).toBeVisible()
+
+  // The decorative print content stays out of the accessibility tree.
+  await expect(page.locator('.calendar-print-month__icon')).toHaveAttribute('aria-hidden', 'true')
+})
+
+test('print: a busy month shrinks to fit without dropping below the legibility floor', async ({
+  page,
+}) => {
   const busyName = 'Slow-roasted butternut squash and sage brown butter'
   await mockPrintApi(page, { entries: filledMonthEntries(2026, 9, busyName) })
 
@@ -438,6 +615,30 @@ test('print: a busy month (every day a long name) fits one page', async ({ page 
 
   // The month shrank to fit rather than spilling.
   await expect(page.locator('.calendar-print-month[data-spill="false"]')).toHaveCount(1)
+
+  // The applied auto-shrink is real (< 1) but never below the ≈10pt floor.
+  const applied = await readAppliedPrintScale(page)
+  const floorScale = applied.floorFontPt / applied.baseFontPt
+  expect(applied.spill).toBe(false)
+  expect(applied.scale).toBeLessThan(1)
+  expect(applied.scale).toBeGreaterThanOrEqual(floorScale - 1e-9)
+  expect(applied.fontSizePx).toBeGreaterThanOrEqual(ptToPx(applied.floorFontPt) - 0.01)
+
+  // Long names wrap fully: no ellipsis and no horizontally clipped overflow.
+  const wrapped = await page
+    .locator('.calendar-print-month__text')
+    .first()
+    .evaluate((node) => {
+      const computed = getComputedStyle(node)
+      return {
+        whiteSpace: computed.whiteSpace,
+        textOverflow: computed.textOverflow,
+        clipped: node.scrollWidth > node.clientWidth + 1,
+      }
+    })
+  expect(wrapped.whiteSpace).toBe('normal')
+  expect(wrapped.textOverflow).not.toBe('ellipsis')
+  expect(wrapped.clipped).toBe(false)
 
   const pdf = summarizePdf(await page.pdf({ preferCSSPageSize: true }))
   expect(pdf.pages).toBe(1)
@@ -472,6 +673,13 @@ test('print: a pathological month spills to more pages instead of clipping', asy
   expect(style.whiteSpace).toBe('normal')
   expect(style.textOverflow).not.toBe('ellipsis')
   expect(style.overflow).toBe('visible')
+
+  // The month sits exactly at the ≈10pt legibility floor: it never shrinks
+  // further, it spills instead.
+  const applied = await readAppliedPrintScale(page)
+  expect(applied.spill).toBe(true)
+  expect(applied.scale).toBeCloseTo(applied.floorFontPt / applied.baseFontPt, 5)
+  expect(applied.fontSizePx).toBeCloseTo(ptToPx(applied.floorFontPt), 1)
 
   // The content flowed onto another page rather than being clipped away.
   const pdf = summarizePdf(await page.pdf({ preferCSSPageSize: true }))
@@ -519,6 +727,17 @@ test('print: dark mode still prints black on white', async ({ page }) => {
   await expect(page.locator('.calendar-print-month__cell').first()).toHaveCSS(
     'color',
     'rgb(0, 0, 0)',
+  )
+  await expect(page.locator('.calendar-print-month__icon')).toHaveCSS('color', 'rgb(0, 0, 0)')
+
+  // No background fills: headings and cells are transparent ink on white paper.
+  await expect(page.locator('.calendar-print-month__heading')).toHaveCSS(
+    'background-color',
+    'rgba(0, 0, 0, 0)',
+  )
+  await expect(page.locator('.calendar-print-month__cell').first()).toHaveCSS(
+    'background-color',
+    'rgba(0, 0, 0, 0)',
   )
 })
 

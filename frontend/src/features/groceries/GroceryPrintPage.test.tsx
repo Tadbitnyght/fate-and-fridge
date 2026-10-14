@@ -47,6 +47,12 @@ describe('grocery print page', () => {
     expect(boxes).toHaveLength(3)
     boxes.forEach((box) => expect(box).toHaveAttribute('aria-hidden', 'true'))
 
+    // The checkbox is the first element of each printed line, i.e. before the
+    // name and quantity it marks.
+    const lines = view.container.querySelectorAll('.grocery-print__line')
+    expect(lines).toHaveLength(3)
+    lines.forEach((line) => expect(line.firstElementChild).toHaveClass('grocery-print__box'))
+
     // The printable checkbox is not an interactive control.
     expect(within(screen.getByRole('list', { name: 'Produce' })).queryByRole('checkbox')).toBeNull()
   })
