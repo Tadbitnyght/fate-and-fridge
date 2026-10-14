@@ -89,6 +89,9 @@ E2E_BASE_URL=http://127.0.0.1:50900 E2E_SETUP_MODE=multiuser \
   npx playwright test e2e/stack/live-sync.spec.ts
 ```
 
+It has been **executed and passed** against a disposable stack (see **Live
+deployment verification**).
+
 The M9 backend fixtures (all in the `M1 setup` collection) share one
 Testcontainers/PostgreSQL container and reset the volatile rows per test. The hub
 tests open real `HubConnection`s over the in-process TestServer (LongPolling; the
@@ -133,6 +136,7 @@ below.
 | Frontend lint / format:check / typecheck (local mirror) | clean |
 | Vitest | **341 passed** (37 files) |
 | Playwright (hermetic, `npx playwright test`) | **49 passed / 3 pre-existing stack skips** |
+| Playwright (real-stack, `e2e/stack/live-sync.spec.ts`) | **1 passed** (19.6 s), all four two-device scenarios green |
 | `npm run build` | succeeds (pre-existing >500 kB chunk warning only) |
 
 No stale full-suite expectation failed: M9 adds no schema, so
@@ -191,20 +195,35 @@ Verified on 2026-10-13 after rebuilding and redeploying via `docker-admin` using
     `.playwright-mcp/m9-shell-live-sync-calendar.png`.
 - **PostgreSQL** still publishes no host port; nothing persistent was deleted (only
   the app container was recreated).
-- **Documented deviation (known limitation / follow-up):** the real-stack
-  two-browser-context spec `frontend/e2e/stack/live-sync.spec.ts` was **not
-  executed** — a disposable stack was not started within the session's step
-  budget. Its invocation is ready:
+- **Real-stack two-device spec — executed and passed.** The M9-08
+  two-browser-context flow `frontend/e2e/stack/live-sync.spec.ts` was run against
+  a **disposable** local compose project (`faf-m9-e2e`, `HOST_PORT=50900`,
+  throwaway `HOST_DATA_DIR=/tmp/opencode/faf-m9-e2e-data`) — never the production
+  NAS stack. The stack was fresh/unconfigured before the run
+  (`setup_completed:false`) and was configured as multiuser by the spec itself,
+  proving it consumed a genuine fresh stack. The spec file was **not modified**.
+  Invocation (from a local mirror; the 9p share times out Playwright workers):
 
   ```bash
-  cd /mnt/y && HOST_PORT=50900 HOST_DATA_DIR=/tmp/opencode/faf-m9-e2e-data \
-    docker compose -p faf-m9-e2e up -d --build
+  rsync -a --exclude node_modules --exclude dist --exclude test-results \
+    --exclude playwright-report /mnt/y/frontend/ /tmp/opencode/frontend/
+  cd /tmp/opencode/frontend
   E2E_BASE_URL=http://127.0.0.1:50900 E2E_SETUP_MODE=multiuser \
     npx playwright test e2e/stack/live-sync.spec.ts
-  # teardown: docker compose -p faf-m9-e2e down -v
   ```
 
-  Cross-device propagation was instead verified by (a) the backend two-real-client
-  matrix, (b) the hermetic `page.routeWebSocket` invalidation test, and (c) the
-  live **two-socket handshake** on the running instance (no writes were performed
-  on production data). This is recorded as a known limitation and a follow-up.
+  Result: **1 test passed (19.6 s)** — all four scenarios inside
+  `two-device live sync › a change on one device reaches the other over the live
+  socket` were green:
+
+  1. a manual grocery added on A became visible on B;
+  2. a grocery check on A showed checked on B;
+  3. a calendar meal change (Misc label) on A appeared in B's grid;
+  4. a lock on A rendered the `Locked` badge on B.
+
+  Both devices asserted `live-sync-status` `data-state="connected"` / `Live`
+  before each scenario. Hermetic safety was re-verified (`npx playwright test
+  e2e/stack/` with no `E2E_BASE_URL` → **3 skipped, exit 0**) and
+  lint/format/typecheck were green in the mirror. The disposable stack was then
+  torn down (`docker compose -p faf-m9-e2e down -v`, data dir removed); the
+  production NAS stack was untouched.

@@ -41,6 +41,10 @@ E2E_BASE_URL=http://127.0.0.1:50900 E2E_SETUP_MODE=multiuser \
   npx playwright test e2e/stack/live-sync.spec.ts
 ```
 
+It has been **executed and passed** against a disposable stack (**1 test, 19.6 s**,
+all four scenarios green); see `docs/M9_VERIFICATION.md` → Live deployment
+verification for the invocation and evidence.
+
 The M9 backend fixtures (all in the `M1 setup` collection) share one
 Testcontainers/PostgreSQL container and reset the volatile rows per test. The
 hub tests open real `HubConnection`s over the in-process TestServer (LongPolling;
@@ -78,7 +82,7 @@ so `has-pending-model-changes` is expected to be empty.
 | Frontend — the status indicator reflects connected/reconnecting accessibly | `frontend/src/features/live-sync/LiveSyncStatus.test.tsx` ("renders the %s state as a polite live region", "is non-blocking: no interactive role and no focusable content"), `LiveSyncProvider.test.tsx` ("surfaces connecting, reconnecting, and connected states") |
 | Frontend — logout closes the socket; `session.revoked` forces sign-out | `LiveSyncProvider.test.tsx` ("tears the connection down on logout", "forces a sign-out and stops reconnecting on session.revoked"), `LiveSyncProvider.test.tsx` ("connects with skipNegotiation over WebSockets at /hub/live") |
 | Frontend — the hermetic socket path (no backend) | `frontend/e2e/live-sync.spec.ts` ("live sync: a groceries.updated frame refetches the list and shows Live", "live sync: the status indicator stays non-blocking and REST keeps working") |
-| Two-device — grocery check on A updates B; manual grocery added on A updates B; calendar meal change updates B; lock state updates B | `frontend/e2e/stack/live-sync.spec.ts` **(new M9-08)** ("a change on one device reaches the other over the live socket", scenarios 1–4, two real browser contexts over a real stack) |
+| Two-device — grocery check on A updates B; manual grocery added on A updates B; calendar meal change updates B; lock state updates B | `frontend/e2e/stack/live-sync.spec.ts` **(new M9-08)** ("a change on one device reaches the other over the live socket", scenarios 1–4, two real browser contexts over a real stack) — **executed and passed** against a disposable stack (1 test, 19.6 s, all four scenarios green) |
 | Two-device — a stale client's write is handled by the existing conflict paths | Deferred to the M6/M7 conflict suites (`UNDO_CONFLICT`, `BATCH_CONFLICT`, `BATCH_DRAFT_EXPIRED`, historical immutability); M9 adds no version token (docs/M9_PLAN.md §1.10). See the deferred list below. |
 
 ## Audit result
