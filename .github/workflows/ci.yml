@@ -130,8 +130,11 @@ jobs:
           # `down -v` leaves the configured database in place. Remove the
           # bind-mounted data directory (from the configured HOST_DATA_DIR) to
           # reproduce a fresh install; Docker recreates it on `up`.
+          # `sudo` is required: the containers create root-owned files (and the
+          # postgres data dir is owned by uid 70), which the runner user cannot
+          # remove. GitHub-hosted runners have passwordless sudo.
           data_dir="$(grep -E '^HOST_DATA_DIR=' .env | cut -d= -f2- || true)"
-          rm -rf "${data_dir:-./data}"
+          sudo rm -rf "${data_dir:-./data}"
           docker compose up -d
           for i in $(seq 1 90); do
             if curl -fsS http://localhost:50080/api/v1/health >/dev/null; then
