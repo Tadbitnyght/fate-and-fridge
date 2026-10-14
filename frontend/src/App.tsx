@@ -16,6 +16,7 @@ import { HouseholdSection } from './features/settings/HouseholdSection'
 import { SecuritySection } from './features/settings/SecuritySection'
 import { UsersSection } from './features/settings/UsersSection'
 import { CalendarPage } from './features/calendar/CalendarPage'
+import { CalendarPrintPage } from './features/calendar/CalendarPrintPage'
 import { ChangePasswordPage } from './pages/ChangePasswordPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { GroceriesPage } from './pages/GroceriesPage'
@@ -45,6 +46,7 @@ export function App() {
             <Route element={<AppShell />}>
               <Route index element={<StartupRedirect />} />
               <Route path="calendar" element={<CalendarPage />} />
+              <Route path="calendar/print" element={<CalendarPrintPage />} />
               <Route path="dashboard" element={<DashboardPage />} />
               <Route path="recipes" element={<RecipesBrowser />} />
               <Route path="recipes/new" element={<RecipeFormPage />} />

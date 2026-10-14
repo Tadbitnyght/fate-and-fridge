@@ -20,7 +20,13 @@ export function renderWithProviders(
   options: RenderWithProvidersOptions = {},
 ): RenderResult {
   const queryClient = options.queryClient ?? createTestQueryClient()
-  const entry = { pathname: options.route ?? '/', state: options.routeState }
+  // Split an optional `?query` off the route so `useSearchParams` works in tests.
+  const [pathname, search] = (options.route ?? '/').split('?')
+  const entry = {
+    pathname,
+    search: search === undefined ? '' : `?${search}`,
+    state: options.routeState,
+  }
 
   function Wrapper({ children }: { children: ReactNode }) {
     return (

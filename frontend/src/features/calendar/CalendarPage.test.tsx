@@ -132,7 +132,7 @@ describe('calendar page', () => {
     expect(headers[6]).toBe('Sun')
   })
 
-  it('prints the calendar from the toolbar', async () => {
+  it('opens the print view from the toolbar (M10-06)', async () => {
     const printSpy = vi.spyOn(window, 'print').mockImplementation(() => {})
     baseMocks([])
     renderWithProviders(<App />, { route: '/calendar' })
@@ -140,7 +140,12 @@ describe('calendar page', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Print' }))
 
-    expect(printSpy).toHaveBeenCalled()
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Print calendar' }),
+    ).toBeInTheDocument()
+    // The toolbar now navigates to the dedicated print view rather than printing
+    // the interactive month grid.
+    expect(printSpy).not.toHaveBeenCalled()
   })
 
   it('hides the calendar from members without calendar.view', async () => {

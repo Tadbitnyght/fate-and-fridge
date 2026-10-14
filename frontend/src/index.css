@@ -2587,10 +2587,6 @@ a.recipes__import:focus-visible {
     break-inside: avoid;
     min-height: 3rem;
   }
-
-  @page {
-    size: landscape;
-  }
 }
 
 .calendar-detail__results button {
@@ -3064,11 +3060,219 @@ a.recipes__import:focus-visible {
   }
 }
 
-@page {
-  margin: 12mm;
+/* Calendar print view (M10-01…M10-04). A dedicated printable month grid: black
+   on white, no background fills, one month per page.
+
+   Print geometry — single source of truth (M10-03). These custom properties are
+   the one place the printed calendar's page budget is defined: the month width
+   and the print height cap below derive from them, and `printScale.ts` reads
+   them at runtime via `getComputedStyle` so the JS auto-shrink budget and the
+   CSS layout cannot drift. The `@page calendar-print` margin must match
+   `--calendar-print-page-margin-mm` (asserted by e2e/print.spec.ts); @page
+   descriptors cannot reference custom properties, so that one literal stays in
+   sync by test. */
+:root {
+  --calendar-print-page-width-mm: 297;
+  --calendar-print-page-height-mm: 210;
+  --calendar-print-page-margin-mm: 10;
+  --calendar-print-base-font-pt: 12;
+  --calendar-print-floor-font-pt: 10;
+  --calendar-print-fit-safety: 0.98;
 }
 
-/* Portrait for the grocery list; the app-wide print page stays as configured. */
+.calendar-print-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.calendar-print-controls__back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.calendar-print-controls__field {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+}
+
+.calendar-print-controls button {
+  min-height: 2.75rem;
+}
+
+.calendar-print-heading {
+  margin: 0 0 0.75rem;
+}
+
+.calendar-print-months {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  overflow-x: auto;
+}
+
+.calendar-print-month {
+  /* The month is laid out at the print content width (A4 landscape − margins)
+     in both media, so a single on-screen measurement is representative of the
+     printed page. The width derives from the shared print geometry. */
+  inline-size: calc(
+    (var(--calendar-print-page-width-mm) - 2 * var(--calendar-print-page-margin-mm)) * 1mm
+  );
+  /* The auto-shrink scale is applied here (not on `__content`) so the whole
+     month — month/year heading and grid — scales together and the measured
+     natural height matches the printed height. */
+  font-size: calc(var(--calendar-print-base-font-pt) * 1pt * var(--calendar-print-scale, 1));
+  flex: none;
+  color: var(--text);
+}
+
+.calendar-print-month__heading {
+  margin: 0 0 0.4em;
+  font-size: 1.4em;
+  color: var(--text);
+}
+
+.calendar-print-month__content {
+  /* No height cap on screen: the auto-shrink measurement must see the month's
+     true natural height. The cap is applied only in print (below), and released
+     for a month that cannot fit at the legibility floor. */
+  overflow: visible;
+}
+
+.calendar-print-month__table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.calendar-print-month__weekday {
+  padding: 0.2em;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 1em;
+  font-weight: 600;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.calendar-print-month__cell {
+  min-block-size: 4em;
+  padding: 0.25em;
+  border: 1px solid var(--border);
+  font-size: 1em;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.calendar-print-month__cell--outside {
+  color: var(--muted);
+}
+
+.calendar-print-month__day {
+  display: block;
+  font-weight: 600;
+}
+
+.calendar-print-month__entry {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15em;
+  align-items: baseline;
+  margin-top: 0.1em;
+}
+
+.calendar-print-month__icon {
+  flex: none;
+  color: var(--text);
+}
+
+/* Full wrap in print — no line clamp, no ellipsis, no clipping. */
+.calendar-print-month__text {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+@media print {
+  .calendar-print-controls,
+  .calendar-print-heading {
+    display: none !important;
+  }
+
+  .calendar-print-months {
+    gap: 0;
+    overflow: visible;
+  }
+
+  .calendar-print-month {
+    inline-size: auto;
+    /* One month per page; the last month must not force a trailing blank page. */
+    break-after: page;
+  }
+
+  .calendar-print-month:last-child {
+    break-after: auto;
+  }
+
+  /* Contain a month that fits at the floor to one page. The cap covers the
+     whole month (heading included) and derives from the shared print geometry,
+     so it matches the JS fit budget. A month that still overflows at the floor
+     releases the cap (`data-spill="true"`) so its content flows onto a
+     following page instead of shrinking or clipping. */
+  .calendar-print-month:not([data-spill='true']) {
+    max-height: calc(
+      (var(--calendar-print-page-height-mm) - 2 * var(--calendar-print-page-margin-mm)) * 1mm
+    );
+  }
+
+  .calendar-print-month__row,
+  .calendar-print-month__cell {
+    break-inside: avoid;
+  }
+
+  .calendar-print-month__heading,
+  .calendar-print-month__weekday,
+  .calendar-print-month__cell,
+  .calendar-print-month__day,
+  .calendar-print-month__text,
+  .calendar-print-month__icon {
+    color: #000;
+    background: transparent;
+  }
+
+  .calendar-print-month__weekday,
+  .calendar-print-month__cell {
+    border-color: #000;
+  }
+
+  .calendar-print-page {
+    page: calendar-print;
+  }
+}
+
+/* Page-size ownership is per print view (M10-02, docs/M10_PLAN.md §1.6): the
+   calendar print view opts into a named landscape page, the grocery print view
+   into a named portrait page. There is deliberately no app-wide `@page` size or
+   margin, so printing any other page keeps the browser's defaults. The paper is
+   pinned (A4) so pagination is deterministic and does not depend on the
+   browser's default paper (Letter in headless Chromium). The calendar margin
+   must match `--calendar-print-page-margin-mm` (asserted by e2e/print.spec.ts). */
+@page calendar-print {
+  size: A4 landscape;
+  margin: 10mm;
+}
+
+/* The grocery list is a single-column document, so A4 portrait is the natural
+   pinned paper; it keeps the M8 print layout deterministic too. */
 @page grocery-list {
-  size: portrait;
+  size: A4 portrait;
+  margin: 12mm;
 }

@@ -1,4 +1,5 @@
 import { useMemo, useState, type JSX } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import type {
   BatchRerollMode,
@@ -23,6 +24,7 @@ import { RerollMenu } from './RerollMenu'
 import { UndoBanner } from './UndoBanner'
 import { useCalendarAccess } from './access'
 import { describeRerollError } from './calendarErrors'
+import { formatMonthKey } from './printRange'
 import { useCalendarRange, useRerollCalendarDay } from './useCalendar'
 
 type CalendarView = 'month' | 'agenda'
@@ -38,6 +40,7 @@ type UndoTarget =
  */
 export function CalendarPage(): JSX.Element {
   const { canView, canEdit } = useCalendarAccess()
+  const navigate = useNavigate()
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
   const [monthIndex, setMonthIndex] = useState(now.getMonth())
@@ -158,7 +161,10 @@ export function CalendarPage(): JSX.Element {
           <button type="button" onClick={goToToday}>
             Today
           </button>
-          <button type="button" onClick={() => window.print()}>
+          <button
+            type="button"
+            onClick={() => navigate(`/calendar/print?month=${formatMonthKey(year, monthIndex)}`)}
+          >
             Print
           </button>
           {canEdit && (
