@@ -486,6 +486,12 @@ Requirements:
 - no lock icons
 - wrap long names
 
+> **Clarification (M10, approved 2026-10-13).** "Wrap long names" and "one month
+> per page" are reconciled as follows: long names **wrap fully**; a busy month
+> **auto-shrinks** to a **≈10pt legibility floor**; and a month that still
+> overflows at that floor **continues onto a following page** rather than
+> shrinking further or clipping. See `docs/M10_PLAN.md` §1.5.
+
 List-style calendar printing deferred.
 
 ---

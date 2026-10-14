@@ -214,6 +214,31 @@ versions follow [Semantic Versioning](https://semver.org/).
   replay), the documented event → query-key mapping, an accessible non-blocking
   `Live`/`Reconnecting…` indicator, and socket teardown on logout. Schema: none —
   live sync is stateless (no table or migration).
+- Milestone 10 — printing (2026-10-14): a dedicated, deep-linkable calendar print
+  view at `/calendar/print` (the calendar toolbar's Print button navigates to it)
+  with screen-only controls (start month + a month count of 1–12, defaulting to
+  the month being viewed, carried as `?month=YYYY-MM`), one printable month per
+  page in chronological order including year-boundary jobs, and a month/year
+  heading on each page. Long names wrap fully (never ellipsis-clipped); a busy
+  month auto-shrinks deterministically to a ≈10pt legibility floor; and a month
+  that still overflows at the floor continues onto a following page rather than
+  shrinking further or clipping. Page size is owned per print view via named
+  `@page` rules — `@page calendar-print { size: A4 landscape; margin: 10mm }` and
+  `@page grocery-list { size: A4 portrait; margin: 12mm }` — replacing the
+  app-wide M5 `@page { size: landscape }` and the global M8
+  `@page { margin: 12mm }`, so printing any other page keeps the browser defaults.
+  Output is black on white with no background fills and no colour-only meaning,
+  legible in greyscale. Printed calendar content is the day number and the
+  recipe/special-event text, the curated special-event icons in black, and
+  eat-out / fend-for-yourself as text — with no meal photos, lock icons, notes,
+  diner count, or restaurant/location. Any month (including past months) is
+  printable. M10 also verifies the M8 grocery print view (still portrait,
+  black-on-white, department order, paper checkbox, per-meal attribution, the
+  manual badge, and checked-excluded-by-default) after the `@page` refactor, and
+  adds a Playwright print battery (`emulateMedia({ media: 'print' })` computed
+  styles plus `page.pdf({ preferCSSPageSize: true })` page-size/page-count
+  assertions). **No new API endpoint and no schema change** — printing is
+  client-rendered from the existing reads.
 
 ### Changed
 

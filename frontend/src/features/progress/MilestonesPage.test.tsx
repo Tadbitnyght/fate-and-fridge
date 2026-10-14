@@ -29,15 +29,15 @@ describe('progress page', () => {
     renderWithProviders(<App />, { route: '/progress' })
 
     expect(await screen.findByRole('heading', { level: 2, name: 'Progress' })).toBeInTheDocument()
-    expect(screen.getByText('10 of 15 milestones complete (67%).')).toBeInTheDocument()
+    expect(screen.getByText('11 of 15 milestones complete (73%).')).toBeInTheDocument()
 
     const progressbar = screen.getByRole('progressbar', { name: 'Milestones complete' })
-    expect(progressbar).toHaveAttribute('aria-valuenow', '67')
-    expect(progressbar).toHaveAttribute('aria-valuetext', '67%')
+    expect(progressbar).toHaveAttribute('aria-valuenow', '73')
+    expect(progressbar).toHaveAttribute('aria-valuetext', '73%')
 
-    expect(screen.getAllByText('Complete', { exact: true })).toHaveLength(10)
+    expect(screen.getAllByText('Complete', { exact: true })).toHaveLength(11)
     // Each of the four planned milestones renders "Planned" twice: the status
-    // chip and the dates line. M10 is in progress.
+    // chip and the dates line. Every milestone through M10 is complete.
     expect(screen.getAllByText('Planned', { exact: true })).toHaveLength(8)
 
     const m1Card = screen
@@ -94,6 +94,12 @@ describe('progress page', () => {
     expect(within(m9Card).getByText(/Completed 2026-10-13/)).toBeInTheDocument()
     // The tag is cut after the live redeploy is verified.
     expect(within(m9Card).getAllByText(/m9-complete/).length).toBeGreaterThan(0)
+
+    const m10Card = screen.getByRole('heading', { level: 3, name: 'M10 — Printing' }).closest('li')!
+    expect(within(m10Card).getByText('Complete', { exact: true })).toBeInTheDocument()
+    expect(within(m10Card).getByText(/Completed 2026-10-14/)).toBeInTheDocument()
+    // The tag and commit are recorded only after the live redeploy is verified.
+    expect(within(m10Card).queryByText(/m10-complete/)).not.toBeInTheDocument()
 
     expect(screen.getByRole('heading', { level: 3, name: 'M14 — Hardening' })).toBeInTheDocument()
   })
@@ -156,7 +162,7 @@ describe('progress page', () => {
     expect(milestonesTab).toHaveAttribute('tabindex', '0')
     expect(futureTab).toHaveAttribute('aria-selected', 'false')
     expect(futureTab).toHaveAttribute('tabindex', '-1')
-    expect(screen.getByText('10 of 15 milestones complete (67%).')).toBeInTheDocument()
+    expect(screen.getByText('11 of 15 milestones complete (73%).')).toBeInTheDocument()
     expect(
       screen.queryByRole('heading', { level: 4, name: 'Pantry / inventory' }),
     ).not.toBeInTheDocument()
@@ -176,7 +182,7 @@ describe('progress page', () => {
     expect(
       screen.queryByRole('heading', { level: 3, name: 'M1 — Setup and Authentication' }),
     ).not.toBeInTheDocument()
-    expect(screen.queryByText('10 of 15 milestones complete (67%).')).not.toBeInTheDocument()
+    expect(screen.queryByText('11 of 15 milestones complete (73%).')).not.toBeInTheDocument()
   })
 
   it('supports Left/Right/Home/End keyboard navigation with roving focus', async () => {

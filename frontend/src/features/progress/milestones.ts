@@ -327,14 +327,24 @@ export const MILESTONES: Milestone[] = [
     id: 'M10',
     number: 10,
     name: 'Printing',
-    status: 'in_progress',
-    summary: 'Print output for the calendar and grocery list, with browser print CSS.',
+    status: 'complete',
+    summary:
+      'Print output for the calendar and grocery list: a dedicated landscape calendar print view with multi-month page handling, long-name wrapping with auto-shrink and spill, and per-view print page ownership.',
     features: [
       'Landscape monthly calendar print with multi-month page handling',
       'Long-name wrapping with auto-shrink and spill',
       'Per-view print page ownership (calendar landscape, grocery portrait)',
       'Grocery print attribution and include-checked option',
       'Browser print CSS testing (print media + PDF geometry)',
+    ],
+    completedOn: '2026-10-14',
+    // The tag is cut after the live redeploy is verified.
+    evidence: [
+      { label: 'Backend tests', value: '2114' },
+      { label: 'Vitest', value: '378' },
+      { label: 'Playwright (hermetic)', value: '65 passed / 3 pre-existing stack skips' },
+      { label: 'M10 verification', value: 'independent review + full §4 battery' },
+      { label: 'Backend gates', value: 'format/build/EF clean' },
     ],
     issues: [131, 132, 133, 134, 135, 136, 137, 138, 139],
     issuesNote: 'Tracking #131; M10-01…M10-08: #132–#139. Runbook: docs/M10_PLAN.md.',

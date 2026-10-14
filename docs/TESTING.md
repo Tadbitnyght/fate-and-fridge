@@ -225,6 +225,30 @@ immutability); M9 adds no version/ETag token.
 
 ---
 
+## 10.1 Print Tests
+Printing is proven at two levels (M10-07, `docs/M10_TEST_MATRIX.md`):
+
+- **Print-media computed styles** — the hermetic Playwright specs call
+  `page.emulateMedia({ media: 'print' })` and assert computed styles: black on
+  white with no background fills, the app chrome (header/nav/footer/skip link/
+  controls/Print/Back) hidden while the printable content survives, long names
+  wrapping fully with no ellipsis, and the ≥≈10pt legibility floor.
+- **PDF geometry** — the same specs call
+  `page.pdf({ preferCSSPageSize: true })` (Chromium) so the CSS `@page` size is
+  honoured, then assert the PDF `/MediaBox` **page size** (calendar A4 landscape,
+  grocery A4 portrait) and the `/Type /Page` **page count** (one month per page;
+  a month that still overflows at the floor spills to a second page). The named
+  `@page` rules are asserted to be the only page-size owners (no unnamed `@page`,
+  no app-wide size or margin).
+
+The print assertions run in the **default hermetic suite** (no stack; the specs
+mock `/api/v1/**` against the Vite dev server). The **real-stack print check** —
+a landscape calendar PDF with one month per page and a portrait grocery PDF on
+the deployed instance — is the M10-10 gate (`docs/M10_PLAN.md` §1.14), not a
+hermetic assertion.
+
+---
+
 ## 11. Accessibility Tests
 - keyboard navigation
 - focus trapping in dialogs

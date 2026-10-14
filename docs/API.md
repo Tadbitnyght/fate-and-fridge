@@ -1031,6 +1031,38 @@ inside the session-guarded app shell, over the same `GET /api/v1/groceries` read
   and keeps each item (`break-inside: avoid`) with its department heading
   (`break-after: avoid`).
 
+### Print views (M10)
+
+M10 adds **no new API endpoint**. The calendar print view is **client-rendered**
+at the client route **`/calendar/print`** (mirroring `/groceries/print`), inside
+the session-guarded app shell, reusing the existing month-scoped calendar range
+read (one request per printed month). Printing stays a browser-print feature —
+there is **no bulk/print endpoint and no server-side PDF export**.
+
+- **Multi-month:** the view selects a **start month** (carried as
+  `?month=YYYY-MM`, defaulting to the month being viewed) and a **month count of
+  1–12**, and prints **one month per page** in chronological order, including
+  jobs that cross a year boundary. Each page carries a **month/year heading**;
+  the household name is never printed. Past months are printable.
+- **Wrap / shrink / spill:** long names wrap fully (never ellipsis-clipped). A
+  busy month auto-shrinks (a deterministic function of the measured content
+  height and the fixed page geometry) down to the **≈10pt legibility floor**; a
+  month that still overflows at the floor continues onto a following page rather
+  than shrinking further or clipping.
+- **Printed content:** day number and recipe/special-event text; curated
+  special-event icons in black; eat-out and fend-for-yourself as text. No meal
+  photos, lock icons, notes, diner count, or restaurant/location.
+- **Named `@page` ownership (per view):** the calendar opts into
+  `@page calendar-print { size: A4 landscape; margin: 10mm }` and the grocery
+  list into `@page grocery-list { size: A4 portrait; margin: 12mm }`. The
+  app-wide `@page { size: landscape }` (M5) and the global
+  `@page { margin: 12mm }` (M8) are **removed**, so printing any other page keeps
+  the browser defaults. The calendar `@page` margin is pinned to the shared
+  `--calendar-print-page-margin-mm` geometry so CSS and the JS fit budget cannot
+  drift.
+- `calendar.view` gates the calendar print content; a caller without it sees a
+  permission message.
+
 ### Errors
 
 Errors: `VALIDATION_FAILED` (range/preset/quantity/reference data/identity),
