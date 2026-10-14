@@ -254,3 +254,8 @@ Process lesson recorded in `docs/BUG_TODO.md`: **CI must be green before a
 milestone is marked complete or tagged.** The verification above was performed on
 the completion commits; these CI fixes landed on `main` afterwards and do not
 change the milestone's product scope or contracts.
+
+**Resolved:** all four CI jobs are green on `main` at `05a9ab8` — Frontend,
+Backend (18m23s), Compose, and the Docker stack acceptance job (including the
+newly gated real-stack live-sync flow, 1 passed) — and `BUG-009`/`BUG-010` are
+closed in `docs/BUG_TODO.md`.

@@ -19,8 +19,8 @@ Status legend: `open` (confirmed, not started) · `fixing` · `verifying` ·
 | BUG-003 | open | Calendar / Concurrency | Concurrent single-date `PUT`/reroll racing a batch Apply on a blank target can raise an unhandled unique-violation 500 | — |
 | BUG-007 | open | Auth / Query cache | The TanStack Query cache is not cleared on logout, so a second user can briefly see the first user's cached data in the same tab | — |
 | BUG-008 | open | Groceries / Data | A live grocery line renders the ingredient label `Onion {owder`; likely stored/seeded data, needs a check that no code path emits a stray `{` | — |
-| BUG-009 | verifying | CI / Dependencies | CI red on `main` since the M9 completion commits because the M9 test-only `Microsoft.AspNetCore.SignalR.Client 10.0.12` pulled the vulnerable `Microsoft.AspNetCore.SignalR.Common 10.0.12` (CVE-2026-70159) | [#139](https://github.com/Tadbitnyght/fate-and-fridge/issues/139) |
-| BUG-010 | fixing | CI / E2E | Stack acceptance job red since the M9 completion commits: the M9-08 real-stack live-sync spec ran before the acceptance spec and consumed the single-shot first-run setup | [#139](https://github.com/Tadbitnyght/fate-and-fridge/issues/139) |
+| BUG-009 | closed | CI / Dependencies | CI red on `main` since the M9 completion commits because the M9 test-only `Microsoft.AspNetCore.SignalR.Client 10.0.12` pulled the vulnerable `Microsoft.AspNetCore.SignalR.Common 10.0.12` (CVE-2026-70159) | [#139](https://github.com/Tadbitnyght/fate-and-fridge/issues/139) |
+| BUG-010 | closed | CI / E2E | Stack acceptance job red since the M9 completion commits: the M9-08 real-stack live-sync spec ran before the acceptance spec and consumed the single-shot first-run setup | [#139](https://github.com/Tadbitnyght/fate-and-fridge/issues/139) |
 
 ---
 
@@ -263,7 +263,8 @@ Status legend: `open` (confirmed, not started) · `fixing` · `verifying` ·
 - **Severity:** High — `main` cannot build; every push and PR fails the backend
   job (no production/data impact).
 - **Reported:** 2026-10-14 (CI job "Backend (format, build, migrations, tests)")
-- **Status:** verifying (fix committed; awaiting a green CI run on `main`)
+- **Status:** closed (2026-10-14 — all CI jobs green on `main`)
+- **Verified:** `main` CI run on `05a9ab8` completed **success** (Frontend, Backend, Compose, and the Docker stack acceptance job); `dotnet list package --vulnerable --include-transitive` reports no vulnerable packages for either project.
 - **Fix commit:** `fix(deps): bump SignalR client test dependency to 10.0.13 (CVE-2026-70159) (#139)`, on `main`.
 - **GitHub:** [#139](https://github.com/Tadbitnyght/fate-and-fridge/issues/139)
 - **Reproduction:** push any commit to `main` (or open a PR) and watch the
@@ -309,7 +310,8 @@ Status legend: `open` (confirmed, not started) · `fixing` · `verifying` ·
   failed on every push/PR since the M9 completion commits (no production/data
   impact).
 - **Reported:** 2026-10-14 (CI job "Docker stack acceptance + Playwright")
-- **Status:** fixing (fix committed; awaiting a green CI run on `main`)
+- **Status:** closed (2026-10-14 — all CI jobs green on `main`)
+- **Verified:** `main` CI run on `05a9ab8` completed **success**; the acceptance step passed (66 passed / 2 skipped), the new reset step passed, and the gated `e2e/stack/live-sync.spec.ts` step passed (1 passed, 7.2 s) on a freshly reset stack.
 - **Fix commits:** `3913ad6` (gate the spec behind `E2E_STACK_LIVE_SYNC` + its own CI step), `8c9f994` (clear the bind-mounted data directory on reset), `10e80f5` (`sudo` for that removal), on `main`.
 - **GitHub:** [#139](https://github.com/Tadbitnyght/fate-and-fridge/issues/139)
 - **Reproduction:** push any commit to `main` (or open a PR) and watch the
