@@ -207,6 +207,9 @@ builder.Services.AddScoped<GroceryCheckStateService>();
 // (docs/M11_PLAN.md §1.14): on-demand SQL, no cache and no statistics table.
 builder.Services.AddScoped<StatisticsService>();
 
+// M11-03: the bounded, month-grouped meal-history read.
+builder.Services.AddScoped<MealHistoryService>();
+
 // M1-09 permission model: one uncached grant reader plus the evaluator service
 // shared by GET /auth/session and the route enforcement filter.
 builder.Services.AddScoped<IPermissionGrantReader, DbPermissionGrantReader>();

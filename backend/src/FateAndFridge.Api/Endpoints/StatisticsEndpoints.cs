@@ -118,10 +118,79 @@ public sealed record RecipeMetricsResponse(
             metrics.TimesEaten);
 }
 
+/// <summary>The applied household-local history range (docs/M11_PLAN.md §1.26).</summary>
+public sealed record MealHistoryRangeResponse(string Start, string End, string Timezone)
+{
+    public static MealHistoryRangeResponse From(MealHistoryRangeRecord range) =>
+        new(
+            range.Start.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            range.End.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            range.Timezone);
+}
+
+/// <summary>One history page: the month key, its label, and its calendar bounds.</summary>
+public sealed record MealHistoryMonthResponse(string Key, string Label, string Start, string End)
+{
+    public static MealHistoryMonthResponse From(MealHistoryMonthRecord month) =>
+        new(
+            month.Key,
+            month.Label,
+            month.Start.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            month.End.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+}
+
 /// <summary>
-/// Statistics routes (docs/API.md §14, docs/M11_PLAN.md §2.1, §2.2). Reads are
-/// gated by <c>recipes.view</c>; the single-user system actor and Admin have
-/// full access and no new permission key is introduced.
+/// One day of the meal log (docs/M11_PLAN.md §1.26): the date, entry type, the
+/// recipe id (null for a tombstone), the display name, and the primary protein
+/// name (null when the entry carries no recipe or its recipe lists no protein).
+/// </summary>
+public sealed record MealHistoryDayResponse(
+    string Date,
+    string EntryType,
+    long? RecipeId,
+    string Name,
+    string? Protein)
+{
+    public static MealHistoryDayResponse From(MealHistoryDayRecord day) =>
+        new(
+            day.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            EnumTextConverters.CalendarEntryTypeToText(day.EntryType),
+            day.RecipeId,
+            day.Name,
+            day.Protein);
+}
+
+/// <summary>
+/// The month cursors, one month per step inside the applied range
+/// (docs/M11_PLAN.md §1.26): <c>newer</c> is the next later month, <c>older</c>
+/// the next earlier one, and both are null at the range ends.
+/// </summary>
+public sealed record MealHistoryPagingResponse(string? Newer, string? Older)
+{
+    public static MealHistoryPagingResponse From(MealHistoryPagingRecord paging) =>
+        new(paging.Newer, paging.Older);
+}
+
+/// <summary>One month page of the strictly-past meal log (docs/M11_PLAN.md §2.2).</summary>
+public sealed record MealHistoryResponse(
+    MealHistoryRangeResponse Range,
+    MealHistoryMonthResponse Month,
+    IReadOnlyList<MealHistoryDayResponse> Days,
+    MealHistoryPagingResponse Paging)
+{
+    public static MealHistoryResponse From(MealHistoryRecord history) =>
+        new(
+            MealHistoryRangeResponse.From(history.Range),
+            MealHistoryMonthResponse.From(history.Month),
+            history.Days.Select(MealHistoryDayResponse.From).ToArray(),
+            MealHistoryPagingResponse.From(history.Paging));
+}
+
+/// <summary>
+/// Statistics routes (docs/API.md §14, docs/M11_PLAN.md §2.1, §2.2). The
+/// overview and per-recipe reads are gated by <c>recipes.view</c> and the
+/// meal-history read by <c>calendar.view</c>; the single-user system actor and
+/// Admin have full access and no new permission key is introduced.
 /// </summary>
 public static class StatisticsEndpoints
 {
@@ -132,6 +201,7 @@ public static class StatisticsEndpoints
         group.MapGet("/overview", GetOverviewAsync).RequirePermission(PermissionKeys.RecipesView);
         group.MapGet("/recipes/{id:long}", GetRecipeMetricsAsync)
             .RequirePermission(PermissionKeys.RecipesView);
+        group.MapGet("/history", GetHistoryAsync).RequirePermission(PermissionKeys.CalendarView);
 
         return app;
     }
@@ -157,5 +227,39 @@ public static class StatisticsEndpoints
                 ErrorCodes.NotFound,
                 "The recipe does not exist.")
             : Results.Ok(RecipeMetricsResponse.From(metrics));
+    }
+
+    private static async Task<IResult> GetHistoryAsync(
+        HttpContext context,
+        MealHistoryService history,
+        CancellationToken cancellationToken)
+    {
+        var request = new MealHistoryRequest(
+            ReadQuery(context, "start"),
+            ReadQuery(context, "end"),
+            ReadQuery(context, "month"),
+            ReadQuery(context, "entry_type"),
+            ReadQuery(context, "recipe"),
+            ReadQuery(context, "protein"));
+
+        var outcome = await history.GetHistoryAsync(request, cancellationToken).ConfigureAwait(false);
+        return outcome switch
+        {
+            MealHistoryOutcome.Success success =>
+                Results.Ok(MealHistoryResponse.From(success.History)),
+            MealHistoryOutcome.ValidationFailed failed =>
+                ApiResults.ValidationError(failed.FieldErrors),
+            _ => Results.StatusCode(StatusCodes.Status500InternalServerError),
+        };
+    }
+
+    private static string? ReadQuery(HttpContext context, string field)
+    {
+        if (!context.Request.Query.TryGetValue(field, out var values) || values.Count == 0)
+        {
+            return null;
+        }
+
+        return values[^1];
     }
 }

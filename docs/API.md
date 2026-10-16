@@ -1198,6 +1198,75 @@ unauthenticated caller and `403 FORBIDDEN` for a member lacking `recipes.view`
 The same three metrics are embedded per item on `GET /api/v1/recipes` (§23) and
 in the recipe detail document's `statistics` object.
 
+### `GET /api/v1/statistics/history`
+
+Permission: `calendar.view`. The read-only meal log: a reverse-chronological,
+month-grouped list of the **days that have an entry**, computed on demand from
+`calendar_entries` (no cache, no statistics table; docs/M11_PLAN.md §1.9,
+§1.14, §1.22). Past dates are immutable in normal use, so the current rows are
+what was eaten — editing past dates and the audit trail are M12. Dates are
+household-local (`HouseholdClock`), never the server wall clock, and there is no
+edit affordance in the contract.
+
+Query parameters (all optional):
+
+| Parameter | Meaning |
+|-----------|---------|
+| `start` / `end` | Household-local `yyyy-MM-dd` range bounds. Default: the household calendar month plus the eleven before it, ending at the household today. The range is capped at **366 days inclusive** (`HouseholdClock.MaxRangeDays`). |
+| `month` | Household-local `yyyy-MM` page selector. Default: the **newest month in the applied range that has an entry**, falling back to the newest month in the range. |
+| `entry_type` | One of the eight entry types: `recipe`, `eat_out`, `host_family_dinner`, `go_to_family_dinner`, `holiday`, `misc`, `fend_for_yourself`, `vacation`. |
+| `recipe` | A live recipe **id** (`5`) or a **normalized stored snapshot name** (`Grandma's Stew`), so a renamed or hard-deleted recipe's meals stay filterable. Matching is by the id or the snapshot name stored with the entry, not by a live recipe name. |
+| `protein` | A primary-protein **id** (`2`, the same shape as the recipes-list `protein_id`). Matches the row's primary protein (below), not every protein a recipe lists. |
+
+Filters are server-side and AND-combined with the range, the selected month, and
+the strictly-past rule. Only **strictly past** days
+(`meal_date < household today`, the "eaten" rule) that **have an entry** appear:
+no blank filler rows. Days are clamped to the applied range (`range.start`
+.. `range.end`), while `month.start`/`month.end` describe the full calendar
+month.
+
+- **Day rows.** `calendar_entries.meal_date` is unique, so a day holds exactly
+  one entry and the day row **is** the entry, newest first:
+  `{ date, entry_type, recipe_id, name, protein }`.
+- `recipe_id` is `null` for a tombstone (an entry whose recipe is gone; M12 owns
+  hard delete, so the meal still shows).
+- `name` is the live recipe name when the recipe survives, else the stored
+  snapshot name (a tombstone), else the entry's own display text (an eat-out
+  restaurant, host, or custom label).
+- `protein` is the entry's **primary protein name**, `null` when the entry
+  carries no recipe or its recipe lists no protein. A recipe that lists several
+  proteins has one deterministic primary: **the lowest protein id**.
+- **Paging.** One month per page. `paging.newer` is the next **later** month
+  inside the applied range and `paging.older` the next **earlier** one, one
+  month per step; both are `null` at the range ends.
+
+Response `200`:
+
+```json
+{
+  "range": { "start": "2025-11-01", "end": "2026-10-16", "timezone": "America/Chicago" },
+  "month": {
+    "key": "2026-10",
+    "label": "October 2026",
+    "start": "2026-10-01",
+    "end": "2026-10-31",
+    "days": [
+      { "date": "2026-10-15", "entry_type": "recipe", "recipe_id": 5, "name": "Tacos", "protein": "Chicken" },
+      { "date": "2026-10-14", "entry_type": "eat_out", "recipe_id": null, "name": "Sushi place", "protein": null }
+    ]
+  },
+  "paging": { "newer": null, "older": "2026-09" }
+}
+```
+
+Errors: `400 VALIDATION_FAILED` (shared envelope) for a malformed `start`,
+`end`, or `month`; `start` later than `end` (reported on `end`); a range longer
+than 366 days (reported on `range`); a `month` outside the applied range; an
+unknown `entry_type`; a blank or non-positive `recipe`; and a non-positive or
+non-numeric `protein`. `401` for an unauthenticated caller and `403 FORBIDDEN`
+for a member lacking `calendar.view` (the overview and per-recipe reads keep
+requiring `recipes.view`).
+
 ---
 
 ## 15. Import

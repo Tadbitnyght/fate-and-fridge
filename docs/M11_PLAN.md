@@ -121,7 +121,18 @@ to the Lead before implementing.
     already-bounded range.
 26. **History paging.** **One month per page, newest first**; the range defaults to
     the last 12 months, and month navigation pages through it (a first load is a
-    single month's query, not twelve).
+    single month's query, not twelve). **Locked 2026-10-16 (M11-03):** the request
+    selects the page with an optional household-local `month=yyyy-MM` (default =
+    the newest month in the range that has at least one entry, falling back to the
+    newest month in the range when none has entries). The response carries the
+    applied `range`, the single `month` (its label, start, end, and its days
+    newest-first), and `paging` cursors (`newer`/`older`, one month per step
+    within the range, `null` at the range ends). Because
+    `calendar_entries.meal_date` is unique, a day holds exactly one entry, so each
+    day row **is** the entry: `{ date, entry_type, recipe_id, name, protein }`,
+    where `recipe_id` is null for a tombstone and `name` is the stored snapshot
+    name, and `protein` is the entry's primary protein (null when none/not
+    applicable). M11-05 builds the browser against this contract; M11-07 tests it.
 27. **Per-recipe metrics on lists.** The **recipes list response gains the three
     §12 metrics** (computed in the same aggregate query) so browser cards need no
     per-card fetch; `GET /statistics/recipes/{id}` remains for the detail view.

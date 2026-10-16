@@ -1,4 +1,3 @@
-using System.Globalization;
 using FateAndFridge.Api.Data;
 using FateAndFridge.Api.Data.Configurations;
 using FateAndFridge.Api.Domain;
@@ -104,17 +103,6 @@ public sealed class StatisticsService(AppDbContext dbContext, HouseholdClock clo
         CalendarEntryType.Vacation,
     ];
 
-    /// <summary>
-    /// English month names, table-driven so the window label is deterministic
-    /// under globalization-invariant mode (invariant ICU is disabled on the
-    /// deployment host).
-    /// </summary>
-    private static readonly string[] MonthNames =
-    [
-        "January", "February", "March", "April", "May", "June",
-        "July", "August", "September", "October", "November", "December",
-    ];
-
     private readonly AppDbContext _dbContext = dbContext;
     private readonly HouseholdClock _clock = clock;
 
@@ -210,8 +198,8 @@ public sealed class StatisticsService(AppDbContext dbContext, HouseholdClock clo
         return new StatisticsOverviewRecord(
             today,
             context.TimeZone.Id,
-            new StatisticsWindowRecord(MonthLabel(today), monthStart, monthEnd),
-            new StatisticsWindowRecord(YearLabel(today), yearStart, yearEnd),
+            new StatisticsWindowRecord(HouseholdDateLabels.MonthLabel(today), monthStart, monthEnd),
+            new StatisticsWindowRecord(HouseholdDateLabels.YearLabel(today), yearStart, yearEnd),
             mostEaten,
             leastRecentlyEaten,
             neverEaten,
@@ -443,12 +431,6 @@ public sealed class StatisticsService(AppDbContext dbContext, HouseholdClock clo
 
         return new ProteinDistributionRecord(ordered, noPrimaryProtein);
     }
-
-    private static string MonthLabel(DateOnly date) =>
-        string.Concat(MonthNames[date.Month - 1], " ", YearLabel(date));
-
-    private static string YearLabel(DateOnly date) =>
-        date.Year.ToString(CultureInfo.InvariantCulture);
 
     /// <summary>A projected eaten occurrence used only inside this service.</summary>
     private sealed record EatenOccurrence(long? RecipeId, string? SnapshotRecipeName, DateOnly MealDate);
