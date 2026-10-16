@@ -3276,3 +3276,199 @@ a.recipes__import:focus-visible {
   size: A4 portrait;
   margin: 12mm;
 }
+
+/* ---------- statistics overview page (#144, M11-04) ---------- */
+
+.stats-empty {
+  margin: 1.25rem 0 0;
+  padding: 1rem 1.25rem;
+  border: 1px dashed var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.stats-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin: 1.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stats-card {
+  flex: 1 1 13rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface);
+}
+
+.stats-card__label {
+  display: block;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.stats-card__value {
+  display: block;
+  font-size: 1.7rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.stats-card__range {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.stats-section {
+  margin-top: 1.75rem;
+}
+
+.stats-section h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+}
+
+.stats-note {
+  margin: 0.5rem 0 0;
+  font-size: 0.9rem;
+}
+
+.stats-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stats-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+}
+
+.stats-row--deleted {
+  border-style: dashed;
+}
+
+.stats-row__rank {
+  min-width: 1.5rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-row__name {
+  font-weight: 600;
+}
+
+.stats-row__name a {
+  display: inline-block;
+  padding: 0.25rem 0;
+}
+
+.stats-row__meta {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.stats-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stats-bar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.75rem;
+}
+
+.stats-bar-row__label {
+  flex: 0 1 auto;
+  min-width: 7rem;
+  font-weight: 600;
+}
+
+.stats-bar {
+  flex: 1 1 8rem;
+  height: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.stats-bar__fill {
+  display: block;
+  height: 100%;
+  background: var(--ok-text);
+}
+
+.stats-bar-row__value {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-events {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stats-event {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+}
+
+.stats-event__count {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.status-chip--normal {
+  background: var(--ok-bg);
+  color: var(--ok-text);
+  border-color: transparent;
+}
+
+.status-chip--manual_only {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.status-chip--retired {
+  background: var(--bg);
+  color: var(--muted);
+}
+
+.status-chip--deleted {
+  background: var(--bad-bg);
+  color: var(--bad-text);
+  border-color: transparent;
+}

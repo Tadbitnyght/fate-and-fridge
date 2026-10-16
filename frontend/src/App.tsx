@@ -29,7 +29,7 @@ import { SettingsPage } from './pages/SettingsPage'
 import { MilestonesPage } from './features/progress/MilestonesPage'
 import { StartupRedirect } from './features/startup/StartupRedirect'
 import { SetupPage } from './pages/SetupPage'
-import { StatisticsPage } from './pages/StatisticsPage'
+import { StatisticsPage } from './features/statistics/StatisticsPage'
 
 export function App() {
   return (

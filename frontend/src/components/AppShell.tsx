@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet } from 'react-router-dom'
 
 import { useAuth } from '../features/auth/AuthContext'
 import { LiveSyncStatus } from '../features/live-sync/LiveSyncStatus'
+import { useAdminAccess } from '../features/settings/access'
 import { useFocusOnRouteChange } from '../hooks/useFocusOnRouteChange'
 import { MAIN_CONTENT_ID, SkipLink } from './SkipLink'
 
@@ -10,6 +11,8 @@ interface NavItem {
   to: string
   label: string
   end?: boolean
+  /** Permission key required to see the item (docs/M11_PLAN.md §1.30). */
+  permission?: string
 }
 
 /** Primary navigation (docs/PRODUCT_SPEC.md §5); Calendar is the default page. */
@@ -18,7 +21,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/recipes', label: 'Recipes' },
   { to: '/groceries', label: 'Groceries' },
-  { to: '/statistics', label: 'Statistics' },
+  { to: '/statistics', label: 'Statistics', permission: 'recipes.view' },
   { to: '/settings', label: 'Settings' },
 ]
 
@@ -27,11 +30,18 @@ function navLinkClass({ isActive }: { isActive: boolean }): string {
 }
 
 export function AppShell() {
-  const { status, user, logout } = useAuth()
+  const { status, user, permissions, logout } = useAuth()
+  const { isAdmin } = useAdminAccess()
   const [signingOut, setSigningOut] = useState(false)
   const [logoutError, setLogoutError] = useState<string | null>(null)
   const mainRef = useRef<HTMLElement>(null)
   useFocusOnRouteChange(mainRef)
+
+  // Admins and the single-user system actor hold every permission key
+  // server-side, so a permission-gated item is always visible to them.
+  const visibleNavItems = NAV_ITEMS.filter(
+    (item) => item.permission === undefined || isAdmin || permissions.includes(item.permission),
+  )
 
   async function handleLogout(): Promise<void> {
     setLogoutError(null)
@@ -76,7 +86,7 @@ export function AppShell() {
         )}
         <nav className="app-nav" aria-label="Primary">
           <ul className="app-nav__list">
-            {NAV_ITEMS.map((item) => (
+            {visibleNavItems.map((item) => (
               <li key={item.to} className="app-nav__item">
                 <NavLink to={item.to} end={item.end} className={navLinkClass}>
                   {item.label}
