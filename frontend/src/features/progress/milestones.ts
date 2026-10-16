@@ -354,18 +354,17 @@ export const MILESTONES: Milestone[] = [
     id: 'M11',
     number: 11,
     name: 'Statistics and History',
-    status: 'planned',
-    summary: 'Household statistics and a meal-history browser over the planned archive.',
+    status: 'in_progress',
+    summary:
+      'Household statistics and a read-only meal-history browser, computed on demand over the current calendar entries (no new tables, no caching).',
     features: [
-      'Statistics overview',
-      'Recipe history metrics',
-      'Protein distribution',
-      'Special-event counts',
-      'Meal-history browser',
+      'Household overview: most eaten, least recently eaten, meal count this month/year',
+      'Per-recipe Last Eaten / Next Planned / Times Eaten on the browser cards and detail',
+      'Primary protein distribution (offline CSS bars) and the seven special-event counts',
+      'Read-only, month-grouped, filterable meal-history browser',
     ],
-    issues: [],
-    issuesNote:
-      'Planned in docs/MILESTONES.md; GitHub issues are created when the milestone starts.',
+    issues: [140, 141, 142, 143, 144, 145, 146, 147, 148],
+    issuesNote: 'Tracking #140; M11-01…M11-08: #141–#148. Runbook: docs/M11_PLAN.md.',
   },
   {
     id: 'M12',

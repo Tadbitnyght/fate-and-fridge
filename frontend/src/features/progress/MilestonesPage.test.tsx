@@ -36,9 +36,11 @@ describe('progress page', () => {
     expect(progressbar).toHaveAttribute('aria-valuetext', '73%')
 
     expect(screen.getAllByText('Complete', { exact: true })).toHaveLength(11)
-    // Each of the four planned milestones renders "Planned" twice: the status
-    // chip and the dates line. Every milestone through M10 is complete.
-    expect(screen.getAllByText('Planned', { exact: true })).toHaveLength(8)
+    // Each of the three remaining planned milestones renders "Planned" twice:
+    // the status chip and the dates line. M11 is in progress, so it renders
+    // "In progress" from both the chip and the dates line.
+    expect(screen.getAllByText('Planned', { exact: true })).toHaveLength(6)
+    expect(screen.getAllByText('In progress', { exact: true })).toHaveLength(2)
 
     const m1Card = screen
       .getByRole('heading', { level: 3, name: 'M1 — Setup and Authentication' })

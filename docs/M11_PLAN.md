@@ -2,6 +2,7 @@
 
 Status: **approved, ready to execute**
 Approved: 2026-10-14 (product owner answered the full M11 decision set)
+Started: 2026-10-16 (tracking #140; M11-01…M11-08: #141–#148)
 Purpose: authoritative M11 runbook. A fresh session should execute M11 from this
 file plus `AGENTS.md`, `docs/MILESTONES.md`, and the existing product, API,
 architecture, database, security, and testing specifications without asking
