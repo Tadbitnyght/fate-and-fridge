@@ -38,7 +38,12 @@ to the Lead before implementing.
    Nothing in statistics may be derived solely from a live `recipes` row.
 6. **Where the §12 metrics appear.** Both on the **recipe browser cards / recipe
    detail** and on the **statistics page**, backed by
-   `GET /api/v1/statistics/recipes/{id}`.
+   `GET /api/v1/statistics/recipes/{id}`. **Locked 2026-10-16 (M11-02):** each
+   metric is `null` when the recipe has no such history (never a fake `0`), so a
+   never-eaten recipe returns `times_eaten: null` and a recipe that is only
+   planned returns `next_planned` set with `times_eaten: null`. The same values
+   flow through the list items and the detail `statistics` object; M11-07 tests
+   this as written.
 7. **Permissions — no contract change.** Statistics reads require
    **`recipes.view`**; meal-history reads require **`calendar.view`**. The seven
    permission keys are unchanged (no eighth key). Enforcement is server-side

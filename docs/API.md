@@ -1737,7 +1737,7 @@ General rules:
 
 - Quantities are precise decimals (`numeric(28,14)`) serialized as JSON numbers; `null` is valid ("to taste"). Bounds: `0 ≤ quantity ≤ 1,000,000`, at most 14 decimal places.
 - `unit` is nullable. `ingredients` holds ungrouped lines; each group nests its own `ingredients`. `sort_order` reflects array order.
-- `statistics` keys are always present. Each is null when the recipe has no such history (never a fake zero); otherwise M11 fills it — `last_eaten`/`next_planned` are household-local dates (`yyyy-MM-dd`) and `times_eaten` is the historical occurrence count. The same three values are filled on the list items and by `GET /statistics/recipes/{id}` (docs/API.md §14).
+- `statistics` keys are always present. Each is null when the recipe has no such history (never a fake zero); otherwise M11 fills it — `last_eaten`/`next_planned` are household-local dates (`yyyy-MM-dd`) and `times_eaten` is the historical occurrence count. The same three values are filled on the list items and by `GET /statistics/recipes/{id}` (docs/API.md §14). **Write responses** (`POST /recipes`, `PATCH /recipes/{id}`) return the `statistics` object with **null** metrics (creation has no history and the write path does not recompute it); re-read the recipe or call §14 for live values.
 
 ### Routes
 
