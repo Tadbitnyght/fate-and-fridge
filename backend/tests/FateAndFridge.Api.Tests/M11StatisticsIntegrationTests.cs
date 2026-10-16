@@ -16,19 +16,23 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// HTTP-level verification of the M11-01 statistics overview
-/// (docs/M11_PLAN.md §1.3, §1.4, §1.12, §1.13, §1.19, §1.20, §1.24, §2.2):
-/// household-local windows, the strictly-past eaten rule, retired/deleted
-/// snapshot integrity, the two rankings with their deterministic ordering, the
-/// month/year counts, the primary-protein distribution, the special-event
-/// counts, and the <c>recipes.view</c> permission matrix. The clock is injected
-/// so "today" is deterministic.
+/// HTTP-level verification of the M11-01 statistics overview and the M11-02
+/// per-recipe metrics (docs/M11_PLAN.md §1.3, §1.4, §1.12, §1.13, §1.19, §1.20,
+/// §1.21, §1.24, §1.27, §2.2): household-local windows, the strictly-past eaten
+/// rule, retired/deleted snapshot integrity, the two rankings with their
+/// deterministic ordering, the month/year counts, the primary-protein
+/// distribution, the special-event counts, the three per-recipe metrics on the
+/// endpoint / recipe list / recipe detail, the history-aware list sorts, and the
+/// <c>recipes.view</c> permission matrix. The clock is injected so "today" is
+/// deterministic.
 /// </summary>
 [Trait("Category", "Integration")]
 [Collection(M11StatisticsCollection.Name)]
 public sealed class M11StatisticsIntegrationTests(M11StatisticsFixture fixture) : IAsyncLifetime
 {
     private const string OverviewPath = "/api/v1/statistics/overview";
+    private const string RecipeMetricsPath = "/api/v1/statistics/recipes";
+    private const string RecipesPath = "/api/v1/recipes";
     private const string AdminPassword = "root horse battery staple";
     private const string MemberPassword = "correct horse battery staple";
     private const string TestUserAgent = "statistics-test";
@@ -373,6 +377,161 @@ public sealed class M11StatisticsIntegrationTests(M11StatisticsFixture fixture) 
         distribution.GetProperty("no_primary_protein").GetInt32().Should().Be(2);
     }
 
+    // ---- M11-02 per-recipe metrics ---------------------------------------
+
+    [Fact]
+    public async Task Recipe_metrics_endpoint_splits_eaten_and_planned()
+    {
+        using var factory = await CreateSingleUserFactoryAsync(new TestTimeProvider(Now));
+        var chili = await SeedRecipeAsync("Chili");
+        await SeedEntryAsync(new DateOnly(2026, 9, 1), CalendarEntryType.HostFamilyDinner, chili.Id, true, "Chili");
+        await SeedEntryAsync(new DateOnly(2026, 11, 10), CalendarEntryType.Recipe, chili.Id, true, "Chili");
+        await SeedEntryAsync(new DateOnly(2026, 11, 14), CalendarEntryType.Recipe, chili.Id, true, "Chili");
+        await SeedEntryAsync(Today, CalendarEntryType.Recipe, chili.Id, true, "Chili");
+        await SeedEntryAsync(new DateOnly(2026, 11, 20), CalendarEntryType.Recipe, chili.Id, true, "Chili");
+        await SeedEntryAsync(new DateOnly(2026, 11, 16), CalendarEntryType.EatOut, null, false);
+
+        using var client = factory.CreateClient();
+        var metrics = await GetRecipeMetricsAsync(client, chili.Id);
+
+        // The recipe-carrying special and the two past recipe days are eaten;
+        // today's dinner is Next Planned, not Times Eaten (strictly past).
+        metrics.GetProperty("last_eaten").GetString().Should().Be("2026-11-14");
+        metrics.GetProperty("next_planned").GetString().Should().Be("2026-11-15");
+        metrics.GetProperty("times_eaten").GetInt32().Should().Be(3);
+    }
+
+    [Fact]
+    public async Task Recipe_metrics_endpoint_reports_no_history_as_null_not_a_fake_zero()
+    {
+        using var factory = await CreateSingleUserFactoryAsync(new TestTimeProvider(Now));
+        var fresh = await SeedRecipeAsync("Fresh Recipe");
+        var futureOnly = await SeedRecipeAsync("Future Only");
+        await SeedEntryAsync(new DateOnly(2026, 12, 1), CalendarEntryType.Recipe, futureOnly.Id, true, "Future Only");
+
+        using var client = factory.CreateClient();
+
+        var freshMetrics = await GetRecipeMetricsAsync(client, fresh.Id);
+        freshMetrics.GetProperty("last_eaten").ValueKind.Should().Be(JsonValueKind.Null);
+        freshMetrics.GetProperty("next_planned").ValueKind.Should().Be(JsonValueKind.Null);
+        freshMetrics.GetProperty("times_eaten").ValueKind.Should().Be(JsonValueKind.Null);
+
+        // A planned-but-never-eaten recipe has Next Planned but still no Times
+        // Eaten count.
+        var futureMetrics = await GetRecipeMetricsAsync(client, futureOnly.Id);
+        futureMetrics.GetProperty("last_eaten").ValueKind.Should().Be(JsonValueKind.Null);
+        futureMetrics.GetProperty("next_planned").GetString().Should().Be("2026-12-01");
+        futureMetrics.GetProperty("times_eaten").ValueKind.Should().Be(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task Recipe_metrics_endpoint_is_not_found_for_unknown_and_hard_deleted_recipes()
+    {
+        using var factory = await CreateSingleUserFactoryAsync(new TestTimeProvider(Now));
+        var ghost = await SeedRecipeAsync("Ghost Stew");
+        await SeedEntryAsync(new DateOnly(2026, 5, 1), CalendarEntryType.Recipe, ghost.Id, true, "Ghost Stew");
+
+        // Simulates M12's hard delete: the recipe row is gone and the entry falls
+        // back to its stored snapshot name (FK ON DELETE SET NULL).
+        await DeleteRecipeAsync(ghost.Id);
+
+        using var client = factory.CreateClient();
+
+        var unknown = await client.GetAsync($"{RecipeMetricsPath}/999999", Ct);
+        unknown.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await ErrorEnvelopeAsync(unknown)).Should().Be("NOT_FOUND");
+
+        var deleted = await client.GetAsync($"{RecipeMetricsPath}/{ghost.Id}", Ct);
+        deleted.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await ErrorEnvelopeAsync(deleted)).Should().Be("NOT_FOUND");
+
+        // The tombstone's meals still count in the household overview.
+        var overview = await GetOverviewAsync(client);
+        var tombstone = MostEaten(overview).Single();
+        tombstone.GetProperty("recipe_id").ValueKind.Should().Be(JsonValueKind.Null);
+        tombstone.GetProperty("name").GetString().Should().Be("Ghost Stew");
+        tombstone.GetProperty("status").GetString().Should().Be("deleted");
+        tombstone.GetProperty("times_eaten").GetInt32().Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Recipes_list_carries_the_metrics_for_every_item_without_a_per_card_fetch()
+    {
+        using var factory = await CreateSingleUserFactoryAsync(new TestTimeProvider(Now));
+        var eaten = await SeedRecipeAsync("Eaten Recipe");
+        var planned = await SeedRecipeAsync("Planned Recipe");
+        await SeedRecipeAsync("Fresh Recipe");
+        await SeedEntryAsync(new DateOnly(2026, 11, 10), CalendarEntryType.Recipe, eaten.Id, true, "Eaten Recipe");
+        await SeedEntryAsync(Today, CalendarEntryType.Recipe, eaten.Id, true, "Eaten Recipe");
+        await SeedEntryAsync(new DateOnly(2026, 11, 25), CalendarEntryType.Recipe, planned.Id, true, "Planned Recipe");
+
+        using var client = factory.CreateClient();
+        var items = await ListItemsAsync(client, "?limit=100");
+
+        var eatenItem = items.Single(item => item.GetProperty("name").GetString() == "Eaten Recipe");
+        eatenItem.GetProperty("last_eaten").GetString().Should().Be("2026-11-10");
+        eatenItem.GetProperty("next_planned").GetString().Should().Be("2026-11-15");
+        eatenItem.GetProperty("times_eaten").GetInt32().Should().Be(1);
+
+        var plannedItem = items.Single(item => item.GetProperty("name").GetString() == "Planned Recipe");
+        plannedItem.GetProperty("last_eaten").ValueKind.Should().Be(JsonValueKind.Null);
+        plannedItem.GetProperty("next_planned").GetString().Should().Be("2026-11-25");
+        plannedItem.GetProperty("times_eaten").ValueKind.Should().Be(JsonValueKind.Null);
+
+        var freshItem = items.Single(item => item.GetProperty("name").GetString() == "Fresh Recipe");
+        freshItem.GetProperty("last_eaten").ValueKind.Should().Be(JsonValueKind.Null);
+        freshItem.GetProperty("next_planned").ValueKind.Should().Be(JsonValueKind.Null);
+        freshItem.GetProperty("times_eaten").ValueKind.Should().Be(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task Recipes_list_history_sorts_use_history_and_break_ties_on_id()
+    {
+        using var factory = await CreateSingleUserFactoryAsync(new TestTimeProvider(Now));
+        var older = await SeedRecipeAsync("Older");
+        var newer = await SeedRecipeAsync("Newer");
+        var frequent = await SeedRecipeAsync("Frequent");
+        await SeedRecipeAsync("Never");
+        await SeedEntryAsync(new DateOnly(2026, 1, 5), CalendarEntryType.Recipe, older.Id, true, "Older");
+        await SeedEntryAsync(new DateOnly(2026, 3, 10), CalendarEntryType.Recipe, newer.Id, true, "Newer");
+        await SeedEntryAsync(new DateOnly(2026, 4, 1), CalendarEntryType.Recipe, frequent.Id, true, "Frequent");
+        await SeedEntryAsync(new DateOnly(2026, 4, 2), CalendarEntryType.Recipe, frequent.Id, true, "Frequent");
+        await SeedEntryAsync(new DateOnly(2026, 4, 3), CalendarEntryType.Recipe, frequent.Id, true, "Frequent");
+        await SeedEntryAsync(new DateOnly(2026, 4, 4), CalendarEntryType.Recipe, frequent.Id, true, "Frequent");
+
+        using var client = factory.CreateClient();
+
+        (await ListNamesAsync(client, "?sort=recently_eaten"))
+            .Should().Equal("Frequent", "Newer", "Older", "Never");
+        (await ListNamesAsync(client, "?sort=least_recently_eaten"))
+            .Should().Equal("Older", "Newer", "Frequent", "Never");
+        // "Older" and "Newer" tie on a count of one and break on id (Older first).
+        (await ListNamesAsync(client, "?sort=most_eaten"))
+            .Should().Equal("Frequent", "Older", "Newer", "Never");
+    }
+
+    [Fact]
+    public async Task Recipe_detail_document_carries_the_metrics()
+    {
+        using var factory = await CreateSingleUserFactoryAsync(new TestTimeProvider(Now));
+        var chili = await SeedRecipeAsync("Chili");
+        var fresh = await SeedRecipeAsync("Fresh Recipe");
+        await SeedEntryAsync(new DateOnly(2026, 11, 10), CalendarEntryType.Recipe, chili.Id, true, "Chili");
+        await SeedEntryAsync(new DateOnly(2026, 11, 20), CalendarEntryType.Recipe, chili.Id, true, "Chili");
+
+        using var client = factory.CreateClient();
+
+        var statistics = (await GetRecipeDetailAsync(client, chili.Id)).GetProperty("statistics");
+        statistics.GetProperty("last_eaten").GetString().Should().Be("2026-11-10");
+        statistics.GetProperty("next_planned").GetString().Should().Be("2026-11-20");
+        statistics.GetProperty("times_eaten").GetInt32().Should().Be(1);
+
+        var freshStatistics = (await GetRecipeDetailAsync(client, fresh.Id)).GetProperty("statistics");
+        freshStatistics.GetProperty("last_eaten").ValueKind.Should().Be(JsonValueKind.Null);
+        freshStatistics.GetProperty("next_planned").ValueKind.Should().Be(JsonValueKind.Null);
+        freshStatistics.GetProperty("times_eaten").ValueKind.Should().Be(JsonValueKind.Null);
+    }
+
     // ---- Permissions -----------------------------------------------------
 
     [Fact]
@@ -410,6 +569,42 @@ public sealed class M11StatisticsIntegrationTests(M11StatisticsFixture fixture) 
     }
 
     [Fact]
+    public async Task Permission_matrix_gates_the_per_recipe_metrics()
+    {
+        await SeedHouseholdAsync(AuthMode.Multiuser);
+        await SeedUserAsync("root", AdminPassword, UserRole.Admin);
+        var viewer = await SeedUserAsync("viewer", MemberPassword, UserRole.Member);
+        await SeedPermissionAsync(viewer.Id, PermissionKeys.RecipesView);
+        await SeedUserAsync("nobody", MemberPassword, UserRole.Member);
+        await MarkSetupCompletedAsync();
+        var recipe = await SeedRecipeAsync("Chili");
+        using var factory = CreateFactory(new TestTimeProvider(Now));
+        var path = $"{RecipeMetricsPath}/{recipe.Id}";
+
+        using (var viewerSession = await SignInAsync(factory, "viewer", MemberPassword))
+        {
+            (await viewerSession.Client.GetAsync(path, Ct)).StatusCode
+                .Should().Be(HttpStatusCode.OK);
+        }
+
+        using (var deniedSession = await SignInAsync(factory, "nobody", MemberPassword))
+        {
+            (await deniedSession.Client.GetAsync(path, Ct)).StatusCode
+                .Should().Be(HttpStatusCode.Forbidden);
+        }
+
+        using (var adminSession = await SignInAsync(factory, "root", AdminPassword))
+        {
+            (await adminSession.Client.GetAsync(path, Ct)).StatusCode
+                .Should().Be(HttpStatusCode.OK);
+        }
+
+        using var anonymous = factory.CreateClient();
+        (await anonymous.GetAsync(path, Ct)).StatusCode
+            .Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
     public async Task Single_user_system_actor_reads_without_a_session()
     {
         using var factory = await CreateSingleUserFactoryAsync(new TestTimeProvider(Now));
@@ -439,6 +634,40 @@ public sealed class M11StatisticsIntegrationTests(M11StatisticsFixture fixture) 
         var response = await client.GetAsync(OverviewPath, Ct);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         return await ReadJsonAsync(response);
+    }
+
+    private static async Task<JsonElement> GetRecipeMetricsAsync(HttpClient client, long recipeId)
+    {
+        var response = await client.GetAsync($"{RecipeMetricsPath}/{recipeId}", Ct);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        return await ReadJsonAsync(response);
+    }
+
+    private static async Task<JsonElement> GetRecipeDetailAsync(HttpClient client, long recipeId)
+    {
+        var response = await client.GetAsync($"{RecipesPath}/{recipeId}", Ct);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        return await ReadJsonAsync(response);
+    }
+
+    private static async Task<List<JsonElement>> ListItemsAsync(HttpClient client, string query)
+    {
+        var response = await client.GetAsync($"{RecipesPath}{query}", Ct);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var root = await ReadJsonAsync(response);
+        return root.GetProperty("items").EnumerateArray().ToList();
+    }
+
+    private static async Task<List<string?>> ListNamesAsync(HttpClient client, string query)
+    {
+        var items = await ListItemsAsync(client, query);
+        return items.Select(item => item.GetProperty("name").GetString()).ToList();
+    }
+
+    private static async Task<string?> ErrorEnvelopeAsync(HttpResponseMessage response)
+    {
+        var root = await ReadJsonAsync(response);
+        return root.GetProperty("error").GetProperty("code").GetString();
     }
 
     private static List<JsonElement> MostEaten(JsonElement root) =>
@@ -556,6 +785,14 @@ public sealed class M11StatisticsIntegrationTests(M11StatisticsFixture fixture) 
         context.Recipes.Add(recipe);
         await context.SaveChangesAsync(Ct);
         return recipe;
+    }
+
+    private async Task DeleteRecipeAsync(long recipeId)
+    {
+        await using var context = fixture.CreateContext();
+        await context.Database.ExecuteSqlInterpolatedAsync(
+            $"DELETE FROM recipes WHERE id = {recipeId}",
+            Ct);
     }
 
     private async Task RenameRecipeAsync(long recipeId, string name)

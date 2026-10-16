@@ -176,6 +176,7 @@ public sealed class RecipeService(
     TimeProvider timeProvider,
     HouseholdClock clock,
     IAuditService auditService,
+    StatisticsService statistics,
     ILogger<RecipeService> logger)
 {
     public const int MaxNameLength = 200;
@@ -212,12 +213,16 @@ public sealed class RecipeService(
     private const string NameTooLongMessage = "name must be at most 200 characters.";
 
     /// <summary>
-    /// Lists recipes matching the filters and named sort, together with the
-    /// unpaged total (M3-09, docs/M3_PLAN.md §1.14–§1.16). History-dependent
-    /// sorts are deterministic until M11 provides history data: they fall back
-    /// to the <c>recently_added</c> order.
+    /// Lists recipes matching the filters and named sort, the unpaged total, and
+    /// the per-recipe history metrics for the returned page (M3-09, M11-02;
+    /// docs/M11_PLAN.md §1.27). The metrics come from one aggregate query for the
+    /// page — or, for a history-aware sort, for every matching recipe before the
+    /// page is chosen — so a list never issues a query per card.
     /// </summary>
-    public async Task<(IReadOnlyList<RecipeRecord> Items, int Total)> ListAsync(
+    public async Task<(
+        IReadOnlyList<RecipeRecord> Items,
+        int Total,
+        IReadOnlyDictionary<long, RecipeMetricsRecord> Metrics)> ListAsync(
         int limit,
         int offset,
         string? normalizedSearch = null,
@@ -273,6 +278,14 @@ public sealed class RecipeService(
 
         var total = await query.CountAsync(cancellationToken);
 
+        // History-aware sorts must see every matching recipe before paging, so
+        // they order the id set and page it themselves (M11-02, docs/API.md §23).
+        if (IsHistorySort(sort))
+        {
+            return await ListByHistoryAsync(query, sort, limit, offset, total, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         query = sort switch
         {
             "name" => query.OrderBy(recipe => recipe.Name).ThenBy(recipe => recipe.Id),
@@ -280,8 +293,6 @@ public sealed class RecipeService(
                 .OrderByDescending(recipe => recipe.IsFavorite)
                 .ThenByDescending(recipe => recipe.CreatedAt)
                 .ThenByDescending(recipe => recipe.Id),
-            // recently_eaten / least_recently_eaten / most_eaten become real
-            // once M5/M11 record history; until then they use the default order.
             _ => query.OrderByDescending(recipe => recipe.CreatedAt).ThenByDescending(recipe => recipe.Id),
         };
 
@@ -294,12 +305,93 @@ public sealed class RecipeService(
             recipes.Select(recipe => recipe.Id).ToArray(),
             cancellationToken);
 
+        // One aggregate query for the whole page keys the three §12 metrics, so
+        // the browser never fetches a metric per card (docs/M11_PLAN.md §1.27).
+        var metrics = await statistics.GetMetricsAsync(
+            recipes.Select(recipe => recipe.Id).ToArray(),
+            cancellationToken).ConfigureAwait(false);
+
         return (
             recipes
                 .Select(recipe => ToRecord(recipe, images.GetValueOrDefault(recipe.Id)))
                 .ToArray(),
-            total);
+            total,
+            metrics);
     }
+
+    private static bool IsHistorySort(string sort) =>
+        sort is "recently_eaten" or "least_recently_eaten" or "most_eaten";
+
+    /// <summary>
+    /// Orders the whole matching set by history, then pages it (docs/API.md §23):
+    /// <c>recently_eaten</c> by latest eaten date, <c>least_recently_eaten</c> by
+    /// oldest eaten date, and <c>most_eaten</c> by eaten count — ties break on
+    /// <c>id</c> and recipes with no history sort last in every case.
+    /// </summary>
+    private async Task<(
+        IReadOnlyList<RecipeRecord> Items,
+        int Total,
+        IReadOnlyDictionary<long, RecipeMetricsRecord> Metrics)> ListByHistoryAsync(
+        IQueryable<Recipe> query,
+        string sort,
+        int limit,
+        int offset,
+        int total,
+        CancellationToken cancellationToken)
+    {
+        var candidateIds = await query
+            .Select(recipe => recipe.Id)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var metrics = await statistics.GetMetricsAsync(candidateIds, cancellationToken)
+            .ConfigureAwait(false);
+
+        var ordered = sort switch
+        {
+            "most_eaten" => candidateIds
+                .OrderByDescending(id => EatenCount(metrics, id))
+                .ThenBy(id => id),
+            "least_recently_eaten" => candidateIds
+                .OrderByDescending(id => LastEaten(metrics, id) is not null)
+                .ThenBy(id => LastEaten(metrics, id))
+                .ThenBy(id => id),
+            _ => candidateIds
+                .OrderByDescending(id => LastEaten(metrics, id) is not null)
+                .ThenByDescending(id => LastEaten(metrics, id))
+                .ThenBy(id => id),
+        };
+
+        var pageIds = ordered
+            .Skip(offset)
+            .Take(limit)
+            .ToArray();
+
+        var pageRecipes = await dbContext.Recipes.AsNoTracking()
+            .Where(recipe => pageIds.Contains(recipe.Id))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+        var recipesById = pageRecipes.ToDictionary(recipe => recipe.Id);
+
+        var images = await LoadImagesAsync(pageIds, cancellationToken).ConfigureAwait(false);
+
+        var items = pageIds
+            .Where(recipesById.ContainsKey)
+            .Select(id => ToRecord(recipesById[id], images.GetValueOrDefault(id)))
+            .ToArray();
+
+        return (items, total, metrics);
+    }
+
+    private static DateOnly? LastEaten(
+        IReadOnlyDictionary<long, RecipeMetricsRecord> metrics,
+        long recipeId) =>
+        metrics.TryGetValue(recipeId, out var record) ? record.LastEaten : null;
+
+    private static int EatenCount(
+        IReadOnlyDictionary<long, RecipeMetricsRecord> metrics,
+        long recipeId) =>
+        metrics.TryGetValue(recipeId, out var record) ? record.TimesEaten ?? 0 : 0;
 
     /// <summary>Reads one recipe's complete document, or null when it does not exist.</summary>
     public async Task<RecipeRecord?> GetAsync(long id, CancellationToken cancellationToken = default)

@@ -1,6 +1,7 @@
 using System.Globalization;
 using FateAndFridge.Api.Auth.Permissions;
 using FateAndFridge.Api.Data.Configurations;
+using FateAndFridge.Api.Errors;
 using FateAndFridge.Api.Services;
 
 namespace FateAndFridge.Api.Endpoints;
@@ -99,6 +100,25 @@ public sealed record StatisticsOverviewResponse(
 }
 
 /// <summary>
+/// The per-recipe metrics (docs/API.md §14, docs/PRODUCT_SPEC.md §12,
+/// docs/M11_PLAN.md §1.2, §1.21): <c>last_eaten</c> and <c>next_planned</c> are
+/// household-local dates (<c>yyyy-MM-dd</c>) or null, and <c>times_eaten</c> is
+/// the historical occurrence count or null when there is none — never a fake
+/// zero.
+/// </summary>
+public sealed record RecipeMetricsResponse(
+    string? LastEaten,
+    string? NextPlanned,
+    int? TimesEaten)
+{
+    public static RecipeMetricsResponse From(RecipeMetricsRecord metrics) =>
+        new(
+            metrics.LastEaten?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            metrics.NextPlanned?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            metrics.TimesEaten);
+}
+
+/// <summary>
 /// Statistics routes (docs/API.md §14, docs/M11_PLAN.md §2.1, §2.2). Reads are
 /// gated by <c>recipes.view</c>; the single-user system actor and Admin have
 /// full access and no new permission key is introduced.
@@ -110,6 +130,8 @@ public static class StatisticsEndpoints
         var group = app.MapGroup("/api/v1/statistics").WithTags("Statistics");
 
         group.MapGet("/overview", GetOverviewAsync).RequirePermission(PermissionKeys.RecipesView);
+        group.MapGet("/recipes/{id:long}", GetRecipeMetricsAsync)
+            .RequirePermission(PermissionKeys.RecipesView);
 
         return app;
     }
@@ -120,5 +142,20 @@ public static class StatisticsEndpoints
     {
         var overview = await statistics.GetOverviewAsync(cancellationToken).ConfigureAwait(false);
         return Results.Ok(StatisticsOverviewResponse.From(overview));
+    }
+
+    private static async Task<IResult> GetRecipeMetricsAsync(
+        long id,
+        StatisticsService statistics,
+        CancellationToken cancellationToken)
+    {
+        var metrics = await statistics.GetRecipeMetricsAsync(id, cancellationToken)
+            .ConfigureAwait(false);
+        return metrics is null
+            ? ApiResults.Error(
+                StatusCodes.Status404NotFound,
+                ErrorCodes.NotFound,
+                "The recipe does not exist.")
+            : Results.Ok(RecipeMetricsResponse.From(metrics));
     }
 }

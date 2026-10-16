@@ -1165,6 +1165,39 @@ A ranked entry's `status` is `normal`, `manual_only`, `retired`, or `deleted`
 unauthenticated caller and `403 FORBIDDEN` for a member lacking `recipes.view`
 (shared envelope).
 
+### `GET /api/v1/statistics/recipes/{id}`
+
+Permission: `recipes.view`. The three per-recipe metrics from
+`docs/PRODUCT_SPEC.md` §12, computed on demand from `calendar_entries` with the
+same occurrence and eaten rules as the overview (docs/M11_PLAN.md §1.2, §1.6,
+§1.21). The route requires a **live** recipe; a hard-deleted recipe returns
+`404 NOT_FOUND` while its meals still appear in the household overview rankings
+as a tombstone (docs/M11_PLAN.md §1.5, §1.20).
+
+- `last_eaten` — latest **eaten** occurrence (`meal_date < household today`), or
+  `null` when the recipe was never eaten.
+- `next_planned` — nearest **today-or-future** occurrence, or `null`.
+- `times_eaten` — the historical (eaten) occurrence count, or `null` when there
+  is none (never a fake zero). A recipe that is only planned has `next_planned`
+  set but `times_eaten` null.
+
+Response `200`:
+
+```json
+{
+  "last_eaten": "2026-11-14",
+  "next_planned": "2026-11-15",
+  "times_eaten": 3
+}
+```
+
+Errors: `404 NOT_FOUND` when no live recipe has that id; `401` for an
+unauthenticated caller and `403 FORBIDDEN` for a member lacking `recipes.view`
+(shared envelope).
+
+The same three metrics are embedded per item on `GET /api/v1/recipes` (§23) and
+in the recipe detail document's `statistics` object.
+
 ---
 
 ## 15. Import
@@ -1704,11 +1737,11 @@ General rules:
 
 - Quantities are precise decimals (`numeric(28,14)`) serialized as JSON numbers; `null` is valid ("to taste"). Bounds: `0 ≤ quantity ≤ 1,000,000`, at most 14 decimal places.
 - `unit` is nullable. `ingredients` holds ungrouped lines; each group nests its own `ingredients`. `sort_order` reflects array order.
-- `statistics` keys are always present and null until M5/M11 record history (never fake zeros). List `last_eaten`/`times_eaten` are always null.
+- `statistics` keys are always present. Each is null when the recipe has no such history (never a fake zero); otherwise M11 fills it — `last_eaten`/`next_planned` are household-local dates (`yyyy-MM-dd`) and `times_eaten` is the historical occurrence count. The same three values are filled on the list items and by `GET /statistics/recipes/{id}` (docs/API.md §14).
 
 ### Routes
 
-- `GET /recipes` — list envelope `{ items, total, limit, offset }`. Query: `search` (normalized name substring), `status` (`normal`, `manual_only`, `retired`), `favorite`, `vegan`, `vegetarian`, `protein_id`, `tag_id`, `sort`, `limit` (default 24, max 100), `offset`. `sort` is one of `recently_added` (default), `name`, `favorites`, `recently_eaten`, `least_recently_eaten`, `most_eaten`. History-dependent sorts are deterministic until M11 data exists and fall back to `recently_added` order. Ties break on `id`. Invalid values return `400 VALIDATION_FAILED`.
+- `GET /recipes` — list envelope `{ items, total, limit, offset }`. Each item carries `id`, `name`, `status`, `is_favorite`, `is_vegan`, `is_vegetarian`, `image`, `last_eaten`, `next_planned`, `times_eaten`, `created_at`, `updated_at`; the three metrics are computed in one aggregate query keyed by the page's recipe ids (no per-card fetch, docs/M11_PLAN.md §1.27) and stay null when the recipe has no such history. Query: `search` (normalized name substring), `status` (`normal`, `manual_only`, `retired`), `favorite`, `vegan`, `vegetarian`, `protein_id`, `tag_id`, `sort`, `limit` (default 24, max 100), `offset`. `sort` is one of `recently_added` (default), `name`, `favorites`, `recently_eaten`, `least_recently_eaten`, `most_eaten`. The three history sorts are now live: `recently_eaten` orders by latest eaten date, `least_recently_eaten` by oldest eaten date, and `most_eaten` by eaten count; ties break on `id`, and recipes with no history sort last. Invalid values return `400 VALIDATION_FAILED`.
 - `POST /recipes` — full create. Body accepts the base metadata plus `ingredient_groups`, `ingredients`, `instruction_sections`, `protein_ids`, and `tag_ids`. Collections default to empty. Returns `201` with the detail document.
 - `GET /recipes/{id}` — detail document; `404 NOT_FOUND` when absent.
 - `PATCH /recipes/{id}` — partial update. Omitted base fields are unchanged; explicit `null` clears an optional field. A present collection is a **full replacement** of that slice (`[]` clears it); omitted collections are untouched. At least one supported field is required.

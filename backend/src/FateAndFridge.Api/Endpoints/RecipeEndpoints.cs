@@ -102,22 +102,34 @@ public sealed record RecipeTagResponse(long Id, string Name)
 }
 
 /// <summary>
-/// History statistics placeholder on the recipe detail document (M3-09). All
-/// values stay null until M5/M11 record history; the keys are always present so
-/// clients never see fake zeros.
+/// History statistics on the recipe detail document (M3-09 placeholder, filled
+/// by M11-02). The keys are always present; each value is null when the recipe
+/// has no such history (never a fake zero) and otherwise a household-local date
+/// (<c>yyyy-MM-dd</c>) or the historical occurrence count
+/// (docs/PRODUCT_SPEC.md §12, docs/API.md §23).
 /// </summary>
 public sealed record RecipeStatisticsResponse(
-    DateTimeOffset? LastEaten,
-    DateTimeOffset? NextPlanned,
+    string? LastEaten,
+    string? NextPlanned,
     int? TimesEaten)
 {
     public static RecipeStatisticsResponse Empty { get; } = new(null, null, null);
+
+    public static RecipeStatisticsResponse From(RecipeMetricsRecord? metrics) =>
+        metrics is null
+            ? Empty
+            : new(
+                metrics.LastEaten?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                metrics.NextPlanned?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                metrics.TimesEaten);
 }
 
 /// <summary>
-/// Recipe list item as returned by <c>GET /api/v1/recipes</c> (M3-09). The
-/// image is embedded since M3-04; last-eaten and times-eaten stay null until
-/// the history milestones land.
+/// Recipe list item as returned by <c>GET /api/v1/recipes</c> (M3-09, M11-02).
+/// The image is embedded since M3-04; the three §12 metrics are filled from the
+/// same aggregate query as the page so a card needs no per-card fetch
+/// (docs/M11_PLAN.md §1.27). Each metric is null when the recipe has no such
+/// history (never a fake zero).
 /// </summary>
 public sealed record RecipeListItemResponse(
     long Id,
@@ -127,12 +139,13 @@ public sealed record RecipeListItemResponse(
     bool IsVegan,
     bool IsVegetarian,
     object? Image,
-    object? LastEaten,
+    string? LastEaten,
+    string? NextPlanned,
     int? TimesEaten,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt)
 {
-    public static RecipeListItemResponse From(RecipeRecord record) =>
+    public static RecipeListItemResponse From(RecipeRecord record, RecipeMetricsRecord? metrics) =>
         new(
             record.Id,
             record.Name,
@@ -141,8 +154,9 @@ public sealed record RecipeListItemResponse(
             record.IsVegan,
             record.IsVegetarian,
             record.Image is null ? null : RecipeImageResponse.From(record.Id, record.Image),
-            null,
-            null,
+            metrics?.LastEaten?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            metrics?.NextPlanned?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            metrics?.TimesEaten,
             record.CreatedAt,
             record.UpdatedAt);
 }
@@ -176,7 +190,7 @@ public sealed record RecipeDetailResponse(
     IReadOnlyList<RecipeTagResponse> Tags,
     RecipeStatisticsResponse Statistics)
 {
-    public static RecipeDetailResponse From(RecipeRecord record) =>
+    public static RecipeDetailResponse From(RecipeRecord record, RecipeMetricsRecord? metrics = null) =>
         new(
             record.Id,
             record.Name,
@@ -199,7 +213,7 @@ public sealed record RecipeDetailResponse(
             record.InstructionSections.Select(RecipeInstructionSectionResponse.From).ToArray(),
             record.Proteins.Select(RecipeProteinResponse.From).ToArray(),
             record.Tags.Select(RecipeTagResponse.From).ToArray(),
-            RecipeStatisticsResponse.Empty);
+            RecipeStatisticsResponse.From(metrics));
 }
 
 /// <summary>Paged recipe list envelope: <c>{ items, total, limit, offset }</c> (M3-09).</summary>
@@ -264,7 +278,7 @@ public static class RecipeEndpoints
             return ApiResults.ValidationError(errors);
         }
 
-        var (items, total) = await recipes.ListAsync(
+        var (items, total, metrics) = await recipes.ListAsync(
             limit,
             offset,
             search,
@@ -277,7 +291,7 @@ public static class RecipeEndpoints
             sort,
             cancellationToken);
         return Results.Ok(new RecipeListResponse(
-            items.Select(RecipeListItemResponse.From).ToArray(),
+            items.Select(record => RecipeListItemResponse.From(record, metrics.GetValueOrDefault(record.Id))).ToArray(),
             total,
             limit,
             offset));
@@ -473,10 +487,18 @@ public static class RecipeEndpoints
     private static async Task<IResult> GetRecipeAsync(
         long id,
         RecipeService recipes,
+        StatisticsService statistics,
         CancellationToken cancellationToken)
     {
         var recipe = await recipes.GetAsync(id, cancellationToken);
-        return recipe is null ? NotFound() : Results.Ok(RecipeDetailResponse.From(recipe));
+        if (recipe is null)
+        {
+            return NotFound();
+        }
+
+        var metrics = await statistics.GetRecipeMetricsAsync(id, cancellationToken)
+            .ConfigureAwait(false);
+        return Results.Ok(RecipeDetailResponse.From(recipe, metrics));
     }
 
     private static async Task<IResult> UpdateRecipeAsync(

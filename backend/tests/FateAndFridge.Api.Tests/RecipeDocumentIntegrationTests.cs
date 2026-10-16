@@ -489,13 +489,15 @@ public sealed class RecipeDocumentIntegrationTests(M1SetupFixture fixture) : IAs
         paged.GetProperty("total").GetInt32().Should().Be(3);
         paged.GetProperty("items").GetArrayLength().Should().Be(1);
 
-        // Statistics placeholders are always present and null, never fake zeros.
+        // Metrics are always present; with no calendar history they stay null
+        // (never a fake zero).
         var alpha = await ReadJsonAsync(
             await session.Client.GetAsync(RecipesPath, cancellationToken),
             cancellationToken);
         var alphaItem = alpha.GetProperty("items").EnumerateArray()
             .Single(item => item.GetProperty("name").GetString() == "Alpha Chicken");
         alphaItem.GetProperty("last_eaten").ValueKind.Should().Be(JsonValueKind.Null);
+        alphaItem.GetProperty("next_planned").ValueKind.Should().Be(JsonValueKind.Null);
         alphaItem.GetProperty("times_eaten").ValueKind.Should().Be(JsonValueKind.Null);
 
         var items = alpha.GetProperty("items");

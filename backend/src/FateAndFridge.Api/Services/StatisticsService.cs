@@ -37,6 +37,19 @@ public sealed record ProteinDistributionRecord(
 /// <summary>One special-event count over the household calendar year.</summary>
 public sealed record SpecialEventCountRecord(CalendarEntryType EntryType, int Count);
 
+/// <summary>
+/// The three per-recipe history metrics (docs/PRODUCT_SPEC.md §12,
+/// docs/M11_PLAN.md §1.2, §2.2): <see cref="LastEaten"/> is the latest eaten
+/// occurrence (strictly before the household today), <see cref="NextPlanned"/>
+/// the nearest today-or-future occurrence, and <see cref="TimesEaten"/> the
+/// historical occurrence count. A metric stays null when there is no such
+/// occurrence — never a fake zero (docs/API.md §14, §23).
+/// </summary>
+public sealed record RecipeMetricsRecord(
+    DateOnly? LastEaten,
+    DateOnly? NextPlanned,
+    int? TimesEaten);
+
 /// <summary>The household statistics overview (docs/M11_PLAN.md §2.2).</summary>
 public sealed record StatisticsOverviewRecord(
     DateOnly Today,
@@ -208,6 +221,103 @@ public sealed class StatisticsService(AppDbContext dbContext, HouseholdClock clo
             specialEventCounts);
     }
 
+    /// <summary>
+    /// The per-recipe metrics for a page of live recipes (Last Eaten / Next
+    /// Planned / Times Eaten; docs/PRODUCT_SPEC.md §12, docs/M11_PLAN.md §1.2).
+    /// One aggregate query keyed by the requested ids serves a whole page, so a
+    /// list of cards needs no per-card fetch (§1.27). An id with no occurrence is
+    /// absent from the result; a caller treats a missing id as all-null history.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<long, RecipeMetricsRecord>> GetMetricsAsync(
+        IReadOnlyCollection<long> recipeIds,
+        CancellationToken cancellationToken = default)
+    {
+        if (recipeIds.Count == 0)
+        {
+            return new Dictionary<long, RecipeMetricsRecord>();
+        }
+
+        var context = await _clock.GetContextAsync(cancellationToken).ConfigureAwait(false);
+        var ids = recipeIds.ToArray();
+
+        var occurrences = await _dbContext.CalendarEntries
+            .AsNoTracking()
+            .Where(MealOccurrenceRules.IsRecipeOccurrence)
+            .Where(entry => entry.RecipeId != null && ids.Contains(entry.RecipeId.Value))
+            .Select(entry => new RecipeOccurrence(entry.RecipeId!.Value, entry.MealDate))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return BuildMetrics(occurrences, context.Today);
+    }
+
+    /// <summary>
+    /// The per-recipe metrics for one live recipe, or null when no live recipe
+    /// has that id — the caller maps that to <c>404 NOT_FOUND</c>
+    /// (docs/M11_PLAN.md §1.21). A hard-deleted recipe's meals stay in the
+    /// household rankings (served from the tombstone snapshot name) but are never
+    /// served from here: this always requires a live <c>recipes</c> row.
+    /// </summary>
+    public async Task<RecipeMetricsRecord?> GetRecipeMetricsAsync(
+        long recipeId,
+        CancellationToken cancellationToken = default)
+    {
+        var isLive = await _dbContext.Recipes
+            .AsNoTracking()
+            .AnyAsync(recipe => recipe.Id == recipeId, cancellationToken)
+            .ConfigureAwait(false);
+        if (!isLive)
+        {
+            return null;
+        }
+
+        var metrics = await GetMetricsAsync([recipeId], cancellationToken).ConfigureAwait(false);
+        return metrics.TryGetValue(recipeId, out var record)
+            ? record
+            : new RecipeMetricsRecord(null, null, null);
+    }
+
+    /// <summary>
+    /// Splits one recipe's occurrences into its eaten and planned metrics. Eaten
+    /// is strictly past (docs/M11_PLAN.md §1.3) so today's dinner counts as
+    /// Next Planned, not Times Eaten. <see cref="RecipeMetricsRecord.TimesEaten"/>
+    /// stays null when the recipe was never eaten (never a fake zero).
+    /// </summary>
+    private static Dictionary<long, RecipeMetricsRecord> BuildMetrics(
+        IReadOnlyList<RecipeOccurrence> occurrences,
+        DateOnly householdToday)
+    {
+        var result = new Dictionary<long, RecipeMetricsRecord>();
+        foreach (var group in occurrences.GroupBy(occurrence => occurrence.RecipeId))
+        {
+            DateOnly? lastEaten = null;
+            DateOnly? nextPlanned = null;
+            var timesEaten = 0;
+            foreach (var occurrence in group)
+            {
+                if (MealOccurrenceRules.IsEaten(occurrence.MealDate, householdToday))
+                {
+                    timesEaten++;
+                    if (lastEaten is null || occurrence.MealDate > lastEaten.Value)
+                    {
+                        lastEaten = occurrence.MealDate;
+                    }
+                }
+                else if (nextPlanned is null || occurrence.MealDate < nextPlanned.Value)
+                {
+                    nextPlanned = occurrence.MealDate;
+                }
+            }
+
+            result[group.Key] = new RecipeMetricsRecord(
+                lastEaten,
+                nextPlanned,
+                timesEaten == 0 ? null : timesEaten);
+        }
+
+        return result;
+    }
+
     private static List<RecipeGroup> BuildGroups(
         IReadOnlyList<EatenOccurrence> eaten,
         IReadOnlyDictionary<long, RecipeSummary> recipeById)
@@ -342,6 +452,9 @@ public sealed class StatisticsService(AppDbContext dbContext, HouseholdClock clo
 
     /// <summary>A projected eaten occurrence used only inside this service.</summary>
     private sealed record EatenOccurrence(long? RecipeId, string? SnapshotRecipeName, DateOnly MealDate);
+
+    /// <summary>A projected recipe occurrence used to compute the §12 metrics.</summary>
+    private sealed record RecipeOccurrence(long RecipeId, DateOnly MealDate);
 
     /// <summary>A live recipe's ranking identity.</summary>
     private sealed record RecipeSummary(long Id, string Name, RecipeStatus Status);

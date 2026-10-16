@@ -141,6 +141,7 @@ public sealed class RecipeEndpointsIntegrationTests(M1SetupFixture fixture) : IA
         item.GetProperty("is_vegetarian").GetBoolean().Should().BeFalse();
         item.GetProperty("image").ValueKind.Should().Be(JsonValueKind.Null);
         item.GetProperty("last_eaten").ValueKind.Should().Be(JsonValueKind.Null);
+        item.GetProperty("next_planned").ValueKind.Should().Be(JsonValueKind.Null);
         item.GetProperty("times_eaten").ValueKind.Should().Be(JsonValueKind.Null);
 
         var audit = (await ReadAuditRowsAsync(cancellationToken)).Should().ContainSingle().Subject;
