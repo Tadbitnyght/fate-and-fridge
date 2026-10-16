@@ -62,7 +62,12 @@ to the Lead before implementing.
     distribution (they are reported by the special-event counts instead). Recipe
     meals with no protein are excluded from the distribution and reported as an
     explicit **"no primary protein"** figure in the response (not silently
-    dropped).
+    dropped). **Locked 2026-10-16 (M11-01 gap resolution):** an occurrence whose
+    recipe lists **several** proteins counts toward **each** of those proteins'
+    bars (the bars answer "meals featuring this protein"), so the bars may sum to
+    more than the occurrence count; `no_primary_protein` covers an occurrence
+    whose recipe has no protein rows or whose live recipe is gone (tombstone).
+    M11-07 tests this rule as written.
 13. **Special-event counts.** One count per entry type — **Eat Out, Host Family
     Dinner, Go To Family Dinner, Holiday, Misc, Fend For Yourself, Vacation** —
     over the **household calendar year**.
