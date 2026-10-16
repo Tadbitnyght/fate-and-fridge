@@ -85,6 +85,48 @@ to the Lead before implementing.
     independent review, docs, the manifest M11 `complete` with evidence, tag
     `m11-complete`, and closing the tracking issue.
 
+### 1.1 Execution details (locked 2026-10-15)
+
+19. **Ranking size.** `most_eaten` and `least_recently_eaten` each return the
+    **top 10**. "Least recently eaten" considers only recipes **eaten at least
+    once**; recipes never eaten are reported as a single `never_eaten` **count**
+    rather than ranked as infinitely stale.
+20. **Grouping identity.** Meals group by **`recipe_id` when present**, else by
+    the **normalized stored snapshot name** (a recipe hard-deleted in M12 nulls
+    the reference). Implement and test this defensively **now**, before hard
+    delete exists, so no history is ever lost.
+21. **Deleted-recipe endpoint.** `GET /statistics/recipes/{id}` returns
+    **`404 NOT_FOUND`** when no live recipe has that id; household rankings still
+    show the deleted recipe's meals via the tombstone row.
+22. **History day set.** The history browser is a **meal log**: it lists only days
+    that have an entry, with no blank filler rows.
+23. **History boundary.** History is **strictly past days**
+    (`meal_date < household today`), matching the "eaten" rule.
+24. **Meal count.** `meal_count_month` / `meal_count_year` count **every calendar
+    entry** in the window regardless of type.
+25. **History filters.** **Server-side and AND-combined**: entry type, recipe, and
+    primary protein. The recipe filter matches the **recipe id or the stored
+    snapshot name**, so deleted recipes stay filterable. Filters narrow within the
+    already-bounded range.
+26. **History paging.** **One month per page, newest first**; the range defaults to
+    the last 12 months, and month navigation pages through it (a first load is a
+    single month's query, not twelve).
+27. **Per-recipe metrics on lists.** The **recipes list response gains the three
+    §12 metrics** (computed in the same aggregate query) so browser cards need no
+    per-card fetch; `GET /statistics/recipes/{id}` remains for the detail view.
+28. **Performance bar.** On the TESTING §12 baseline (2,000 recipes, 10 years of
+    meal history) the overview and a single history month each respond within
+    **1 second**, with **no N+1** query pattern.
+29. **Index policy.** Add a **non-destructive index migration** only if the
+    measured baseline misses the bar, with the Lead's approval.
+30. **UI gating.** Hide the Statistics nav item for a user without
+    `recipes.view` (and the history tab without `calendar.view`) and show a clear
+    "not available" message on a deep link. UI visibility only — the server
+    remains the sole authority.
+31. **Existing recipes UI.** The per-recipe metrics reuse the **existing** recipes
+    browser cards and the recipe detail/editor — **no new page and no new nav
+    item**.
+
 ---
 
 ## 2. M11 architecture and contracts
@@ -106,16 +148,26 @@ to the Lead before implementing.
 ### 2.2 Response contracts (recorded in `docs/API.md` §14 before completion)
 
 - `GET /statistics/overview` (`recipes.view`) → household-local window labels,
-  `most_eaten` (ranked, each with the recipe id or tombstone name, status badge,
-  times eaten, last eaten), `least_recently_eaten`, `meal_count_month`,
-  `meal_count_year`, `protein_distribution` (per protein + an explicit
-  `no_primary_protein` figure), and `special_event_counts` (the seven types).
+  `most_eaten` and `least_recently_eaten` (**top 10 each**, ordered by count /
+  last-eaten date with a deterministic name tie-break; each entry carries the
+  recipe id **or** the tombstone snapshot name, a status badge, times eaten, and
+  last eaten), a `never_eaten` count, `meal_count_month`, `meal_count_year`
+  (both counting **every entry type**), `protein_distribution` (per protein +
+  an explicit `no_primary_protein` figure), and `special_event_counts` (the seven
+  types over the household calendar year).
 - `GET /statistics/recipes/{id}` (`recipes.view`) → `last_eaten`, `next_planned`,
-  `times_eaten` for one recipe, with `404 NOT_FOUND` for an unknown id.
-- `GET /statistics/history?start=&end=` (`calendar.view`) → months newest-first,
-  each with its household-local label and its days (date, entry type, recipe or
-  snapshot name, primary protein), plus the applied range. Errors:
-  `VALIDATION_FAILED` for a malformed/past-unbounded range beyond 366 days.
+  `times_eaten` for one recipe, with `404 NOT_FOUND` when no live recipe has that
+  id (a hard-deleted recipe's meals still appear in the household rankings).
+- **The existing recipes list response gains `last_eaten`, `next_planned`, and
+  `times_eaten`** per recipe (§1.27), computed in the same aggregate query, so the
+  browser needs no per-card request.
+- `GET /statistics/history?start=&end=` (`calendar.view`) → **one month per page,
+  newest first**, each month with its household-local label and only its **days
+  that have an entry** (strictly past dates; each day carries the date, entry
+  type, recipe or snapshot name, and primary protein), plus the applied range and
+  the paging cursor. Optional server-side, AND-combined filters: `entry_type`,
+  `recipe` (id **or** snapshot name), and `protein`. Errors: `VALIDATION_FAILED`
+  for a malformed range or one longer than 366 days.
 - Every response uses the shared error envelope and snake_case JSON.
 
 ### 2.3 Frontend (`frontend/src/`)
@@ -141,7 +193,7 @@ to the Lead before implementing.
 | M11-03 | Meal-history endpoint | `GET /statistics/history?start=&end=` (month-grouped, filters, 366-day bound, month paging) under `calendar.view` | M11-01 |
 | M11-04 | Statistics page UI | overview cards, ranked lists, CSS protein bars, event counts; empty/error states; permission gating | M11-01, M11-02 |
 | M11-05 | Meal-history browser UI | month-grouped read-only list with filters and month paging | M11-03 |
-| M11-06 | Per-recipe metrics in the recipe browser | Last Eaten / Next Planned / Times Eaten on cards/detail with the retired badge | M11-02 |
+| M11-06 | Per-recipe metrics in the recipe browser | Last Eaten / Next Planned / Times Eaten on the existing cards/detail with the retired badge; the recipes **list** response carries the metrics so cards need no per-card fetch | M11-02 |
 | M11-07 | Exhaustive statistics/history tests | definitional matrix (today excluded, specials-with-recipe counted, retired/deleted snapshots, timezone month/year boundaries, protein distribution, event counts), permission matrix, history range/paging bounds, and the TESTING §12 performance baseline (2,000 recipes / 10 years) | M11-01…M11-06 |
 | M11-08 | M11 verification sweep | independent §4 battery, docs (`API.md` §14, `TESTING.md`, `CHANGELOG.md`, the `M8_PLAN` §6 correction), manifest M11 `complete`, rebuild/redeploy + live gate, tag `m11-complete`, close the tracking issue | M11-01…M11-07 |
 
@@ -178,9 +230,11 @@ Milestone mapping: 1→M11-01/M11-04; 2→M11-02/M11-06; 3→M11-01/M11-04;
 - **Permissions:** `recipes.view` on overview/per-recipe, `calendar.view` on
   history; unauthenticated → 401, a member lacking the key → 403, single-user
   system actor and Admin → full access. No new permission key exists.
-- **Performance:** the TESTING §12 baseline (2,000 recipes, 10 years of meal
-  history) returns the overview and a history month within an acceptable time on
-  the reference hardware; no N+1 query storm.
+- **Performance:** on the TESTING §12 baseline (2,000 recipes, 10 years of meal
+  history) the overview and a single history month each respond within **1
+  second**, with **no N+1** query pattern; the recipes list with metrics stays
+  bounded. An index migration is added only if the measured baseline misses this
+  bar (§1.29).
 - **UI:** statistics page cards/lists/bars render and are accessible
   (labels, no colour-only meaning, keyboard, mobile); the history browser is
   read-only with no edit affordance; per-recipe metrics show on cards/detail with
