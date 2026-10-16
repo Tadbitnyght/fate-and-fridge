@@ -1079,6 +1079,92 @@ Errors: `VALIDATION_FAILED` (range/preset/quantity/reference data/identity),
 
 Keep API flexible enough for additional metrics later.
 
+### `GET /api/v1/statistics/overview`
+
+Permission: `recipes.view`. Returns the household overview computed on demand
+from `calendar_entries` (no cache, no statistics table, no background job;
+docs/M11_PLAN.md §1.14). All windows are household-local (`HouseholdClock`
+timezone), never the server wall clock.
+
+- **Occurrence** = an entry carrying a recipe: `recipe` entries plus
+  `host_family_dinner` / `holiday` / `misc` that carry a recipe (the
+  `include_groceries` rule). `eat_out`, `fend_for_yourself`,
+  `go_to_family_dinner`, and vacation never count toward recipe metrics.
+- **Eaten** is strictly past: `meal_date < household today`, so today's dinner
+  is not yet eaten (`docs/M11_PLAN.md` §1.3).
+- **Grouping identity** = `recipe_id` when present, else the normalized stored
+  snapshot name (a tombstone; hard delete is M12). A retired recipe still counts
+  and carries its status badge; a hard-deleted recipe's meals still count under
+  the stored snapshot name. Nothing is derived solely from a live `recipes` row.
+- `most_eaten` and `least_recently_eaten` each return the **top 10**, ordered by
+  times eaten / last-eaten date with a deterministic name tie-break.
+  `least_recently_eaten` only lists recipes eaten at least once; recipes never
+  eaten are reported as the `never_eaten` **count** of live recipes with no
+  eaten occurrence.
+- `meal_count_month` / `meal_count_year` count **every** entry type in the
+  household calendar month/year.
+- `protein_distribution` counts **recipe occurrences** per primary protein (an
+  occurrence whose recipe lists several proteins counts toward each bar) plus an
+  explicit `no_primary_protein` figure (a recipe with no protein rows, or a
+  tombstone whose live recipe is gone). No-recipe days are excluded from the
+  distribution and appear only in the special-event counts.
+- `special_event_counts` gives one count per special-event type (all seven,
+  excluding `recipe`) over the household calendar year.
+
+Response `200`:
+
+```json
+{
+  "windows": {
+    "today": "2026-11-15",
+    "timezone": "America/Chicago",
+    "month": { "label": "November 2026", "start": "2026-11-01", "end": "2026-11-30" },
+    "year": { "label": "2026", "start": "2026-01-01", "end": "2026-12-31" }
+  },
+  "most_eaten": [
+    {
+      "recipe_id": 5,
+      "name": "Tacos",
+      "status": "normal",
+      "times_eaten": 9,
+      "last_eaten": "2026-11-01"
+    }
+  ],
+  "least_recently_eaten": [
+    {
+      "recipe_id": null,
+      "name": "Grandma's Stew",
+      "status": "deleted",
+      "times_eaten": 3,
+      "last_eaten": "2025-12-24"
+    }
+  ],
+  "never_eaten": 42,
+  "meal_count_month": 12,
+  "meal_count_year": 140,
+  "protein_distribution": {
+    "proteins": [
+      { "protein_id": 2, "name": "Chicken", "count": 30 }
+    ],
+    "no_primary_protein": 7
+  },
+  "special_event_counts": [
+    { "entry_type": "eat_out", "count": 4 },
+    { "entry_type": "host_family_dinner", "count": 1 },
+    { "entry_type": "go_to_family_dinner", "count": 2 },
+    { "entry_type": "holiday", "count": 1 },
+    { "entry_type": "misc", "count": 0 },
+    { "entry_type": "fend_for_yourself", "count": 6 },
+    { "entry_type": "vacation", "count": 1 }
+  ]
+}
+```
+
+A ranked entry's `status` is `normal`, `manual_only`, `retired`, or `deleted`
+(a tombstone). `recipe_id` is null only for a tombstone. Errors: `401` for an
+unauthenticated caller and `403 FORBIDDEN` for a member lacking `recipes.view`
+(shared envelope).
+
 ---
 
 ## 15. Import

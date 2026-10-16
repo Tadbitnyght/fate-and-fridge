@@ -203,6 +203,10 @@ builder.Services.AddScoped<GroceryPreferenceService>();
 builder.Services.AddScoped<GroceryStapleService>();
 builder.Services.AddScoped<GroceryCheckStateService>();
 
+// M11-01: read-only statistics aggregates over the request AppDbContext
+// (docs/M11_PLAN.md §1.14): on-demand SQL, no cache and no statistics table.
+builder.Services.AddScoped<StatisticsService>();
+
 // M1-09 permission model: one uncached grant reader plus the evaluator service
 // shared by GET /auth/session and the route enforcement filter.
 builder.Services.AddScoped<IPermissionGrantReader, DbPermissionGrantReader>();
@@ -307,6 +311,7 @@ app.MapRecipeEndpoints();
 app.MapRecipeImageEndpoints();
 app.MapCalendarEndpoints();
 app.MapGroceryEndpoints();
+app.MapStatisticsEndpoints();
 app.MapOperationEndpoints();
 app.MapImportEndpoints();
 
