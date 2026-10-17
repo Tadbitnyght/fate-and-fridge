@@ -32,6 +32,7 @@ public sealed class M11StatisticsIntegrationTests(M11StatisticsFixture fixture) 
 {
     private const string OverviewPath = "/api/v1/statistics/overview";
     private const string RecipeMetricsPath = "/api/v1/statistics/recipes";
+    private const string HistoryPath = "/api/v1/statistics/history";
     private const string RecipesPath = "/api/v1/recipes";
     private const string AdminPassword = "root horse battery staple";
     private const string MemberPassword = "correct horse battery staple";
@@ -602,6 +603,71 @@ public sealed class M11StatisticsIntegrationTests(M11StatisticsFixture fixture) 
         using var anonymous = factory.CreateClient();
         (await anonymous.GetAsync(path, Ct)).StatusCode
             .Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task Edit_implies_view_serves_the_statistics_and_history_reads()
+    {
+        await SeedHouseholdAsync(AuthMode.Multiuser);
+        await SeedUserAsync("root", AdminPassword, UserRole.Admin);
+        var recipeEditor = await SeedUserAsync("recipe-editor", MemberPassword, UserRole.Member);
+        await SeedPermissionAsync(recipeEditor.Id, PermissionKeys.RecipesEdit);
+        var calendarEditor = await SeedUserAsync("calendar-editor", MemberPassword, UserRole.Member);
+        await SeedPermissionAsync(calendarEditor.Id, PermissionKeys.CalendarEdit);
+        var grocer = await SeedUserAsync("grocer", MemberPassword, UserRole.Member);
+        await SeedPermissionAsync(grocer.Id, PermissionKeys.GroceriesView);
+        await MarkSetupCompletedAsync();
+        var recipe = await SeedRecipeAsync("Chili");
+        using var factory = CreateFactory(new TestTimeProvider(Now));
+
+        using (var session = await SignInAsync(factory, "recipe-editor", MemberPassword))
+        {
+            // recipes.edit implies recipes.view (PermissionEvaluator.ForMember).
+            (await session.Client.GetAsync(OverviewPath, Ct)).StatusCode.Should().Be(HttpStatusCode.OK);
+            (await session.Client.GetAsync($"{RecipeMetricsPath}/{recipe.Id}", Ct)).StatusCode
+                .Should().Be(HttpStatusCode.OK);
+            (await session.Client.GetAsync(RecipesPath, Ct)).StatusCode.Should().Be(HttpStatusCode.OK);
+            // It does not imply calendar.view.
+            (await session.Client.GetAsync(HistoryPath, Ct)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        }
+
+        using (var session = await SignInAsync(factory, "calendar-editor", MemberPassword))
+        {
+            (await session.Client.GetAsync(HistoryPath, Ct)).StatusCode.Should().Be(HttpStatusCode.OK);
+            // calendar.edit implies only calendar.view, never recipes.view.
+            (await session.Client.GetAsync(OverviewPath, Ct)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        }
+
+        using (var session = await SignInAsync(factory, "grocer", MemberPassword))
+        {
+            (await session.Client.GetAsync(OverviewPath, Ct)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+            (await session.Client.GetAsync(HistoryPath, Ct)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        }
+    }
+
+    [Fact]
+    public async Task Recipes_list_is_gated_by_recipes_view()
+    {
+        await SeedHouseholdAsync(AuthMode.Multiuser);
+        await SeedUserAsync("root", AdminPassword, UserRole.Admin);
+        var viewer = await SeedUserAsync("viewer", MemberPassword, UserRole.Member);
+        await SeedPermissionAsync(viewer.Id, PermissionKeys.RecipesView);
+        await SeedUserAsync("nobody", MemberPassword, UserRole.Member);
+        await MarkSetupCompletedAsync();
+        using var factory = CreateFactory(new TestTimeProvider(Now));
+
+        using (var session = await SignInAsync(factory, "viewer", MemberPassword))
+        {
+            (await session.Client.GetAsync(RecipesPath, Ct)).StatusCode.Should().Be(HttpStatusCode.OK);
+        }
+
+        using (var session = await SignInAsync(factory, "nobody", MemberPassword))
+        {
+            (await session.Client.GetAsync(RecipesPath, Ct)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        }
+
+        using var anonymous = factory.CreateClient();
+        (await anonymous.GetAsync(RecipesPath, Ct)).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]

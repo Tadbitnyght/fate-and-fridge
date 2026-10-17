@@ -223,6 +223,85 @@ public sealed class M11MealHistoryIntegrationTests(M11StatisticsFixture fixture)
     }
 
     [Fact]
+    public async Task Walking_the_month_cursors_visits_every_month_in_the_range_exactly_once()
+    {
+        using var factory = await CreateSingleUserFactoryAsync(new TestTimeProvider(Now));
+        var recipe = await SeedRecipeAsync("Chili");
+        await SeedEntryAsync(new DateOnly(2025, 12, 25), CalendarEntryType.Recipe, recipe.Id, true, "Chili");
+        await SeedEntryAsync(new DateOnly(2026, 3, 10), CalendarEntryType.Recipe, recipe.Id, true, "Chili");
+        await SeedEntryAsync(new DateOnly(2026, 10, 20), CalendarEntryType.Recipe, recipe.Id, true, "Chili");
+
+        using var client = factory.CreateClient();
+
+        // The default range is 2025-12..2026-11 (twelve household months).
+        var expected = new[]
+        {
+            "2025-12", "2026-01", "2026-02", "2026-03", "2026-04", "2026-05",
+            "2026-06", "2026-07", "2026-08", "2026-09", "2026-10", "2026-11",
+        };
+
+        // Walk older from the newest month in the range.
+        var olderWalk = new List<string>();
+        var page = await GetHistoryAsync(client, "?month=2026-11");
+        page.GetProperty("paging").GetProperty("newer").ValueKind.Should().Be(JsonValueKind.Null);
+        olderWalk.Add(MonthKey(page));
+        while (page.GetProperty("paging").GetProperty("older").GetString() is { } older)
+        {
+            page = await GetHistoryAsync(client, $"?month={older}");
+            MonthKey(page).Should().Be(older);
+            page.GetProperty("month").GetProperty("start").GetString().Should().Be($"{older}-01");
+            olderWalk.Add(MonthKey(page));
+        }
+
+        olderWalk.Should().Equal(expected.Reverse());
+        olderWalk.Should().OnlyHaveUniqueItems();
+
+        // A month without entries still pages (a page is a month, not a month with
+        // meals); its day list is empty rather than skipped.
+        Days(await GetHistoryAsync(client, "?month=2026-01")).Should().BeEmpty();
+
+        // Walk newer back to the newest month.
+        var newerWalk = new List<string>();
+        page = await GetHistoryAsync(client, "?month=2025-12");
+        page.GetProperty("paging").GetProperty("older").ValueKind.Should().Be(JsonValueKind.Null);
+        newerWalk.Add(MonthKey(page));
+        while (page.GetProperty("paging").GetProperty("newer").GetString() is { } newer)
+        {
+            page = await GetHistoryAsync(client, $"?month={newer}");
+            MonthKey(page).Should().Be(newer);
+            newerWalk.Add(MonthKey(page));
+        }
+
+        newerWalk.Should().Equal(expected);
+        newerWalk.Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
+    public async Task The_month_page_keeps_days_as_a_sibling_of_month()
+    {
+        using var factory = await CreateSingleUserFactoryAsync(new TestTimeProvider(Now));
+        var recipe = await SeedRecipeAsync("Chili");
+        await SeedEntryAsync(new DateOnly(2026, 10, 15), CalendarEntryType.Recipe, recipe.Id, true, "Chili");
+
+        using var client = factory.CreateClient();
+        var root = await GetHistoryAsync(client, "?month=2026-10");
+
+        // The shipped wire shape (docs/API.md §14, M11_PLAN §1.26): `days` is a
+        // sibling of `month`, never nested inside it.
+        root.GetProperty("month").TryGetProperty("days", out _).Should().BeFalse();
+        root.TryGetProperty("days", out var days).Should().BeTrue();
+        days.ValueKind.Should().Be(JsonValueKind.Array);
+        days.GetArrayLength().Should().Be(1);
+
+        var day = days[0];
+        day.GetProperty("date").GetString().Should().Be("2026-10-15");
+        day.GetProperty("entry_type").GetString().Should().Be("recipe");
+        day.GetProperty("recipe_id").GetInt64().Should().Be(recipe.Id);
+        day.GetProperty("name").GetString().Should().Be("Chili");
+        day.TryGetProperty("protein", out _).Should().BeTrue();
+    }
+
+    [Fact]
     public async Task A_malformed_or_out_of_range_month_is_rejected()
     {
         using var factory = await CreateSingleUserFactoryAsync(new TestTimeProvider(Now));
@@ -474,6 +553,9 @@ public sealed class M11MealHistoryIntegrationTests(M11StatisticsFixture fixture)
 
     private static List<string?> Dates(JsonElement root) =>
         Days(root).Select(day => day.GetProperty("date").GetString()).ToList();
+
+    private static string MonthKey(JsonElement root) =>
+        root.GetProperty("month").GetProperty("key").GetString()!;
 
     private static async Task<string?> ErrorCodeAsync(HttpResponseMessage response)
     {
