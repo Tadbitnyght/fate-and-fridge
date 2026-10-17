@@ -333,3 +333,31 @@ describe('statistics tabs', () => {
     expect(mock.callsFor('/statistics/history')).toBe(0)
   })
 })
+
+/* ---------- M11-06: edit-implies-view gates (docs/M11_PLAN.md §1.30) ---------- */
+
+describe('statistics access gates honour edit-implies-view', () => {
+  it('shows the nav item and the overview for a member with only recipes.edit', async () => {
+    renderPage({ session: { ...memberSession, permissions: ['recipes.edit'] } })
+
+    expect(await screen.findByRole('link', { name: 'Statistics' })).toBeInTheDocument()
+    expect(await screen.findByText('Eaten 9 times')).toBeInTheDocument()
+    expect(screen.queryByText(/do not have permission to view statistics/i)).not.toBeInTheDocument()
+  })
+
+  it('shows the history tab and content for a member with only calendar.edit', async () => {
+    const mock = renderTabsPage({
+      session: { ...memberSession, permissions: ['calendar.edit'] },
+      route: '/statistics?tab=history',
+    })
+
+    expect(await screen.findByRole('region', { name: 'October 2026' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'History' })).toHaveAttribute('aria-selected', 'true')
+    expect(
+      screen.queryByText(/meal history is not available to your account/i),
+    ).not.toBeInTheDocument()
+    expect(mock.callsFor('/statistics/overview')).toBe(0)
+    // Neither recipes.view nor recipes.edit, so the nav item stays hidden.
+    expect(screen.queryByRole('link', { name: 'Statistics' })).not.toBeInTheDocument()
+  })
+})

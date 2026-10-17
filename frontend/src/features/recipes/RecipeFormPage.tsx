@@ -15,6 +15,7 @@ import { useIngredients, useProteins, useTags, useUnits } from '../reference-dat
 import { useRecipeAccess } from './access'
 import { IngredientFields, type PickerOption } from './IngredientFields'
 import { InstructionFields } from './InstructionFields'
+import { RecipeHistoryStats } from './RecipeHistoryStats'
 import { RecipeImageField } from './RecipeImageField'
 import { ReferenceCheckboxes } from './ReferenceCheckboxes'
 import {
@@ -443,6 +444,17 @@ export function RecipeFormPage() {
             }
           />
         </Field>
+
+        {isEdit && recipeQuery.data && (
+          <fieldset className="form__fieldset">
+            <legend>History</legend>
+            <p className="form__hint">
+              Read-only metrics from the household calendar. Retiring a recipe does not remove the
+              meals already eaten.
+            </p>
+            <RecipeHistoryStats metrics={recipeQuery.data.statistics} />
+          </fieldset>
+        )}
 
         <div className="recipe-form__actions">
           <Link className="recipes__new" to="/recipes">

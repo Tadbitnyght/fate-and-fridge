@@ -33,6 +33,7 @@ interface RecipeRow {
   is_vegetarian: boolean
   image: null
   last_eaten: null
+  next_planned: null
   times_eaten: null
   created_at: string
   updated_at: string
@@ -70,6 +71,7 @@ function detail(
     is_vegetarian: false,
     image: null,
     last_eaten: null,
+    next_planned: null,
     times_eaten: null,
     created_at: '2026-10-01T10:00:00Z',
     updated_at: '2026-10-01T10:00:00Z',
@@ -108,6 +110,7 @@ async function mockRecipeApi(page: Page): Promise<{ requests: RecordedRequest[] 
         is_vegetarian: false,
         image: null,
         last_eaten: null,
+        next_planned: null,
         times_eaten: null,
         created_at: now,
         updated_at: now,
@@ -121,6 +124,7 @@ async function mockRecipeApi(page: Page): Promise<{ requests: RecordedRequest[] 
         is_vegetarian: false,
         image: null,
         last_eaten: null,
+        next_planned: null,
         times_eaten: null,
         created_at: now,
         updated_at: now,

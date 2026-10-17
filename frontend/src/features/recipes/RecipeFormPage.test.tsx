@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { App } from '../../App'
@@ -69,6 +69,12 @@ const detail: Recipe = {
   proteins: [{ id: 5, name: 'Chicken', is_active: true }],
   tags: [],
   statistics: { last_eaten: null, next_planned: null, times_eaten: null },
+}
+
+const historyDetail: Recipe = {
+  ...detail,
+  status: 'retired',
+  statistics: { last_eaten: '2026-09-30', next_planned: '2026-10-20', times_eaten: 4 },
 }
 
 function baseMocks(routes: MockRoute[]): MockFetch {
@@ -170,6 +176,37 @@ describe('recipe form', () => {
     const body = requestBodyFor(mock, '/recipes/1', 'PATCH') as Record<string, unknown>
     expect(body.name).toBe('Chicken Supper')
     expect(body.ingredients).toHaveLength(1)
+  })
+
+  it('shows the read-only history metrics on the detail/editor, including for a retired recipe', async () => {
+    baseMocks([{ path: '/recipes/1', method: 'GET', body: historyDetail }])
+
+    renderWithProviders(<App />, { route: '/recipes/1/edit' })
+
+    expect(await screen.findByLabelText('Name')).toHaveValue('Chicken Dinner')
+    expect(screen.getByLabelText('Randomization status')).toHaveValue('retired')
+
+    const history = screen.getByText('History').closest('fieldset')
+    expect(history).not.toBeNull()
+    const scope = within(history as HTMLElement)
+    expect(scope.getByText('Last eaten')).toBeInTheDocument()
+    expect(scope.getByText('Sep 30, 2026')).toBeInTheDocument()
+    expect(scope.getByText('Next planned')).toBeInTheDocument()
+    expect(scope.getByText('Oct 20, 2026')).toBeInTheDocument()
+    expect(scope.getByText('Times eaten')).toBeInTheDocument()
+    expect(scope.getByText('4')).toBeInTheDocument()
+  })
+
+  it('falls back to the no-history label when the recipe has no metrics', async () => {
+    baseMocks([{ path: '/recipes/1', method: 'GET', body: detail }])
+
+    renderWithProviders(<App />, { route: '/recipes/1/edit' })
+
+    expect(await screen.findByLabelText('Name')).toHaveValue('Chicken Dinner')
+
+    const history = screen.getByText('History').closest('fieldset')
+    expect(history).not.toBeNull()
+    expect(within(history as HTMLElement).getAllByText('No history yet')).toHaveLength(3)
   })
 
   it('reports validation problems before contacting the server', async () => {

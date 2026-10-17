@@ -11,8 +11,11 @@ interface NavItem {
   to: string
   label: string
   end?: boolean
-  /** Permission key required to see the item (docs/M11_PLAN.md §1.30). */
-  permission?: string
+  /**
+   * Permission keys that reveal the item — any one is enough
+   * (docs/M11_PLAN.md §1.30).
+   */
+  permissions?: string[]
 }
 
 /** Primary navigation (docs/PRODUCT_SPEC.md §5); Calendar is the default page. */
@@ -21,7 +24,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/recipes', label: 'Recipes' },
   { to: '/groceries', label: 'Groceries' },
-  { to: '/statistics', label: 'Statistics', permission: 'recipes.view' },
+  { to: '/statistics', label: 'Statistics', permissions: ['recipes.view', 'recipes.edit'] },
   { to: '/settings', label: 'Settings' },
 ]
 
@@ -40,7 +43,10 @@ export function AppShell() {
   // Admins and the single-user system actor hold every permission key
   // server-side, so a permission-gated item is always visible to them.
   const visibleNavItems = NAV_ITEMS.filter(
-    (item) => item.permission === undefined || isAdmin || permissions.includes(item.permission),
+    (item) =>
+      item.permissions === undefined ||
+      isAdmin ||
+      item.permissions.some((permission) => permissions.includes(permission)),
   )
 
   async function handleLogout(): Promise<void> {

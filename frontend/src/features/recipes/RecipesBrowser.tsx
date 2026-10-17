@@ -13,6 +13,8 @@ import {
 } from '../../api/recipes'
 import { useProteins, useTags } from '../reference-data/useReferenceData'
 import { useRecipeAccess } from './access'
+import { RecipeHistoryStats } from './RecipeHistoryStats'
+import { historyCountLabel, historyDateLabel } from './recipeMetrics'
 import { useRecipeList } from './useRecipes'
 
 const PAGE_LIMIT = 24
@@ -58,21 +60,6 @@ function RecipeBadges({ recipe }: { recipe: RecipeListItem }) {
       {recipe.is_vegan && <li className="tag">Vegan</li>}
       {recipe.is_vegetarian && <li className="tag">Vegetarian</li>}
     </ul>
-  )
-}
-
-function HistoryStats({ recipe }: { recipe: RecipeListItem }) {
-  return (
-    <dl className="recipe-card__stats">
-      <div>
-        <dt>Last eaten</dt>
-        <dd>{recipe.last_eaten ?? <span className="recipe-muted">No history yet</span>}</dd>
-      </div>
-      <div>
-        <dt>Times eaten</dt>
-        <dd>{recipe.times_eaten ?? <span className="recipe-muted">No history yet</span>}</dd>
-      </div>
-    </dl>
   )
 }
 
@@ -354,7 +341,7 @@ export function RecipesBrowser() {
                   <RecipeName recipe={recipe} canEdit={canEdit} />
                 </h3>
                 <RecipeBadges recipe={recipe} />
-                <HistoryStats recipe={recipe} />
+                <RecipeHistoryStats metrics={recipe} />
               </div>
             </li>
           ))}
@@ -368,6 +355,7 @@ export function RecipesBrowser() {
                 <th scope="col">Name</th>
                 <th scope="col">Status</th>
                 <th scope="col">Last eaten</th>
+                <th scope="col">Next planned</th>
                 <th scope="col">Times eaten</th>
               </tr>
             </thead>
@@ -382,8 +370,9 @@ export function RecipesBrowser() {
                     {recipe.is_favorite && <span className="tag tag--ok">Favorite</span>}
                   </th>
                   <td>{RECIPE_STATUS_LABELS[recipe.status]}</td>
-                  <td>{recipe.last_eaten ?? 'No history yet'}</td>
-                  <td>{recipe.times_eaten ?? 'No history yet'}</td>
+                  <td>{historyDateLabel(recipe.last_eaten)}</td>
+                  <td>{historyDateLabel(recipe.next_planned)}</td>
+                  <td>{historyCountLabel(recipe.times_eaten)}</td>
                 </tr>
               ))}
             </tbody>

@@ -17,6 +17,7 @@ function listItem(
     is_vegetarian: false,
     image: null,
     last_eaten: null,
+    next_planned: null,
     times_eaten: null,
     created_at: '2026-10-01T12:00:00Z',
     updated_at: '2026-10-01T12:00:00Z',
@@ -39,6 +40,14 @@ const alpha = listItem({
 })
 const beta = listItem({ id: 2, name: 'Beta Beef', status: 'manual_only' })
 const retired = listItem({ id: 3, name: 'Gamma Retired', status: 'retired', is_vegan: true })
+const logged = listItem({
+  id: 4,
+  name: 'Delta Stew',
+  status: 'retired',
+  last_eaten: '2026-09-30',
+  next_planned: '2026-10-20',
+  times_eaten: 3,
+})
 
 const proteins = [
   { id: 5, name: 'Chicken', is_active: true },
@@ -141,6 +150,54 @@ describe('recipe browser', () => {
 
     const table = screen.getByRole('table', { name: 'Recipes' })
     expect(within(table).getByRole('rowheader', { name: 'Beta Beef' })).toBeInTheDocument()
+  })
+
+  it('shows the three per-recipe metrics on cards with a no-history fallback', async () => {
+    baseMocks([{ path: '/recipes?', method: 'GET', body: listResponse([alpha, logged]) }])
+
+    renderWithProviders(<App />, { route: '/recipes' })
+    await screen.findByRole('link', { name: 'Alpha Chicken' })
+
+    // A retired recipe still displays its full history, with its status badge.
+    const loggedCard = screen.getByRole('link', { name: 'Delta Stew' }).closest('li')
+    expect(loggedCard).not.toBeNull()
+    const loggedScope = within(loggedCard as HTMLElement)
+    expect(loggedScope.getByText('Retired')).toBeInTheDocument()
+    expect(loggedScope.getByText('Last eaten')).toBeInTheDocument()
+    expect(loggedScope.getByText('Sep 30, 2026')).toBeInTheDocument()
+    expect(loggedScope.getByText('Next planned')).toBeInTheDocument()
+    expect(loggedScope.getByText('Oct 20, 2026')).toBeInTheDocument()
+    expect(loggedScope.getByText('Times eaten')).toBeInTheDocument()
+    expect(loggedScope.getByText('3')).toBeInTheDocument()
+
+    // A recipe with no history falls back for every metric.
+    const emptyCard = screen.getByRole('link', { name: 'Alpha Chicken' }).closest('li')
+    expect(emptyCard).not.toBeNull()
+    expect(within(emptyCard as HTMLElement).getAllByText('No history yet')).toHaveLength(3)
+  })
+
+  it('shows the metrics as columns in the compact list view, including Next planned', async () => {
+    baseMocks([{ path: '/recipes?', method: 'GET', body: listResponse([alpha, logged]) }])
+
+    renderWithProviders(<App />, { route: '/recipes' })
+    await screen.findByRole('link', { name: 'Alpha Chicken' })
+    fireEvent.click(screen.getByRole('button', { name: 'List' }))
+
+    const table = screen.getByRole('table', { name: 'Recipes' })
+    expect(within(table).getByRole('columnheader', { name: 'Next planned' })).toBeInTheDocument()
+
+    const loggedRow = within(table)
+      .getByRole('rowheader', { name: 'Delta Stew' })
+      .closest('tr') as HTMLElement
+    expect(within(loggedRow).getByText('Retired')).toBeInTheDocument()
+    expect(within(loggedRow).getByText('Sep 30, 2026')).toBeInTheDocument()
+    expect(within(loggedRow).getByText('Oct 20, 2026')).toBeInTheDocument()
+    expect(within(loggedRow).getByText('3')).toBeInTheDocument()
+
+    const emptyRow = within(table)
+      .getByRole('rowheader', { name: /Alpha Chicken/ })
+      .closest('tr') as HTMLElement
+    expect(within(emptyRow).getAllByText('No history yet')).toHaveLength(3)
   })
 
   it('shows the empty state and hides write affordances from view-only members', async () => {

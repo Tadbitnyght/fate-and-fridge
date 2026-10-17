@@ -73,8 +73,11 @@ export interface RecipeListItem {
   is_vegan: boolean
   is_vegetarian: boolean
   image: RecipeImage | null
-  /** Always null until calendar history exists (M5/M11). */
+  /** Latest eaten occurrence (household-local `yyyy-MM-dd`), or null (M11). */
   last_eaten: string | null
+  /** Nearest today-or-future occurrence (household-local `yyyy-MM-dd`), or null. */
+  next_planned: string | null
+  /** Historical eaten occurrence count, or null when the recipe has none. */
   times_eaten: number | null
   created_at: string
   updated_at: string
