@@ -125,8 +125,10 @@ to the Lead before implementing.
     selects the page with an optional household-local `month=yyyy-MM` (default =
     the newest month in the range that has at least one entry, falling back to the
     newest month in the range when none has entries). The response carries the
-    applied `range`, the single `month` (its label, start, end, and its days
-    newest-first), and `paging` cursors (`newer`/`older`, one month per step
+    applied `range`, the single `month` (its `key`, `label`, and full
+    calendar-month `start`/`end`), a **sibling** `days` array (newest-first day
+    rows — *not* nested inside `month`; recorded 2026-10-16 after M11-03 shipped
+    that wire shape), and `paging` cursors (`newer`/`older`, one month per step
     within the range, `null` at the range ends). Because
     `calendar_entries.meal_date` is unique, a day holds exactly one entry, so each
     day row **is** the entry: `{ date, entry_type, recipe_id, name, protein }`,
