@@ -146,7 +146,12 @@ to the Lead before implementing.
 30. **UI gating.** Hide the Statistics nav item for a user without
     `recipes.view` (and the history tab without `calendar.view`) and show a clear
     "not available" message on a deep link. UI visibility only — the server
-    remains the sole authority.
+    remains the sole authority. **Locked 2026-10-17 (M11-05 review):** the client
+    gates mirror the server's **edit-implies-view** rule
+    (`PermissionEvaluator.ForMember`), so a member holding `recipes.edit` (or
+    `calendar.edit`) is treated as holding the corresponding `.view` key: the nav
+    item and the history tab are hidden only when the member holds **neither**
+    key. M11-06 applies this to `useStatisticsAccess` and the AppShell nav gate.
 31. **Existing recipes UI.** The per-recipe metrics reuse the **existing** recipes
     browser cards and the recipe detail/editor — **no new page and no new nav
     item**.
