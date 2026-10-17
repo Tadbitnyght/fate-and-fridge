@@ -1,5 +1,5 @@
-import type { JSX } from 'react'
-import { Link } from 'react-router-dom'
+import { useRef, type JSX, type KeyboardEvent } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 
 import {
   SPECIAL_EVENT_LABELS,
@@ -11,34 +11,76 @@ import {
   type StatisticsOverview,
 } from '../../api/statistics'
 import { ErrorScreen, LoadingScreen } from '../../components/Screens'
+import { MealHistoryBrowser } from './MealHistoryBrowser'
 import { useStatisticsAccess } from './access'
+import { formatHouseholdDate } from './statisticsFormat'
 import { useStatisticsOverview } from './useStatistics'
 
+type StatisticsTab = 'overview' | 'history'
+
+const TABS: { id: StatisticsTab; label: string }[] = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'history', label: 'History' },
+]
+
 /**
- * Statistics overview (M11-04, docs/M11_PLAN.md §2.3, docs/API.md §14).
+ * Statistics page (M11-04 overview, M11-05 meal history; docs/M11_PLAN.md
+ * §2.3, docs/API.md §14).
  *
- * `recipes.view` gates the content; a caller without it sees a permission
- * message instead of the page. Every figure (windows, rankings, month/year
- * counts, protein distribution, special-event counts) comes straight from the
- * server — no client-side aggregation, and no client-side date parsing that
- * could shift a household-local date across a timezone boundary.
+ * Two tabs over one route. The URL (`?tab=history`) is the source of truth so
+ * the history browser is deep-linkable; the History tab is offered only with
+ * `calendar.view`, and a deep link without it explains that history is
+ * unavailable. `recipes.view` gates the overview content. Every figure comes
+ * straight from the server — no client-side aggregation, and no client-side
+ * date parsing that could shift a household-local date across a timezone
+ * boundary.
  */
 export function StatisticsPage(): JSX.Element {
-  const { canViewOverview } = useStatisticsAccess()
-  const overviewQuery = useStatisticsOverview(canViewOverview)
+  const { canViewOverview, canViewHistory } = useStatisticsAccess()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
 
-  if (!canViewOverview) {
-    return (
-      <section className="page statistics-page" aria-labelledby="statistics-heading">
-        <h2 id="statistics-heading" tabIndex={-1}>
-          Statistics
-        </h2>
-        <p className="form__error" role="alert">
-          You do not have permission to view statistics. Ask an Admin for the recipes.view
-          permission.
-        </p>
-      </section>
-    )
+  const requestedHistory = searchParams.get('tab') === 'history'
+  const showHistory = requestedHistory && canViewHistory
+  const tabs = canViewHistory ? TABS : TABS.filter((tab) => tab.id !== 'history')
+  const requestedTab: StatisticsTab = requestedHistory ? 'history' : 'overview'
+  // A deep link to a tab the caller may not see falls back to the Overview tab
+  // stop (the only available one) while the panel below explains why.
+  const activeTab: StatisticsTab = tabs.some((tab) => tab.id === requestedTab)
+    ? requestedTab
+    : 'overview'
+
+  // The overview is only fetched while its panel is the one on screen.
+  const overviewQuery = useStatisticsOverview(canViewOverview && !requestedHistory)
+
+  function selectTab(index: number): void {
+    const clamped = (index + tabs.length) % tabs.length
+    const next = tabs[clamped].id
+    setSearchParams(next === 'history' ? { tab: 'history' } : {}, { replace: true })
+    tabRefs.current[clamped]?.focus()
+  }
+
+  function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number): void {
+    switch (event.key) {
+      case 'ArrowRight':
+        event.preventDefault()
+        selectTab(index + 1)
+        break
+      case 'ArrowLeft':
+        event.preventDefault()
+        selectTab(index - 1)
+        break
+      case 'Home':
+        event.preventDefault()
+        selectTab(0)
+        break
+      case 'End':
+        event.preventDefault()
+        selectTab(tabs.length - 1)
+        break
+      default:
+        break
+    }
   }
 
   const overview = overviewQuery.data
@@ -49,23 +91,83 @@ export function StatisticsPage(): JSX.Element {
         Statistics
       </h2>
 
-      {overview && (
-        <p className="page-note">
-          Today is {formatHouseholdDate(overview.windows.today)} ({overview.windows.timezone}).
-        </p>
+      <div className="stats-tabs" role="tablist" aria-label="Statistics views">
+        {tabs.map((tab, index) => {
+          const selected = activeTab === tab.id
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              id={`statistics-tab-${tab.id}`}
+              className={`stats-tab${selected ? ' stats-tab--active' : ''}`}
+              aria-selected={selected}
+              aria-controls={`statistics-panel-${tab.id}`}
+              tabIndex={selected ? 0 : -1}
+              ref={(element) => {
+                tabRefs.current[index] = element
+              }}
+              onClick={() => selectTab(index)}
+              onKeyDown={(event) => handleTabKeyDown(event, index)}
+            >
+              {tab.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {showHistory ? (
+        <div
+          className="stats-tabpanel"
+          id="statistics-panel-history"
+          role="tabpanel"
+          aria-labelledby="statistics-tab-history"
+          tabIndex={0}
+        >
+          <MealHistoryBrowser />
+        </div>
+      ) : requestedHistory ? (
+        <section className="stats-section" aria-labelledby="statistics-history-heading">
+          <h3 id="statistics-history-heading">Meal history</h3>
+          <p className="form__error" role="alert">
+            Meal history is not available to your account. Ask an Admin for the calendar.view
+            permission.
+          </p>
+        </section>
+      ) : (
+        <div
+          className="stats-tabpanel"
+          id="statistics-panel-overview"
+          role="tabpanel"
+          aria-labelledby="statistics-tab-overview"
+          tabIndex={0}
+        >
+          {!canViewOverview && (
+            <p className="form__error" role="alert">
+              You do not have permission to view statistics. Ask an Admin for the recipes.view
+              permission.
+            </p>
+          )}
+
+          {overview && (
+            <p className="page-note">
+              Today is {formatHouseholdDate(overview.windows.today)} ({overview.windows.timezone}).
+            </p>
+          )}
+
+          {overviewQuery.isPending && <LoadingScreen label="Loading statistics…" />}
+
+          {overviewQuery.isError && (
+            <ErrorScreen
+              title="Cannot load statistics"
+              error={overviewQuery.error}
+              onRetry={() => void overviewQuery.refetch()}
+            />
+          )}
+
+          {overview && <Overview overview={overview} />}
+        </div>
       )}
-
-      {overviewQuery.isPending && <LoadingScreen label="Loading statistics…" />}
-
-      {overviewQuery.isError && (
-        <ErrorScreen
-          title="Cannot load statistics"
-          error={overviewQuery.error}
-          onRetry={() => void overviewQuery.refetch()}
-        />
-      )}
-
-      {overview && <Overview overview={overview} />}
     </section>
   )
 }
@@ -263,24 +365,4 @@ function formatTimes(times: number): string {
 
 function formatMeals(count: number): string {
   return count === 1 ? '1 meal' : `${count} meals`
-}
-
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
-/**
- * Renders a household-local `YYYY-MM-DD` string as `Mon D, YYYY` without ever
- * constructing a `Date`: `new Date('2026-11-01')` is UTC midnight and
- * `toLocaleDateString` could move it a day in a negative-offset timezone
- * (docs/M11_PLAN.md §1.26). A value that is not a bare date is shown verbatim.
- */
-function formatHouseholdDate(value: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
-  if (match === null) {
-    return value
-  }
-  const month = MONTHS[Number(match[2]) - 1]
-  if (month === undefined) {
-    return value
-  }
-  return `${month} ${Number(match[3])}, ${match[1]}`
 }

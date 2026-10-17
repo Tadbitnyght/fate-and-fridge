@@ -1,3 +1,4 @@
+import type { CalendarEntryType } from './calendar'
 import { apiRequest } from './client'
 
 /**
@@ -112,4 +113,104 @@ export interface StatisticsOverview {
 
 export function getStatisticsOverview(): Promise<StatisticsOverview> {
   return apiRequest<StatisticsOverview>('/statistics/overview')
+}
+
+/* ---------- meal history ---------- */
+
+/**
+ * One day of the strictly-past meal log. A day row **is** the entry
+ * (`calendar_entries.meal_date` is unique), so there is no blank filler
+ * (docs/M11_PLAN.md §1.22).
+ */
+export interface MealHistoryDay {
+  /** Household-local `YYYY-MM-DD`. */
+  date: string
+  entry_type: CalendarEntryType
+  /** Null for a tombstone: the live recipe is gone, so only the name remains. */
+  recipe_id: number | null
+  /** Live recipe name, else the stored snapshot name, else the entry's display text. */
+  name: string
+  /** Primary protein name, or null when the entry carries no primary protein. */
+  protein: string | null
+}
+
+/** The applied household-local range the month was selected inside. */
+export interface MealHistoryRange {
+  start: string
+  end: string
+  timezone: string
+}
+
+/** The single month page: its key, label, and full calendar-month bounds. */
+export interface MealHistoryMonth {
+  /** Household-local `YYYY-MM`, matching the `month` request parameter. */
+  key: string
+  label: string
+  start: string
+  end: string
+}
+
+/** The month cursors: one month per step, both null at the range ends. */
+export interface MealHistoryPaging {
+  newer: string | null
+  older: string | null
+}
+
+/**
+ * `GET /api/v1/statistics/history` (docs/API.md §14). One month page of the
+ * read-only meal log, newest first.
+ *
+ * The shipped M11-03 response carries `days` as a **sibling** of `month`
+ * (asserted by `M11MealHistoryIntegrationTests`); the §14 example's nested
+ * `month.days` placement is a documentation error — the wire shape here
+ * matches the server.
+ */
+export interface MealHistoryResponse {
+  range: MealHistoryRange
+  month: MealHistoryMonth
+  days: MealHistoryDay[]
+  paging: MealHistoryPaging
+}
+
+/** Server-side, AND-combined meal-history filters (docs/M11_PLAN.md §1.25). */
+export interface MealHistoryParams {
+  /** Household-local `YYYY-MM-DD` range bound. */
+  start?: string
+  /** Household-local `YYYY-MM-DD` range bound. */
+  end?: string
+  /** Household-local `YYYY-MM` month page; omitted, the server picks the newest. */
+  month?: string
+  entry_type?: CalendarEntryType
+  /** A live recipe id (`5`) or a normalized stored snapshot name (`Grandma's Stew`). */
+  recipe?: string
+  /** A primary-protein id (the recipes-list `protein_id` shape). */
+  protein?: number
+}
+
+function historyQuery(params: MealHistoryParams): string {
+  const query = new URLSearchParams()
+  if (params.start !== undefined && params.start.length > 0) {
+    query.set('start', params.start)
+  }
+  if (params.end !== undefined && params.end.length > 0) {
+    query.set('end', params.end)
+  }
+  if (params.month !== undefined && params.month.length > 0) {
+    query.set('month', params.month)
+  }
+  if (params.entry_type !== undefined) {
+    query.set('entry_type', params.entry_type)
+  }
+  if (params.recipe !== undefined && params.recipe.length > 0) {
+    query.set('recipe', params.recipe)
+  }
+  if (params.protein !== undefined) {
+    query.set('protein', String(params.protein))
+  }
+  const text = query.toString()
+  return text.length > 0 ? `?${text}` : ''
+}
+
+export function getMealHistory(params: MealHistoryParams = {}): Promise<MealHistoryResponse> {
+  return apiRequest<MealHistoryResponse>(`/statistics/history${historyQuery(params)}`)
 }

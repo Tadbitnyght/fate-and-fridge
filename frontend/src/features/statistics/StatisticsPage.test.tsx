@@ -6,7 +6,6 @@ import { SPECIAL_EVENT_TYPES, type StatisticsOverview } from '../../api/statisti
 import { adminSession, memberSession, setupCompleteStatus } from '../../test/fixtures'
 import { installMockFetch, type MockFetch, type MockResponse } from '../../test/mockFetch'
 import { renderWithProviders } from '../../test/utils'
-
 function sampleOverview(overrides: Partial<StatisticsOverview> = {}): StatisticsOverview {
   return {
     windows: {
@@ -220,5 +219,117 @@ describe('statistics overview page', () => {
 
     expect(await screen.findByRole('link', { name: 'Statistics' })).toBeInTheDocument()
     expect(await screen.findByText('Eaten 9 times')).toBeInTheDocument()
+  })
+})
+
+/* ---------- M11-05: Overview / History tabs ---------- */
+
+function sampleHistory(): unknown {
+  return {
+    range: { start: '2025-11-01', end: '2026-10-16', timezone: 'America/Chicago' },
+    month: { key: '2026-10', label: 'October 2026', start: '2026-10-01', end: '2026-10-31' },
+    days: [
+      { date: '2026-10-15', entry_type: 'recipe', recipe_id: 5, name: 'Tacos', protein: 'Chicken' },
+    ],
+    paging: { newer: null, older: '2026-09' },
+  }
+}
+
+interface TabRenderOptions {
+  session?: typeof adminSession
+  route?: string
+}
+
+/** Renders the statistics route with both tab endpoints stubbed. */
+function renderTabsPage(options: TabRenderOptions = {}): MockFetch {
+  const mock = installMockFetch([
+    { path: '/setup/status', body: setupCompleteStatus },
+    { path: '/auth/session', body: options.session ?? adminSession },
+    { path: '/statistics/overview', body: sampleOverview() },
+    { path: '/proteins?', body: [{ id: 2, name: 'Chicken', is_active: true }] },
+    { path: '/statistics/history', body: sampleHistory() },
+  ])
+  renderWithProviders(<App />, { route: options.route ?? '/statistics' })
+  return mock
+}
+
+describe('statistics tabs', () => {
+  it('defaults to the Overview tab and shows the History tab with calendar.view', async () => {
+    const mock = renderTabsPage()
+
+    await screen.findByText('Eaten 9 times')
+
+    const overviewTab = screen.getByRole('tab', { name: 'Overview' })
+    const historyTab = screen.getByRole('tab', { name: 'History' })
+    expect(overviewTab).toHaveAttribute('aria-selected', 'true')
+    expect(overviewTab).toHaveAttribute('tabindex', '0')
+    expect(historyTab).toHaveAttribute('aria-selected', 'false')
+    expect(historyTab).toHaveAttribute('tabindex', '-1')
+    expect(mock.callsFor('/statistics/history')).toBe(0)
+
+    fireEvent.click(historyTab)
+
+    expect(await screen.findByRole('region', { name: 'October 2026' })).toBeInTheDocument()
+    expect(historyTab).toHaveAttribute('aria-selected', 'true')
+    expect(overviewTab).toHaveAttribute('aria-selected', 'false')
+    expect(screen.queryByText('Eaten 9 times')).not.toBeInTheDocument()
+  })
+
+  it('supports Left/Right/Home/End keyboard navigation with roving focus', async () => {
+    renderTabsPage()
+
+    await screen.findByText('Eaten 9 times')
+
+    const overviewTab = screen.getByRole('tab', { name: 'Overview' })
+    const historyTab = screen.getByRole('tab', { name: 'History' })
+
+    overviewTab.focus()
+    fireEvent.keyDown(overviewTab, { key: 'ArrowRight' })
+    expect(historyTab).toHaveAttribute('aria-selected', 'true')
+    expect(document.activeElement).toBe(historyTab)
+
+    fireEvent.keyDown(historyTab, { key: 'ArrowLeft' })
+    expect(overviewTab).toHaveAttribute('aria-selected', 'true')
+    expect(document.activeElement).toBe(overviewTab)
+
+    // Arrows wrap around the ends of the tablist.
+    fireEvent.keyDown(overviewTab, { key: 'ArrowLeft' })
+    expect(historyTab).toHaveAttribute('aria-selected', 'true')
+
+    fireEvent.keyDown(historyTab, { key: 'Home' })
+    expect(overviewTab).toHaveAttribute('aria-selected', 'true')
+    expect(document.activeElement).toBe(overviewTab)
+
+    fireEvent.keyDown(overviewTab, { key: 'End' })
+    expect(historyTab).toHaveAttribute('aria-selected', 'true')
+    expect(document.activeElement).toBe(historyTab)
+  })
+
+  it('deep-links the History tab for a member with calendar.view but no recipes.view', async () => {
+    const member = { ...memberSession, permissions: ['calendar.view'] }
+    const mock = renderTabsPage({ session: member, route: '/statistics?tab=history' })
+
+    const historyTab = await screen.findByRole('tab', { name: 'History' })
+    expect(historyTab).toHaveAttribute('aria-selected', 'true')
+    expect(historyTab).toHaveAttribute('tabindex', '0')
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'false')
+
+    expect(await screen.findByRole('region', { name: 'October 2026' })).toBeInTheDocument()
+    expect(mock.callsFor('/statistics/overview')).toBe(0)
+    // The nav item still requires recipes.view, so it stays hidden.
+    expect(screen.queryByRole('link', { name: 'Statistics' })).not.toBeInTheDocument()
+  })
+
+  it('explains a History deep link when calendar.view is missing', async () => {
+    const member = { ...memberSession, permissions: ['recipes.view'] }
+    const mock = renderTabsPage({ session: member, route: '/statistics?tab=history' })
+
+    // Waiting for the nav link proves the session (and its permissions) loaded.
+    expect(await screen.findByRole('link', { name: 'Statistics' })).toBeInTheDocument()
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /meal history is not available to your account/i,
+    )
+    expect(screen.queryByRole('tab', { name: 'History' })).not.toBeInTheDocument()
+    expect(mock.callsFor('/statistics/history')).toBe(0)
   })
 })

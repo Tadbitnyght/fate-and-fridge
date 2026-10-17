@@ -192,12 +192,12 @@ describe('LiveSyncProvider', () => {
     const { invalidateQueries } = renderApp()
 
     await waitFor(() => expect(signalr.state.connections).toHaveLength(1))
-    await waitFor(() => expect(invalidateQueries).toHaveBeenCalledTimes(9))
+    await waitFor(() => expect(invalidateQueries).toHaveBeenCalledTimes(10))
 
     invalidateQueries.mockClear()
     act(() => signalr.state.connections[0].handlers['reconnected']())
 
-    await waitFor(() => expect(invalidateQueries).toHaveBeenCalledTimes(9))
+    await waitFor(() => expect(invalidateQueries).toHaveBeenCalledTimes(10))
     expect(screen.getByTestId('live-status')).toHaveAttribute('data-state', 'connected')
   })
 
@@ -206,7 +206,7 @@ describe('LiveSyncProvider', () => {
 
     const { invalidateQueries } = renderApp()
     await waitFor(() => expect(signalr.state.connections).toHaveLength(1))
-    await waitFor(() => expect(invalidateQueries).toHaveBeenCalledTimes(9))
+    await waitFor(() => expect(invalidateQueries).toHaveBeenCalledTimes(10))
 
     invalidateQueries.mockClear()
     act(() =>

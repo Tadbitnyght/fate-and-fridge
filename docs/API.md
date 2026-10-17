@@ -1249,15 +1249,19 @@ Response `200`:
     "key": "2026-10",
     "label": "October 2026",
     "start": "2026-10-01",
-    "end": "2026-10-31",
-    "days": [
-      { "date": "2026-10-15", "entry_type": "recipe", "recipe_id": 5, "name": "Tacos", "protein": "Chicken" },
-      { "date": "2026-10-14", "entry_type": "eat_out", "recipe_id": null, "name": "Sushi place", "protein": null }
-    ]
+    "end": "2026-10-31"
   },
+  "days": [
+    { "date": "2026-10-15", "entry_type": "recipe", "recipe_id": 5, "name": "Tacos", "protein": "Chicken" },
+    { "date": "2026-10-14", "entry_type": "eat_out", "recipe_id": null, "name": "Sushi place", "protein": null }
+  ],
   "paging": { "newer": null, "older": "2026-09" }
 }
 ```
+
+`month` carries only the page's key, label, and full calendar-month bounds;
+`days` (newest first) is a sibling of `month`, not nested inside it — the M11-03
+integration tests assert that shape.
 
 Errors: `400 VALIDATION_FAILED` (shared envelope) for a malformed `start`,
 `end`, or `month`; `start` later than `end` (reported on `end`); a range longer

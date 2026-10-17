@@ -8,6 +8,7 @@ import {
   groceriesStaplesQueryKey,
 } from '../groceries/useGroceries'
 import { recipesQueryKey } from '../recipes/useRecipes'
+import { statisticsQueryKey } from '../statistics/useStatistics'
 import {
   dashboardQueryKey,
   invalidateAllLiveSyncQueries,
@@ -41,11 +42,12 @@ function event(type: string): LiveSyncEvent {
 }
 
 describe('liveSyncKeys mapping', () => {
-  it('maps calendar.updated to calendar, operations, and dashboard', () => {
+  it('maps calendar.updated to calendar, operations, dashboard, and statistics', () => {
     expect(queryKeysForEvent(liveSyncEventType.calendarUpdated)).toEqual([
       calendarQueryKey,
       operationsQueryKey,
       dashboardQueryKey,
+      statisticsQueryKey,
     ])
   })
 
@@ -64,11 +66,12 @@ describe('liveSyncKeys mapping', () => {
     expect(queryKeysForEvent(liveSyncEventType.groceriesUpdated)).not.toContain(groceriesQueryKey)
   })
 
-  it('maps recipe.updated to recipes, groceries, and calendar', () => {
+  it('maps recipe.updated to recipes, groceries, calendar, and statistics', () => {
     expect(queryKeysForEvent(liveSyncEventType.recipeUpdated)).toEqual([
       recipesQueryKey,
       groceriesQueryKey,
       calendarQueryKey,
+      statisticsQueryKey,
     ])
   })
 
@@ -129,12 +132,12 @@ describe('invalidateAllLiveSyncQueries', () => {
     const keys = await invalidateAllLiveSyncQueries(queryClient)
 
     // calendar, operations, dashboard, groceries/list, groceries/staples,
-    // recipes, groceries, settings, reference-data.
-    expect(new Set(liveSyncInvalidationKeys.map((key) => JSON.stringify(key))).size).toBe(9)
+    // recipes, groceries, settings, reference-data, statistics.
+    expect(new Set(liveSyncInvalidationKeys.map((key) => JSON.stringify(key))).size).toBe(10)
     expect(keys).toEqual(liveSyncInvalidationKeys)
-    expect(invalidateQueries).toHaveBeenCalledTimes(9)
+    expect(invalidateQueries).toHaveBeenCalledTimes(10)
     expect(new Set(invalidatedKeys(invalidateQueries).map((key) => JSON.stringify(key))).size).toBe(
-      9,
+      10,
     )
   })
 })

@@ -7,6 +7,7 @@ import {
   groceriesStaplesQueryKey,
 } from '../groceries/useGroceries'
 import { recipesQueryKey } from '../recipes/useRecipes'
+import { statisticsQueryKey } from '../statistics/useStatistics'
 
 /**
  * Live-sync event → query-key invalidation mapping (docs/M9_PLAN.md §2.3,
@@ -15,14 +16,18 @@ import { recipesQueryKey } from '../recipes/useRecipes'
  * single place that knows which queries an event affects, so no component
  * talks to the socket and no view duplicates server state from events.
  *
- * | Event                   | Invalidated query keys                     |
- * |-------------------------|--------------------------------------------|
- * | `calendar.updated`      | calendar, operations, dashboard            |
- * | `calendar.lock_changed` | calendar, operations                       |
- * | `groceries.updated`     | groceries (list + staples)                 |
- * | `recipe.updated`        | recipes, groceries, calendar               |
- * | `settings.updated`      | settings, reference-data, groceries, recipes |
- * | `session.revoked`       | force sign-out (handled by the provider)   |
+ * | Event                   | Invalidated query keys                       |
+ * |-------------------------|----------------------------------------------|
+ * | `calendar.updated`      | calendar, operations, dashboard, statistics   |
+ * | `calendar.lock_changed` | calendar, operations                          |
+ * | `groceries.updated`     | groceries (list + staples)                    |
+ * | `recipe.updated`        | recipes, groceries, calendar, statistics      |
+ * | `settings.updated`      | settings, reference-data, groceries, recipes  |
+ * | `session.revoked`       | force sign-out (handled by the provider)      |
+ *
+ * Statistics (overview + meal history) are on-demand reads derived from
+ * calendar entries and recipes, so both events invalidate them (docs/M11_PLAN.md
+ * §1.14).
  */
 
 /** The six stable envelope types (docs/M9_PLAN.md §1.5). */
@@ -67,10 +72,20 @@ export const referenceDataQueryKey = ['reference-data'] as const
  * query: it is a forced sign-out, handled by `LiveSyncProvider`.
  */
 export const liveSyncInvalidationMap: Record<LiveSyncEventType, readonly QueryKey[]> = {
-  [liveSyncEventType.calendarUpdated]: [calendarQueryKey, operationsQueryKey, dashboardQueryKey],
+  [liveSyncEventType.calendarUpdated]: [
+    calendarQueryKey,
+    operationsQueryKey,
+    dashboardQueryKey,
+    statisticsQueryKey,
+  ],
   [liveSyncEventType.calendarLockChanged]: [calendarQueryKey, operationsQueryKey],
   [liveSyncEventType.groceriesUpdated]: [groceriesListQueryKey, groceriesStaplesQueryKey],
-  [liveSyncEventType.recipeUpdated]: [recipesQueryKey, groceriesQueryKey, calendarQueryKey],
+  [liveSyncEventType.recipeUpdated]: [
+    recipesQueryKey,
+    groceriesQueryKey,
+    calendarQueryKey,
+    statisticsQueryKey,
+  ],
   [liveSyncEventType.settingsUpdated]: [
     settingsQueryKey,
     referenceDataQueryKey,
