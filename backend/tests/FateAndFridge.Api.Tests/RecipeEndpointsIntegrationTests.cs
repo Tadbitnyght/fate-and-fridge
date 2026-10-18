@@ -669,11 +669,16 @@ public sealed class RecipeEndpointsIntegrationTests(M1SetupFixture fixture) : IA
         rows.Select(row => row.EventType).Should().Equal(
             AuditEventTypes.Created,
             AuditEventTypes.Updated,
-            AuditEventTypes.Updated,
+            AuditEventTypes.RecipeRetired,
             AuditEventTypes.Updated);
         Snapshot(rows[1].BeforeJson!)["status"]!.GetValue<string>().Should().Be("normal");
         Snapshot(rows[1].AfterJson!)["status"]!.GetValue<string>().Should().Be("manual_only");
+
+        // M12-01: only the transition into retired is the retire event, and its
+        // before/after capture the status change.
+        Snapshot(rows[2].BeforeJson!)["status"]!.GetValue<string>().Should().Be("manual_only");
         Snapshot(rows[2].AfterJson!)["status"]!.GetValue<string>().Should().Be("retired");
+        Snapshot(rows[3].BeforeJson!)["status"]!.GetValue<string>().Should().Be("retired");
         Snapshot(rows[3].AfterJson!)["status"]!.GetValue<string>().Should().Be("normal");
         rows.Should().OnlyContain(row => row.EntityType == AuditEntityTypes.Recipe);
     }
@@ -1074,7 +1079,9 @@ public sealed class RecipeEndpointsIntegrationTests(M1SetupFixture fixture) : IA
             .Should().Be("retired");
 
         var rows = await ReadAuditRowsAsync(cancellationToken);
-        rows.Select(row => row.EventType).Should().Equal(AuditEventTypes.Created, AuditEventTypes.Updated);
+        rows.Select(row => row.EventType).Should().Equal(
+            AuditEventTypes.Created,
+            AuditEventTypes.RecipeRetired);
         rows.Should().OnlyContain(row => row.ActorUserId == null);
     }
 

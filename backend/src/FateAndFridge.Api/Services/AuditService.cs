@@ -37,6 +37,72 @@ public static class AuditEventTypes
 
     // M3-04: the active recipe image was removed.
     public const string ImageRemoved = "image_removed";
+
+    // ---- M12 families (docs/M12_PLAN.md §1.3, §2.1) ----------------------
+    // Recipe create/update deliberately keep the M2 Retired/Updated-style
+    // values ("created"/"updated") with entity_type "recipe" (M3 emit sites,
+    // unchanged); only the retire transition gets a dotted lifecycle event.
+
+    // Calendar meal changes.
+    public const string CalendarCreated = "calendar.created";
+
+    public const string CalendarUpdated = "calendar.updated";
+
+    public const string CalendarDeleted = "calendar.deleted";
+
+    public const string CalendarLocked = "calendar.locked";
+
+    public const string CalendarUnlocked = "calendar.unlocked";
+
+    // Recipe lifecycle: status -> retired.
+    public const string RecipeRetired = "recipe.retired";
+
+    // Users and permissions.
+    public const string UserCreated = "user.created";
+
+    public const string UserRenamed = "user.renamed";
+
+    public const string UserRoleChanged = "user.role_changed";
+
+    public const string UserDisabled = "user.disabled";
+
+    public const string UserEnabled = "user.enabled";
+
+    public const string UserPasswordReset = "user.password_reset";
+
+    public const string UserPermissionsChanged = "user.permissions_changed";
+
+    // Settings, including the single-user -> multiuser switch.
+    public const string SettingsHouseholdUpdated = "settings.household_updated";
+
+    public const string SettingsSecurityUpdated = "settings.security_updated";
+
+    public const string SettingsAuthModeSwitched = "settings.auth_mode_switched";
+
+    // Groceries: manual items and the staple catalog.
+    public const string GroceriesManualItemAdded = "groceries.manual_item_added";
+
+    public const string GroceriesManualItemUpdated = "groceries.manual_item_updated";
+
+    public const string GroceriesManualItemRemoved = "groceries.manual_item_removed";
+
+    public const string GroceriesStapleCreated = "groceries.staple_created";
+
+    public const string GroceriesStapleUpdated = "groceries.staple_updated";
+
+    public const string GroceriesStapleRetired = "groceries.staple_retired";
+
+    // Auth mirror of the auth_events stream (docs/PRODUCT_SPEC.md §43).
+    public const string AuthLoginSucceeded = "auth.login_succeeded";
+
+    public const string AuthLoginFailed = "auth.login_failed";
+
+    public const string AuthLogout = "auth.logout";
+
+    // M13 stubs: defined now, emitted by the backup/restore workflow.
+    public const string BackupCreated = "backup.created";
+
+    public const string BackupRestored = "backup.restored";
 }
 
 /// <summary>
@@ -61,6 +127,24 @@ public static class AuditEntityTypes
     public const string Tag = "tag";
 
     public const string Recipe = "recipe";
+
+    // ---- M12 entity types (docs/M12_PLAN.md §2.1) ------------------------
+
+    public const string CalendarEntry = "calendar_entry";
+
+    public const string User = "user";
+
+    public const string Settings = "settings";
+
+    public const string GroceryManualItem = "grocery_manual_item";
+
+    public const string GroceryStaple = "grocery_staple";
+
+    public const string Session = "session";
+
+    public const string Auth = "auth";
+
+    public const string Backup = "backup";
 }
 
 /// <summary>

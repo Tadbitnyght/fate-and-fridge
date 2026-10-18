@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using FateAndFridge.Api.Data;
 using FateAndFridge.Api.Data.Configurations;
@@ -120,10 +121,16 @@ public abstract record CalendarMutationResult
 /// M5 calendar core service (docs/M5_PLAN.md §2): reads with the household clock,
 /// full-replace writes with per-type validation, snapshots (refresh future /
 /// freeze past), lock/unlock, and the manual-selection repeat check. Every write
-/// stages exactly one <see cref="CalendarEntryHistory"/> row; M5 writes no audit
-/// rows (M12 owns calendar auditing).
+/// stages exactly one <see cref="CalendarEntryHistory"/> row and one M12 audit
+/// row with the actor, the date target, and the before/after documents
+/// (docs/M12_PLAN.md §1.3); the entry, its history, and the audit row commit
+/// atomically.
 /// </summary>
-public sealed class CalendarService(AppDbContext dbContext, HouseholdClock clock, TimeProvider timeProvider)
+public sealed class CalendarService(
+    AppDbContext dbContext,
+    HouseholdClock clock,
+    TimeProvider timeProvider,
+    IAuditService auditService)
 {
     public const int MinDinerCount = 1;
 
@@ -225,6 +232,7 @@ public sealed class CalendarService(AppDbContext dbContext, HouseholdClock clock
         DateOnly date,
         CalendarWriteRequest request,
         long? actorUserId,
+        string? ipAddress = null,
         CancellationToken cancellationToken = default)
     {
         var context = await clock.GetContextAsync(cancellationToken).ConfigureAwait(false);
@@ -346,12 +354,25 @@ public sealed class CalendarService(AppDbContext dbContext, HouseholdClock clock
         entry.UpdatedAt = now;
         entry.UpdatedByUserId = actorUserId;
 
-        // Entry and history commit atomically (docs/M5_PLAN.md §4).
+        // Entry, history, and audit commit atomically (docs/M5_PLAN.md §4,
+        // docs/M12_PLAN.md §2.1).
         await using var transaction = await dbContext.Database
             .BeginTransactionAsync(cancellationToken)
             .ConfigureAwait(false);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-        StageHistory(entry.Id, entry.MealDate, beforeJson, SnapshotJson(entry), actorUserId);
+        var afterJson = SnapshotJson(entry);
+        StageHistory(entry.Id, entry.MealDate, beforeJson, afterJson, actorUserId);
+        await auditService.WriteAsync(
+            new AuditEventEntry(
+                beforeJson is null ? AuditEventTypes.CalendarCreated : AuditEventTypes.CalendarUpdated,
+                AuditEntityTypes.CalendarEntry,
+                EntityId: entry.Id.ToString(CultureInfo.InvariantCulture),
+                BeforeJson: beforeJson,
+                AfterJson: afterJson,
+                IpAddress: ipAddress,
+                ActorUserId: actorUserId,
+                Metadata: MealDateMetadata(entry.MealDate)),
+            cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
@@ -361,10 +382,11 @@ public sealed class CalendarService(AppDbContext dbContext, HouseholdClock clock
         return new CalendarMutationResult.Success(ToDayRecord(date, context, entry, summary, repeatWarning: null));
     }
 
-    /// <summary>Hard-deletes a today/future entry after recording history.</summary>
+    /// <summary>Hard-deletes a today/future entry after recording history and audit.</summary>
     public async Task<CalendarMutationResult> DeleteAsync(
         DateOnly date,
         long? actorUserId,
+        string? ipAddress = null,
         CancellationToken cancellationToken = default)
     {
         var context = await clock.GetContextAsync(cancellationToken).ConfigureAwait(false);
@@ -386,9 +408,26 @@ public sealed class CalendarService(AppDbContext dbContext, HouseholdClock clock
 
         var beforeJson = SnapshotJson(entry);
         var mealDate = entry.MealDate;
+        var entryId = entry.Id;
+
+        // Entry, history, and audit commit atomically (docs/M12_PLAN.md §2.1).
+        await using var transaction = await dbContext.Database
+            .BeginTransactionAsync(cancellationToken)
+            .ConfigureAwait(false);
         dbContext.CalendarEntries.Remove(entry);
         StageHistory(entryId: null, mealDate, beforeJson, afterJson: null, actorUserId);
+        await auditService.WriteAsync(
+            new AuditEventEntry(
+                AuditEventTypes.CalendarDeleted,
+                AuditEntityTypes.CalendarEntry,
+                EntityId: entryId.ToString(CultureInfo.InvariantCulture),
+                BeforeJson: beforeJson,
+                IpAddress: ipAddress,
+                ActorUserId: actorUserId,
+                Metadata: MealDateMetadata(mealDate)),
+            cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
         return new CalendarMutationResult.Success(
             ToDayRecord(date, context, entry: null, recipe: null, repeatWarning: null));
@@ -399,6 +438,7 @@ public sealed class CalendarService(AppDbContext dbContext, HouseholdClock clock
         DateOnly date,
         bool locked,
         long? actorUserId,
+        string? ipAddress = null,
         CancellationToken cancellationToken = default)
     {
         var context = await clock.GetContextAsync(cancellationToken).ConfigureAwait(false);
@@ -428,8 +468,26 @@ public sealed class CalendarService(AppDbContext dbContext, HouseholdClock clock
         entry.IsLocked = locked;
         entry.UpdatedAt = timeProvider.GetUtcNow();
         entry.UpdatedByUserId = actorUserId;
-        StageHistory(entry.Id, entry.MealDate, beforeJson, SnapshotJson(entry), actorUserId);
+
+        // Entry, history, and audit commit atomically (docs/M12_PLAN.md §2.1).
+        await using var transaction = await dbContext.Database
+            .BeginTransactionAsync(cancellationToken)
+            .ConfigureAwait(false);
+        var afterJson = SnapshotJson(entry);
+        StageHistory(entry.Id, entry.MealDate, beforeJson, afterJson, actorUserId);
+        await auditService.WriteAsync(
+            new AuditEventEntry(
+                locked ? AuditEventTypes.CalendarLocked : AuditEventTypes.CalendarUnlocked,
+                AuditEntityTypes.CalendarEntry,
+                EntityId: entry.Id.ToString(CultureInfo.InvariantCulture),
+                BeforeJson: beforeJson,
+                AfterJson: afterJson,
+                IpAddress: ipAddress,
+                ActorUserId: actorUserId,
+                Metadata: MealDateMetadata(entry.MealDate)),
+            cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
         return new CalendarMutationResult.Success(await DayAfterAsync(date, context, entry, cancellationToken)
             .ConfigureAwait(false));
@@ -775,4 +833,14 @@ public sealed class CalendarService(AppDbContext dbContext, HouseholdClock clock
             ["snapshot_recipe_name"] = entry.SnapshotRecipeName,
             ["snapshot_display_text"] = entry.SnapshotDisplayText,
         });
+
+    /// <summary>
+    /// Audit metadata naming the audited date target (the entry id changes on
+    /// create/delete, so the date is the stable target discriminator).
+    /// </summary>
+    private static IReadOnlyDictionary<string, object?> MealDateMetadata(DateOnly mealDate) =>
+        new Dictionary<string, object?>
+        {
+            ["meal_date"] = mealDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+        };
 }

@@ -337,7 +337,12 @@ public static class CalendarEndpoints
             return actorError;
         }
 
-        var result = await calendar.UpsertAsync(parsedDate, request, actorUserId, cancellationToken);
+        var result = await calendar.UpsertAsync(
+            parsedDate,
+            request,
+            actorUserId,
+            RemoteIpAddress(context),
+            cancellationToken);
         if (result is CalendarMutationResult.Success upserted)
         {
             await liveSync.CalendarUpdatedAsync(
@@ -351,6 +356,7 @@ public static class CalendarEndpoints
 
     private static async Task<IResult> DeleteAsync(
         string date,
+        HttpContext context,
         HouseholdClock clock,
         ICurrentActorProvider actorProvider,
         CalendarService calendar,
@@ -376,7 +382,11 @@ public static class CalendarEndpoints
             return actorError;
         }
 
-        var result = await calendar.DeleteAsync(parsedDate, actorUserId, cancellationToken);
+        var result = await calendar.DeleteAsync(
+            parsedDate,
+            actorUserId,
+            RemoteIpAddress(context),
+            cancellationToken);
         if (result is CalendarMutationResult.Success deleted)
         {
             await liveSync.CalendarUpdatedAsync(
@@ -396,7 +406,7 @@ public static class CalendarEndpoints
         CalendarService calendar,
         ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken) =>
-        SetLockAsync(date, locked: true, actorProvider, clock, calendar, liveSync, cancellationToken);
+        SetLockAsync(date, locked: true, context, actorProvider, clock, calendar, liveSync, cancellationToken);
 
     private static Task<IResult> UnlockAsync(
         string date,
@@ -406,11 +416,12 @@ public static class CalendarEndpoints
         CalendarService calendar,
         ILiveSyncPublisher liveSync,
         CancellationToken cancellationToken) =>
-        SetLockAsync(date, locked: false, actorProvider, clock, calendar, liveSync, cancellationToken);
+        SetLockAsync(date, locked: false, context, actorProvider, clock, calendar, liveSync, cancellationToken);
 
     private static async Task<IResult> SetLockAsync(
         string date,
         bool locked,
+        HttpContext context,
         ICurrentActorProvider actorProvider,
         HouseholdClock clock,
         CalendarService calendar,
@@ -436,7 +447,12 @@ public static class CalendarEndpoints
             return actorError;
         }
 
-        var result = await calendar.SetLockAsync(parsedDate, locked, actorUserId, cancellationToken);
+        var result = await calendar.SetLockAsync(
+            parsedDate,
+            locked,
+            actorUserId,
+            RemoteIpAddress(context),
+            cancellationToken);
         if (result is CalendarMutationResult.Success lockedDay)
         {
             await liveSync.CalendarLockChangedAsync(
@@ -798,6 +814,10 @@ public static class CalendarEndpoints
 
         return (actor.IsSystem ? null : actor.UserId, null);
     }
+
+    /// <summary>Client address for audit rows (never a secret).</summary>
+    internal static string? RemoteIpAddress(HttpContext context) =>
+        context.Connection.RemoteIpAddress?.ToString();
 
     private static DateOnly ReadQueryDate(
         HttpContext context,

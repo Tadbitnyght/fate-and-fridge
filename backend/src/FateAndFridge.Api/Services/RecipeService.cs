@@ -540,6 +540,7 @@ public sealed class RecipeService(
 
         var beforeJson = SnapshotJson(recipe, await LoadNestedAsync(recipe.Id, cancellationToken));
         var recipeId = recipe.Id;
+        var wasRetired = recipe.Status == RecipeStatus.Retired;
 
         var renamed = name is not null
             && !string.Equals(name.Normalized, recipe.NormalizedName, StringComparison.Ordinal);
@@ -597,7 +598,11 @@ public sealed class RecipeService(
 
             await auditService.WriteAsync(
                 new AuditEventEntry(
-                    AuditEventTypes.Updated,
+                    // A status change into retired is the M12 retire transition;
+                    // every other edit stays a plain update (exactly one row).
+                    !wasRetired && recipe.Status == RecipeStatus.Retired
+                        ? AuditEventTypes.RecipeRetired
+                        : AuditEventTypes.Updated,
                     AuditEntityTypes.Recipe,
                     EntityId: recipeId.ToString(CultureInfo.InvariantCulture),
                     BeforeJson: beforeJson,
