@@ -1274,7 +1274,12 @@ public sealed class RecipeEndpointsIntegrationTests(M1SetupFixture fixture) : IA
     private async Task<List<AuditEvent>> ReadAuditRowsAsync(CancellationToken cancellationToken)
     {
         await using var context = fixture.CreateContext();
+
+        // M12-01 mirrors login/logout into audit_events; these suites assert the
+        // reference-data/recipe rows they themselves write, so the auth mirror is
+        // excluded here.
         return await context.AuditEvents.AsNoTracking()
+            .Where(row => !row.EventType.StartsWith("auth."))
             .OrderBy(row => row.Id)
             .ToListAsync(cancellationToken);
     }
