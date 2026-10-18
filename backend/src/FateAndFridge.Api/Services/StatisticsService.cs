@@ -169,7 +169,10 @@ public sealed class StatisticsService(AppDbContext dbContext, HouseholdClock clo
         var neverEaten = recipes.Count(recipe => !eatenLiveRecipeIds.Contains(recipe.Id));
 
         // 3) Meal counts: every entry type in the household calendar month/year
-        // counts, so one query over the year's dates serves both (§1.24).
+        // counts, so one bounded query over the year's dates serves both (§1.24).
+        // The month count is the inclusive [monthStart, monthEnd] window — never
+        // "from the first of the month through the end of the year", which
+        // wrongly counted later months (regression #148).
         var yearDates = await _dbContext.CalendarEntries
             .AsNoTracking()
             .Where(entry => entry.MealDate >= yearStart && entry.MealDate <= yearEnd)
@@ -203,7 +206,7 @@ public sealed class StatisticsService(AppDbContext dbContext, HouseholdClock clo
             mostEaten,
             leastRecentlyEaten,
             neverEaten,
-            yearDates.Count(date => date >= monthStart),
+            yearDates.Count(date => date >= monthStart && date <= monthEnd),
             yearDates.Count,
             proteinDistribution,
             specialEventCounts);

@@ -318,6 +318,51 @@ public sealed class M11StatisticsIntegrationTests(M11StatisticsFixture fixture) 
     }
 
     [Fact]
+    public async Task Meal_count_month_is_bounded_to_the_household_calendar_month()
+    {
+        // Regression (#148): the month count used to run from the first of the
+        // month through December 31, so every later-in-the-year entry inflated
+        // it. Household today is 2026-10-16, so the month window is
+        // [2026-10-01, 2026-10-31] and the year window is [2026-01-01, 2026-12-31].
+        var now = new DateTimeOffset(2026, 10, 16, 18, 0, 0, TimeSpan.Zero);
+        using var factory = await CreateSingleUserFactoryAsync(new TestTimeProvider(now));
+        var recipe = await SeedRecipeAsync("October Meal");
+        await SeedEntryAsync(new DateOnly(2026, 10, 5), CalendarEntryType.Recipe, recipe.Id, true, "October Meal");
+        await SeedEntryAsync(new DateOnly(2026, 10, 20), CalendarEntryType.Recipe, recipe.Id, true, "October Meal");
+        await SeedEntryAsync(new DateOnly(2026, 11, 5), CalendarEntryType.Recipe, recipe.Id, true, "October Meal");
+        await SeedEntryAsync(new DateOnly(2026, 12, 31), CalendarEntryType.Holiday, null, false);
+        await SeedEntryAsync(new DateOnly(2025, 12, 31), CalendarEntryType.Holiday, null, false);
+
+        using var client = factory.CreateClient();
+        var root = await GetOverviewAsync(client);
+
+        // A future day within the month still counts (§1.24); next month, the
+        // rest of this year, and the previous year do not.
+        root.GetProperty("meal_count_month").GetInt32().Should().Be(2);
+        root.GetProperty("meal_count_year").GetInt32().Should().Be(4);
+    }
+
+    [Fact]
+    public async Task Meal_counts_are_bounded_at_the_year_boundary()
+    {
+        // Household today 2026-01-15: the previous December falls outside both
+        // the month and the year windows.
+        var now = new DateTimeOffset(2026, 1, 15, 18, 0, 0, TimeSpan.Zero);
+        using var factory = await CreateSingleUserFactoryAsync(new TestTimeProvider(now));
+        var recipe = await SeedRecipeAsync("January Meal");
+        await SeedEntryAsync(new DateOnly(2025, 12, 31), CalendarEntryType.Holiday, null, false);
+        await SeedEntryAsync(new DateOnly(2026, 1, 2), CalendarEntryType.Recipe, recipe.Id, true, "January Meal");
+        await SeedEntryAsync(new DateOnly(2026, 1, 20), CalendarEntryType.Recipe, recipe.Id, true, "January Meal");
+        await SeedEntryAsync(new DateOnly(2026, 2, 3), CalendarEntryType.Recipe, recipe.Id, true, "January Meal");
+
+        using var client = factory.CreateClient();
+        var root = await GetOverviewAsync(client);
+
+        root.GetProperty("meal_count_month").GetInt32().Should().Be(2);
+        root.GetProperty("meal_count_year").GetInt32().Should().Be(3);
+    }
+
+    [Fact]
     public async Task Special_event_counts_cover_all_seven_types_over_the_calendar_year()
     {
         using var factory = await CreateSingleUserFactoryAsync(new TestTimeProvider(Now));

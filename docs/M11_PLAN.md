@@ -101,7 +101,10 @@ to the Lead before implementing.
 19. **Ranking size.** `most_eaten` and `least_recently_eaten` each return the
     **top 10**. "Least recently eaten" considers only recipes **eaten at least
     once**; recipes never eaten are reported as a single `never_eaten` **count**
-    rather than ranked as infinitely stale.
+    rather than ranked as infinitely stale. **Locked 2026-10-17 (M11 review):**
+    `never_eaten` counts **all live recipes of any status** (normal, manual-only,
+    retired) with no eaten occurrence — it is literally "live recipes never
+    eaten", complementing the eaten-only rankings.
 20. **Grouping identity.** Meals group by **`recipe_id` when present**, else by
     the **normalized stored snapshot name** (a recipe hard-deleted in M12 nulls
     the reference). Implement and test this defensively **now**, before hard
