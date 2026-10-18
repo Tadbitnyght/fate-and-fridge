@@ -210,6 +210,10 @@ builder.Services.AddScoped<StatisticsService>();
 // M11-03: the bounded, month-grouped meal-history read.
 builder.Services.AddScoped<MealHistoryService>();
 
+// M12-02: the merged, newest-first admin audit read model (audit_events plus
+// the reroll/batch calendar_entry_history rows); bounded, read-only.
+builder.Services.AddScoped<AuditLogQueryService>();
+
 // M1-09 permission model: one uncached grant reader plus the evaluator service
 // shared by GET /auth/session and the route enforcement filter.
 builder.Services.AddScoped<IPermissionGrantReader, DbPermissionGrantReader>();
@@ -315,6 +319,7 @@ app.MapRecipeImageEndpoints();
 app.MapCalendarEndpoints();
 app.MapGroceryEndpoints();
 app.MapStatisticsEndpoints();
+app.MapAdminEndpoints();
 app.MapOperationEndpoints();
 app.MapImportEndpoints();
 
