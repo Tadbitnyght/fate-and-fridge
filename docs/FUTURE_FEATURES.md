@@ -53,6 +53,7 @@ that plan.
 | [Nutrition / macros](#nutrition--macros) | V2 | `V2_BACKLOG.md`, `PRODUCT_SPEC.md §47` |
 | [Native apps / PWA](#native-apps--pwa) | V2 | `V2_BACKLOG.md` |
 | [Multi-household tenancy](#multi-household-tenancy) | V2 | `PRODUCT_SPEC.md §47` |
+| [Administration & audit expansion](#administration--audit-expansion) | V2 | `M12_PLAN.md §6` |
 | [Import & recipe enhancements](#import--recipe-enhancements) | Enhancement | `M4_VERIFICATION.md` |
 | [Calendar enhancements](#calendar-enhancements) | Enhancement | `M5_VERIFICATION.md` |
 | [Randomizer enhancements](#randomizer-enhancements) | Enhancement | `M6_PLAN.md §6`, `RANDOMIZER.md` |
@@ -235,6 +236,25 @@ Status: **V2**
 Notes: V1 is single-household (single `household_settings` row;
 `docs/PRODUCT_SPEC.md §47`). Source: `docs/PRODUCT_SPEC.md §47`.
 
+## Administration & audit expansion
+Status: **V2**
+
+- Bulk / date-range historical correction by an Admin (M12 corrects one past date
+  at a time).
+- Per-capability permission keys — `audit.view`, `history.correct`,
+  `recipes.delete` — so an Admin can delegate audit read (or other admin
+  capabilities) to a member; V1 keeps audit read, historical correction, and hard
+  recipe delete Admin-only with the seven-key model.
+- Automatic or scheduled audit pruning, and scheduled/recurring audit exports
+  (M12 prunes only on an explicit Admin action).
+- Tamper-evident audit storage (hash chaining or signing) beyond the current
+  append-only rows.
+- A dedicated `/admin` navigation area (M12 keeps the audit log inside
+  `/settings`).
+
+Notes: raised while planning M12 (2026-10-18); each was deferred by the product
+owner during the M12 decision set. Source: `docs/M12_PLAN.md §6`.
+
 ## Import & recipe enhancements
 Status: **Enhancement**
 
@@ -290,3 +310,6 @@ Status: **Never-V1**
   shows a notice (`docs/PRODUCT_SPEC.md §45/§47`).
 - Telemetry by default (`docs/AGENTS.md` Architecture Rules).
 - Mandatory external AI dependencies (`docs/AGENTS.md` Architecture Rules).
+- A non-ISO **API wire date format** (e.g. localised `MM-DD-YY` in JSON): V1 keeps
+  ISO `yyyy-MM-dd` on the wire for stored data and clients, and localises only the
+  product UI display (raised planning M12, 2026-10-18; `docs/M12_PLAN.md §1.15`).
