@@ -100,6 +100,9 @@ to the Lead before implementing.
     string, final confirm) used by **historical correction, hard recipe delete,
     and audit prune**, and **reused by M13's restore**. The typed confirmation is
     verified **server-side** as well as in the UI. Every use writes an audit row.
+    The reason is trimmed and capped at **500 characters**; the typed confirmation
+    must match exactly (ordinal, case-sensitive) after trimming. `DangerousActionGuard`
+    owns these rules so the endpoints cannot drift.
 12. **UI placement.** The **audit log** is a new Admin-only section of the
     existing `/settings` console — **no new nav item and no new route family for
     navigation**. **Historical correction** is launched from the existing
@@ -180,7 +183,7 @@ to the Lead before implementing.
 | M12-01 | Audit coverage sweep | M12 event/entity type constants + emitters at calendar, recipe, user/permission, settings, grocery, and auth write paths, with tests proving actor/target/before/after and that secrets are never logged | — |
 | M12-02 | Audit log query service + read API | merged audit+reroll read model, filters, newest-first paging, detail projection, `GET /admin/audit` | M12-01 |
 | M12-03 | Audit viewer UI | Admin-only Audit log section in `/settings`: filters, paging, detail, reason/IP/metadata, empty/error states, a11y, mobile | M12-02 |
-| M12-04 | Audit export + retention | CSV/JSON export of the filtered view (quoting + formula-injection safety) and the `audit_retention_days` setting with the confirmed prune action (`audit.pruned`) | M12-02 |
+| M12-04 | Audit export + retention | CSV/JSON export of the filtered view (quoting + formula-injection safety) and the `audit_retention_days` setting with the confirmed prune action (`audit.pruned`) | M12-02, **M12-05** |
 | M12-05 | Shared dangerous-action dialog | reusable accessible dialog (reason, warnings, acknowledgement, typed confirmation, final confirm) + server-side confirmation verification seam | — |
 | M12-06 | Historical correction backend | `POST /calendar/{date}/correction`, past-only + locked-date acknowledgement, reason, snapshot refresh, history + audit rows in one transaction, live sync | M12-05 |
 | M12-07 | Historical correction UI | admin-only entry point from the meal-history/date view using the shared dialog | M12-06 |

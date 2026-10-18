@@ -128,4 +128,17 @@ public static class ErrorCodes
 
     /// <summary>An active staple with the same normalized name already exists.</summary>
     public const string GroceryStapleExists = "GROCERY_STAPLE_EXISTS";
+
+    // M12 dangerous-action codes (docs/M12_PLAN.md §1.11, §2.2).
+    /// <summary>A dangerous action was submitted without a usable reason.</summary>
+    public const string ReasonRequired = "REASON_REQUIRED";
+
+    /// <summary>The dangerous-action reason exceeded the allowed length.</summary>
+    public const string ReasonTooLong = "REASON_TOO_LONG";
+
+    /// <summary>The dangerous-action reason contained a null character.</summary>
+    public const string ReasonInvalid = "REASON_INVALID";
+
+    /// <summary>The typed confirmation did not match the required value.</summary>
+    public const string ConfirmationMismatch = "CONFIRMATION_MISMATCH";
 }
