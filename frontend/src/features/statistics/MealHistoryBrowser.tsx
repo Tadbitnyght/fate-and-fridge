@@ -9,6 +9,7 @@ import {
 import type { MealHistoryDay, MealHistoryParams } from '../../api/statistics'
 import { ErrorScreen, LoadingScreen } from '../../components/Screens'
 import { useProteins } from '../reference-data/useReferenceData'
+import { useStatisticsAccess } from './access'
 import { formatHouseholdDate, formatHouseholdMonth } from './statisticsFormat'
 import { useMealHistory } from './useStatistics'
 
@@ -23,6 +24,7 @@ import { useMealHistory } from './useStatistics'
  * dates are immutable in normal use (docs/M11_PLAN.md §1.9).
  */
 export function MealHistoryBrowser(): JSX.Element {
+  const { canEditRecipes } = useStatisticsAccess()
   // Applied filter state (server-side) plus the unapplied recipe text input,
   // mirroring the recipes browser: a select applies at once, free text on submit.
   const [entryType, setEntryType] = useState<'' | CalendarEntryType>('')
@@ -180,7 +182,7 @@ export function MealHistoryBrowser(): JSX.Element {
           ) : (
             <ol className="history-days">
               {history.days.map((day) => (
-                <HistoryDayRow key={day.date} day={day} />
+                <HistoryDayRow key={day.date} day={day} canEditRecipes={canEditRecipes} />
               ))}
             </ol>
           )}
@@ -191,11 +193,13 @@ export function MealHistoryBrowser(): JSX.Element {
 }
 
 /**
- * One meal-log day. The recipe name links to the recipe only when the reference
- * is still live; a tombstone shows its stored snapshot name as plain text. The
- * row carries no edit affordance.
+ * One meal-log day. The recipe name links to the recipe's edit page only while
+ * the reference is live **and** the caller may edit (`recipes.edit`); a
+ * view-only member — and a tombstone — sees the same name as plain text, since
+ * the edit page refuses a view-only member (issue #148). The row carries no
+ * edit affordance of its own.
  */
-function HistoryDayRow({ day }: { day: MealHistoryDay }) {
+function HistoryDayRow({ day, canEditRecipes }: { day: MealHistoryDay; canEditRecipes: boolean }) {
   return (
     <li className="history-day">
       <time className="history-day__date" dateTime={day.date}>
@@ -203,7 +207,7 @@ function HistoryDayRow({ day }: { day: MealHistoryDay }) {
       </time>
       <span className="history-day__type">{CALENDAR_ENTRY_LABELS[day.entry_type]}</span>
       <span className="history-day__name">
-        {day.recipe_id !== null ? (
+        {day.recipe_id !== null && canEditRecipes ? (
           <Link to={`/recipes/${day.recipe_id}/edit`}>{day.name}</Link>
         ) : (
           day.name

@@ -160,10 +160,9 @@ export interface MealHistoryPaging {
  * `GET /api/v1/statistics/history` (docs/API.md §14). One month page of the
  * read-only meal log, newest first.
  *
- * The shipped M11-03 response carries `days` as a **sibling** of `month`
- * (asserted by `M11MealHistoryIntegrationTests`); the §14 example's nested
- * `month.days` placement is a documentation error — the wire shape here
- * matches the server.
+ * The wire shape here matches the shipped server response and the documented
+ * contract: `days` is a **sibling** of `month` (docs/API.md §14, the §14
+ * example, and `M11MealHistoryIntegrationTests.The_month_page_keeps_days_as_a_sibling_of_month`).
  */
 export interface MealHistoryResponse {
   range: MealHistoryRange

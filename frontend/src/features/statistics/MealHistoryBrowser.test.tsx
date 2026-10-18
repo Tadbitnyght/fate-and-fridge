@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { App } from '../../App'
 import type { MealHistoryResponse } from '../../api/statistics'
-import { adminSession, setupCompleteStatus } from '../../test/fixtures'
+import { adminSession, memberSession, setupCompleteStatus } from '../../test/fixtures'
 import { installMockFetch, type MockFetch, type MockRoute } from '../../test/mockFetch'
 import { renderWithProviders } from '../../test/utils'
 
@@ -54,10 +54,12 @@ function historyRequests(mock: MockFetch): string[] {
 }
 
 /** Renders the app on the History tab with the meal-log endpoint stubbed. */
-function renderHistory(options: { history?: MockRoute } = {}): MockFetch {
+function renderHistory(
+  options: { history?: MockRoute; session?: typeof adminSession } = {},
+): MockFetch {
   const mock = installMockFetch([
     { path: '/setup/status', body: setupCompleteStatus },
-    { path: '/auth/session', body: adminSession },
+    { path: '/auth/session', body: options.session ?? adminSession },
     { path: '/proteins?', body: proteins },
     { path: '/statistics/history', body: sampleHistory(), ...options.history },
   ])
@@ -223,5 +225,30 @@ describe('meal-history browser', () => {
         .map((link) => link.getAttribute('href'))
         .filter((href) => href?.startsWith('/recipes/')),
     ).toEqual(['/recipes/5/edit'])
+  })
+
+  it('renders a live recipe name as plain text for a view-only member (#148)', async () => {
+    renderHistory({ session: { ...memberSession, permissions: ['calendar.view', 'recipes.view'] } })
+
+    const month = await screen.findByRole('region', { name: 'October 2026' })
+
+    expect(within(month).getByText('Tacos')).toBeInTheDocument()
+    expect(within(month).queryByRole('link', { name: 'Tacos' })).not.toBeInTheDocument()
+    // No recipe edit-page link exists anywhere in the rendered output.
+    expect(
+      screen
+        .queryAllByRole('link')
+        .filter((link) => /^\/recipes\/\d+\/edit$/.test(link.getAttribute('href') ?? '')),
+    ).toHaveLength(0)
+  })
+
+  it('links a live recipe name for a member with recipes.edit (#148)', async () => {
+    renderHistory({ session: { ...memberSession, permissions: ['calendar.view', 'recipes.edit'] } })
+
+    const month = await screen.findByRole('region', { name: 'October 2026' })
+    expect(within(month).getByRole('link', { name: 'Tacos' })).toHaveAttribute(
+      'href',
+      '/recipes/5/edit',
+    )
   })
 })

@@ -6,6 +6,13 @@ export interface StatisticsAccess {
   canViewOverview: boolean
   /** May read the meal-history browser (`calendar.view`, or `calendar.edit`; M11-05). */
   canViewHistory: boolean
+  /**
+   * May open a recipe's edit page (`recipes.edit`). Read-only recipe references
+   * must not link to `/recipes/{id}/edit` when this is false: the edit page
+   * refuses a view-only member, so the reference renders as plain text instead
+   * (issue #148).
+   */
+  canEditRecipes: boolean
   isAdmin: boolean
   isSingleUser: boolean
 }
@@ -35,6 +42,7 @@ export function useStatisticsAccess(): StatisticsAccess {
       isAdmin ||
       permissions.includes('calendar.view') ||
       permissions.includes('calendar.edit'),
+    canEditRecipes: isSingleUser || isAdmin || permissions.includes('recipes.edit'),
     isAdmin,
     isSingleUser,
   }

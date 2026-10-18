@@ -36,7 +36,7 @@ const TABS: { id: StatisticsTab; label: string }[] = [
  * boundary.
  */
 export function StatisticsPage(): JSX.Element {
-  const { canViewOverview, canViewHistory } = useStatisticsAccess()
+  const { canEditRecipes, canViewOverview, canViewHistory } = useStatisticsAccess()
   const [searchParams, setSearchParams] = useSearchParams()
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
 
@@ -165,14 +165,20 @@ export function StatisticsPage(): JSX.Element {
             />
           )}
 
-          {overview && <Overview overview={overview} />}
+          {overview && <Overview overview={overview} canEditRecipes={canEditRecipes} />}
         </div>
       )}
     </section>
   )
 }
 
-function Overview({ overview }: { overview: StatisticsOverview }) {
+function Overview({
+  overview,
+  canEditRecipes,
+}: {
+  overview: StatisticsOverview
+  canEditRecipes: boolean
+}) {
   const hasHistory =
     overview.meal_count_year > 0 ||
     overview.most_eaten.length > 0 ||
@@ -217,6 +223,7 @@ function Overview({ overview }: { overview: StatisticsOverview }) {
         <RankedRecipeList
           items={overview.most_eaten}
           emptyLabel="No recipes have been eaten yet."
+          canEditRecipes={canEditRecipes}
         />
       </section>
 
@@ -225,6 +232,7 @@ function Overview({ overview }: { overview: StatisticsOverview }) {
         <RankedRecipeList
           items={overview.least_recently_eaten}
           emptyLabel="No recipes have been eaten yet."
+          canEditRecipes={canEditRecipes}
         />
         <p className="page-note stats-note">{neverEaten}</p>
       </section>
@@ -279,7 +287,21 @@ function StatusBadge({ status }: { status: RankedRecipe['status'] }) {
   )
 }
 
-function RankedRecipeList({ items, emptyLabel }: { items: RankedRecipe[]; emptyLabel: string }) {
+/**
+ * One ranked row. A live recipe links to its edit page only for a caller who
+ * may edit (`recipes.edit`); a view-only member sees the same name as plain
+ * text, because the edit page refuses them (issue #148). A tombstone keeps its
+ * snapshot name as plain text either way.
+ */
+function RankedRecipeList({
+  items,
+  emptyLabel,
+  canEditRecipes,
+}: {
+  items: RankedRecipe[]
+  emptyLabel: string
+  canEditRecipes: boolean
+}) {
   if (items.length === 0) {
     return <p className="page-note">{emptyLabel}</p>
   }
@@ -295,7 +317,7 @@ function RankedRecipeList({ items, emptyLabel }: { items: RankedRecipe[]; emptyL
             {index + 1}.
           </span>
           <span className="stats-row__name">
-            {item.recipe_id !== null ? (
+            {item.recipe_id !== null && canEditRecipes ? (
               <Link to={`/recipes/${item.recipe_id}/edit`}>{item.name}</Link>
             ) : (
               item.name

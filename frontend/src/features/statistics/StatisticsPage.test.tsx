@@ -3,9 +3,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { App } from '../../App'
 import { SPECIAL_EVENT_TYPES, type StatisticsOverview } from '../../api/statistics'
-import { adminSession, memberSession, setupCompleteStatus } from '../../test/fixtures'
+import {
+  adminSession,
+  memberSession,
+  setupCompleteStatus,
+  singleUserSession,
+  singleUserSetupStatus,
+} from '../../test/fixtures'
 import { installMockFetch, type MockFetch, type MockResponse } from '../../test/mockFetch'
 import { renderWithProviders } from '../../test/utils'
+
 function sampleOverview(overrides: Partial<StatisticsOverview> = {}): StatisticsOverview {
   return {
     windows: {
@@ -359,5 +366,49 @@ describe('statistics access gates honour edit-implies-view', () => {
     expect(mock.callsFor('/statistics/overview')).toBe(0)
     // Neither recipes.view nor recipes.edit, so the nav item stays hidden.
     expect(screen.queryByRole('link', { name: 'Statistics' })).not.toBeInTheDocument()
+  })
+})
+
+/* ---------- #148: ranked references are gated by recipes.edit ---------- */
+
+/** Every `/recipes/{id}/edit` link in the rendered output. */
+function recipeEditLinks(): HTMLElement[] {
+  return screen
+    .queryAllByRole('link')
+    .filter((link) => /^\/recipes\/\d+\/edit$/.test(link.getAttribute('href') ?? ''))
+}
+
+describe('ranked recipe references respect recipes.edit (#148)', () => {
+  it('renders a ranked name as plain text for a view-only member (no links anywhere)', async () => {
+    renderPage({ session: { ...memberSession, permissions: ['recipes.view'] } })
+
+    expect(await screen.findByText('Eaten 9 times')).toBeInTheDocument()
+
+    expect(screen.getByText('Tacos')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Tacos' })).not.toBeInTheDocument()
+    expect(screen.getByText('Lasagna')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Lasagna' })).not.toBeInTheDocument()
+    expect(recipeEditLinks()).toHaveLength(0)
+  })
+
+  it('links the ranked name for a member with recipes.edit', async () => {
+    renderPage({ session: { ...memberSession, permissions: ['recipes.edit'] } })
+
+    expect(await screen.findByText('Eaten 9 times')).toBeInTheDocument()
+
+    expect(screen.getByRole('link', { name: 'Tacos' })).toHaveAttribute('href', '/recipes/5/edit')
+    expect(screen.getByRole('link', { name: 'Chili' })).toHaveAttribute('href', '/recipes/9/edit')
+  })
+
+  it('links the ranked name for the single-user actor', async () => {
+    installMockFetch([
+      { path: '/setup/status', body: singleUserSetupStatus },
+      { path: '/auth/session', body: singleUserSession },
+      { path: '/statistics/overview', body: sampleOverview() },
+    ])
+    renderWithProviders(<App />, { route: '/statistics' })
+
+    expect(await screen.findByText('Eaten 9 times')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Tacos' })).toHaveAttribute('href', '/recipes/5/edit')
   })
 })
