@@ -31,10 +31,14 @@ public sealed class SecuritySettingsService(
     AppDbContext dbContext,
     IMemoryCache cache,
     TimeProvider timeProvider,
+    IAuditService auditService,
     ILogger<SecuritySettingsService> logger)
 {
     /// <summary>Cross-request cache key (single household).</summary>
     public const string CacheKey = "faf.security_settings";
+
+    /// <summary>Stable audit entity id for the security settings.</summary>
+    public const string SecuritySettingsEntityId = "security";
 
     /// <summary>Short TTL so out-of-band database changes are picked up.</summary>
     public static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(5);
@@ -84,13 +88,24 @@ public sealed class SecuritySettingsService(
 
     /// <summary>
     /// Persists the settings (upsert per key) and updates the cache so the
-    /// change applies to the next request immediately.
+    /// change applies to the next request immediately. The upserts and the
+    /// <c>settings.security_updated</c> audit row share one transaction
+    /// (docs/M12_PLAN.md §2.1).
     /// </summary>
-    public async Task SaveAsync(SecuritySettings settings, CancellationToken cancellationToken = default)
+    public async Task SaveAsync(
+        SecuritySettings settings,
+        long? actorUserId = null,
+        string? ipAddress = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(settings);
 
+        // The request-scoped/cached value is the pre-change state the endpoint
+        // read before building the patch.
+        var before = await GetAsync(cancellationToken);
         var now = timeProvider.GetUtcNow();
+
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         await UpsertAsync(
             SetupCompletionService.IpAllowlistEnabledKey,
             JsonSerializer.Serialize(settings.IpAllowlistEnabled),
@@ -107,8 +122,29 @@ public sealed class SecuritySettingsService(
             now,
             cancellationToken);
 
+        await auditService.WriteAsync(
+            new AuditEventEntry(
+                AuditEventTypes.SettingsSecurityUpdated,
+                AuditEntityTypes.Settings,
+                EntityId: SecuritySettingsEntityId,
+                BeforeJson: SnapshotJson(before),
+                AfterJson: SnapshotJson(settings),
+                IpAddress: ipAddress,
+                ActorUserId: actorUserId),
+            cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
         SetCache(settings);
     }
+
+    private static string SnapshotJson(SecuritySettings settings) =>
+        JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["ip_allowlist_enabled"] = settings.IpAllowlistEnabled,
+            ["ip_allowlist_ranges"] = settings.IpAllowlistRanges,
+            ["trusted_proxies"] = settings.TrustedProxies,
+        });
 
     private void SetCache(SecuritySettings settings)
     {

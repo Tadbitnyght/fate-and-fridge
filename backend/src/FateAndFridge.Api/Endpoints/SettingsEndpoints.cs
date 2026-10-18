@@ -147,13 +147,8 @@ public static class SettingsEndpoints
             return ApiResults.ValidationError(errors);
         }
 
-        var updated = new SecuritySettings(resultingEnabled, resultingRanges, resultingProxies);
-        await securitySettings.SaveAsync(updated, cancellationToken);
-
-        // Resolve the actor only after the write has committed, then fail closed
-        // when it cannot be resolved rather than silently emitting a null actor
-        // (RequireAdmin makes this defensive, but a null actor would misattribute
-        // the event to the single-user system actor).
+        // Resolve the actor before the write so the audit row can never be
+        // misattributed to the single-user system actor (fail closed).
         var (actorUserId, actorError) = await CalendarEndpoints
             .ResolveActorAsync(actorProvider, cancellationToken)
             .ConfigureAwait(false);
@@ -161,6 +156,13 @@ public static class SettingsEndpoints
         {
             return actorError;
         }
+
+        var updated = new SecuritySettings(resultingEnabled, resultingRanges, resultingProxies);
+        await securitySettings.SaveAsync(
+            updated,
+            actorUserId,
+            CalendarEndpoints.RemoteIpAddress(context),
+            cancellationToken);
 
         await liveSync.SettingsUpdatedAsync(
             LiveSyncPublisherExtensions.SettingsEntity,
@@ -270,12 +272,8 @@ public static class SettingsEndpoints
             return ApiResults.ValidationError(crossFieldErrors);
         }
 
-        var settings = await settingsService.ApplyPatchAsync(validation.Patch, cancellationToken);
-
-        // Resolve the actor only after the write has committed, then fail closed
-        // when it cannot be resolved rather than silently emitting a null actor
-        // (RequireAdmin makes this defensive, but a null actor would misattribute
-        // the event to the single-user system actor).
+        // Resolve the actor before the write so the audit row can never be
+        // misattributed to the single-user system actor (fail closed).
         var (actorUserId, actorError) = await CalendarEndpoints
             .ResolveActorAsync(actorProvider, cancellationToken)
             .ConfigureAwait(false);
@@ -283,6 +281,12 @@ public static class SettingsEndpoints
         {
             return actorError;
         }
+
+        var settings = await settingsService.ApplyPatchAsync(
+            validation.Patch,
+            actorUserId,
+            CalendarEndpoints.RemoteIpAddress(context),
+            cancellationToken);
 
         await liveSync.SettingsUpdatedAsync(
             LiveSyncPublisherExtensions.SettingsEntity,

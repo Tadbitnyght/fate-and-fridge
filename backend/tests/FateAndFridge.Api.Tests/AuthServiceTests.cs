@@ -1,6 +1,7 @@
 using FateAndFridge.Api.Auth;
 using FateAndFridge.Api.Data;
 using FateAndFridge.Api.Domain;
+using FateAndFridge.Api.Services;
 using FateAndFridge.Api.Tests.Support;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -202,7 +203,8 @@ public sealed class AuthServiceTests(M1SetupFixture fixture) : IAsyncLifetime
             sessionId = session.Id;
 
             var service = CreateService(context, new RecordingPasswordHasher(), clock);
-            (await service.LogoutAsync(sessionId, cancellationToken)).Should().BeTrue();
+            (await service.LogoutAsync(sessionId, username: "smith", cancellationToken: cancellationToken))
+                .Should().BeTrue();
         }
 
         await using (var context = fixture.CreateContext())
@@ -216,7 +218,8 @@ public sealed class AuthServiceTests(M1SetupFixture fixture) : IAsyncLifetime
             // A second logout keeps the first revocation untouched.
             clock.Advance(TimeSpan.FromHours(1));
             var service = CreateService(context, new RecordingPasswordHasher(), clock);
-            (await service.LogoutAsync(sessionId, cancellationToken)).Should().BeTrue();
+            (await service.LogoutAsync(sessionId, username: "smith", cancellationToken: cancellationToken))
+                .Should().BeTrue();
         }
 
         await using var verification = fixture.CreateContext();
@@ -243,6 +246,7 @@ public sealed class AuthServiceTests(M1SetupFixture fixture) : IAsyncLifetime
             throttle ?? new LoginIpThrottle(clock, Options.Create(new LoginThrottleOptions())),
             delayer ?? new RecordingLoginAttemptDelayer(),
             new RecordingLiveSyncPublisher(),
+            new AuditService(context, clock, NullLogger<AuditService>.Instance),
             clock,
             logger ?? NullLogger<AuthService>.Instance);
 

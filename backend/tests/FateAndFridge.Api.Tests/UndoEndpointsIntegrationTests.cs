@@ -295,7 +295,9 @@ public sealed class UndoEndpointsIntegrationTests(M1SetupFixture fixture) : IAsy
         document.RootElement.GetProperty("undone_operation_id").GetString()
             .Should().Be(operationId.ToString());
 
-        (await context.AuditEvents.CountAsync(Ct)).Should().Be(0);
+        (await context.AuditEvents.CountAsync(row => !row.EventType.StartsWith("auth."), Ct)).Should().Be(
+            0,
+            "undo stages no audit row; M12-01 only mirrors auth events");
     }
 
     [Fact]

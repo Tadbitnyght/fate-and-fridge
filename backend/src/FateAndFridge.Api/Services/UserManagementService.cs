@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.Json;
 using FateAndFridge.Api.Auth;
 using FateAndFridge.Api.Auth.Permissions;
 using FateAndFridge.Api.Data;
@@ -57,6 +59,7 @@ public sealed class UserManagementService(
     SessionService sessionService,
     ILiveSyncPublisher liveSync,
     TimeProvider timeProvider,
+    IAuditService auditService,
     ILogger<UserManagementService> logger)
 {
     /// <summary><c>user_sessions.revoked_reason</c> for a disabled user.</summary>
@@ -115,13 +118,17 @@ public sealed class UserManagementService(
     /// <summary>
     /// Creates a user. Without an explicit password a one-time temporary
     /// password is generated and returned once; every admin-created account
-    /// starts with <c>must_change_password = true</c>.
+    /// starts with <c>must_change_password = true</c>. The account, its default
+    /// grants, and the <c>user.created</c> audit row commit atomically; the
+    /// password and temporary password are never audited.
     /// </summary>
     public async Task<UserMutationResult> CreateAsync(
         string? username,
         string? roleText,
         string? password,
         bool passwordProvided,
+        long? actorUserId = null,
+        string? ipAddress = null,
         CancellationToken cancellationToken = default)
     {
         var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
@@ -190,6 +197,12 @@ public sealed class UserManagementService(
         };
 
         dbContext.Users.Add(user);
+
+        var grantedKeys = role == UserRole.Member ? PermissionKeys.MemberViewOnly : [];
+
+        // Account, default grants, and the audit row commit atomically
+        // (docs/M12_PLAN.md §2.1).
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         try
         {
             await dbContext.SaveChangesAsync(cancellationToken);
@@ -212,12 +225,25 @@ public sealed class UserManagementService(
                     PermissionKey = permissionKey,
                 });
             }
-
-            await dbContext.SaveChangesAsync(cancellationToken);
         }
 
+        await auditService.WriteAsync(
+            new AuditEventEntry(
+                AuditEventTypes.UserCreated,
+                AuditEntityTypes.User,
+                EntityId: user.Id.ToString(CultureInfo.InvariantCulture),
+                AfterJson: SnapshotJson(user, grantedKeys),
+                IpAddress: ipAddress,
+                ActorUserId: actorUserId,
+                Metadata: temporaryPassword is null
+                    ? null
+                    : new Dictionary<string, object?> { ["temporary_password_issued"] = true }),
+            cancellationToken);
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
         logger.LogInformation("Created user {UserId} with role {Role}", user.Id, EnumTextConverters.UserRoleToText(role));
-        var grantedKeys = role == UserRole.Member ? PermissionKeys.MemberViewOnly : [];
         return new UserMutationResult.Success(
             ToRecord(user, EffectiveKeys(user, grantedKeys)),
             temporaryPassword);
@@ -226,7 +252,9 @@ public sealed class UserManagementService(
     /// <summary>
     /// Renames a user and/or changes their role. Demoting the last active Admin
     /// is rejected; a role change revokes the target's sessions so the new role
-    /// takes effect on the next login.
+    /// takes effect on the next login. Exactly one audit row is staged
+    /// (<c>user.role_changed</c> takes precedence over <c>user.renamed</c> when
+    /// both change in one request).
     /// </summary>
     public async Task<UserMutationResult> UpdateAsync(
         long id,
@@ -234,6 +262,8 @@ public sealed class UserManagementService(
         bool renameRequested,
         string? roleText,
         bool roleRequested,
+        long? actorUserId = null,
+        string? ipAddress = null,
         CancellationToken cancellationToken = default)
     {
         var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
@@ -283,6 +313,14 @@ public sealed class UserManagementService(
             return new UserMutationResult.NotFound();
         }
 
+        var grantedKeys = await dbContext.UserPermissions
+            .AsNoTracking()
+            .Where(permission => permission.UserId == id)
+            .Select(permission => permission.PermissionKey)
+            .ToListAsync(cancellationToken);
+        var beforeJson = SnapshotJson(user, grantedKeys);
+        var previousUsername = user.Username;
+
         if (trimmedUsername is not null)
         {
             var normalizedUsername = UsernameNormalizer.Normalize(trimmedUsername);
@@ -299,6 +337,7 @@ public sealed class UserManagementService(
         }
 
         var roleChanged = false;
+        var seededDefaultGrants = false;
         if (newRole is { } role && role != user.Role)
         {
             if (user.Role == UserRole.Admin
@@ -325,6 +364,8 @@ public sealed class UserManagementService(
                         PermissionKey = permissionKey,
                     });
                 }
+
+                seededDefaultGrants = true;
             }
 
             user.Role = role;
@@ -332,6 +373,28 @@ public sealed class UserManagementService(
         }
 
         user.UpdatedAt = timeProvider.GetUtcNow();
+
+        // One row per write; the granted-key sets record any demotion seeding.
+        var afterKeys = seededDefaultGrants
+            ? grantedKeys.Concat(PermissionKeys.MemberViewOnly)
+            : grantedKeys;
+        var renamed = !string.Equals(user.Username, previousUsername, StringComparison.Ordinal);
+        await auditService.WriteAsync(
+            new AuditEventEntry(
+                roleChanged ? AuditEventTypes.UserRoleChanged : AuditEventTypes.UserRenamed,
+                AuditEntityTypes.User,
+                EntityId: id.ToString(CultureInfo.InvariantCulture),
+                BeforeJson: beforeJson,
+                AfterJson: SnapshotJson(user, afterKeys),
+                IpAddress: ipAddress,
+                ActorUserId: actorUserId,
+                Metadata: new Dictionary<string, object?>
+                {
+                    ["renamed"] = renamed,
+                    ["role_changed"] = roleChanged,
+                }),
+            cancellationToken);
+
         try
         {
             await dbContext.SaveChangesAsync(cancellationToken);
@@ -366,11 +429,14 @@ public sealed class UserManagementService(
     /// <summary>
     /// Replaces a member's granted permission rows. Unknown keys are rejected;
     /// Admins always hold all keys and cannot have rows set. Grants are read
-    /// per request, so the change takes effect immediately.
+    /// per request, so the change takes effect immediately. The before/after
+    /// key sets are audited; no other user field is included.
     /// </summary>
     public async Task<UserMutationResult> ReplacePermissionsAsync(
         long id,
         IReadOnlyList<string> permissions,
+        long? actorUserId = null,
+        string? ipAddress = null,
         CancellationToken cancellationToken = default)
     {
         var unknownKeys = permissions
@@ -405,6 +471,10 @@ public sealed class UserManagementService(
         var existing = await dbContext.UserPermissions
             .Where(permission => permission.UserId == id)
             .ToListAsync(cancellationToken);
+        var beforeJson = SnapshotJson(user, existing.Select(permission => permission.PermissionKey));
+
+        // Grant replacement and its audit row commit atomically.
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         dbContext.UserPermissions.RemoveRange(existing);
         foreach (var key in normalizedKeys)
         {
@@ -416,7 +486,19 @@ public sealed class UserManagementService(
         }
 
         user.UpdatedAt = timeProvider.GetUtcNow();
+        await auditService.WriteAsync(
+            new AuditEventEntry(
+                AuditEventTypes.UserPermissionsChanged,
+                AuditEntityTypes.User,
+                EntityId: id.ToString(CultureInfo.InvariantCulture),
+                BeforeJson: beforeJson,
+                AfterJson: SnapshotJson(user, normalizedKeys),
+                IpAddress: ipAddress,
+                ActorUserId: actorUserId),
+            cancellationToken);
+
         await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return new UserMutationResult.Success(
             await GetAsync(id, cancellationToken) ?? throw new InvalidOperationException("User disappeared."));
@@ -430,6 +512,8 @@ public sealed class UserManagementService(
     public async Task<UserMutationResult> SetActiveAsync(
         long id,
         bool activate,
+        long? actorUserId = null,
+        string? ipAddress = null,
         CancellationToken cancellationToken = default)
     {
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
@@ -457,6 +541,13 @@ public sealed class UserManagementService(
             return new UserMutationResult.LastAdminProtected();
         }
 
+        var grantedKeys = await dbContext.UserPermissions
+            .AsNoTracking()
+            .Where(permission => permission.UserId == id)
+            .Select(permission => permission.PermissionKey)
+            .ToListAsync(cancellationToken);
+        var beforeJson = SnapshotJson(user, grantedKeys);
+
         user.IsActive = activate;
         user.UpdatedAt = timeProvider.GetUtcNow();
 
@@ -468,6 +559,17 @@ public sealed class UserManagementService(
             user.LockoutCount = 0;
             user.LockoutWindowStartedAt = null;
         }
+
+        await auditService.WriteAsync(
+            new AuditEventEntry(
+                activate ? AuditEventTypes.UserEnabled : AuditEventTypes.UserDisabled,
+                AuditEntityTypes.User,
+                EntityId: id.ToString(CultureInfo.InvariantCulture),
+                BeforeJson: beforeJson,
+                AfterJson: SnapshotJson(user, grantedKeys),
+                IpAddress: ipAddress,
+                ActorUserId: actorUserId),
+            cancellationToken);
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
@@ -508,6 +610,26 @@ public sealed class UserManagementService(
                     && candidate.Role == UserRole.Admin
                     && candidate.Id != exceptUserId,
                 cancellationToken);
+
+    /// <summary>
+    /// Secret-free user snapshot for <c>before_json</c>/<c>after_json</c>: the
+    /// account's public fields plus the sorted granted permission keys. The
+    /// password hash, any plaintext or temporary password, session tokens, and
+    /// lockout internals are deliberately excluded (docs/SECURITY.md §17).
+    /// </summary>
+    private static string SnapshotJson(User user, IEnumerable<string> grantedKeys) =>
+        JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["id"] = user.Id,
+            ["username"] = user.Username,
+            ["role"] = EnumTextConverters.UserRoleToText(user.Role),
+            ["is_active"] = user.IsActive,
+            ["must_change_password"] = user.MustChangePassword,
+            ["permissions"] = grantedKeys
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(key => key, StringComparer.Ordinal)
+                .ToArray(),
+        });
 
     private static IReadOnlyList<string> EffectiveKeys(User user, IEnumerable<string> grantedKeys) =>
         PermissionEvaluator.For(

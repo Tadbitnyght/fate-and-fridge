@@ -89,6 +89,7 @@ public static class UserEndpoints
 
     private static async Task<IResult> CreateUserAsync(
         HttpContext context,
+        ICurrentActorProvider actorProvider,
         UserManagementService users,
         IOptions<JsonOptions> jsonOptions,
         CancellationToken cancellationToken)
@@ -102,11 +103,23 @@ public static class UserEndpoints
             return error!;
         }
 
+        // Resolve the actor before the write so the audit row can never be
+        // misattributed to the system actor (fail closed).
+        var (actorUserId, actorError) = await CalendarEndpoints
+            .ResolveActorAsync(actorProvider, cancellationToken)
+            .ConfigureAwait(false);
+        if (actorError is not null)
+        {
+            return actorError;
+        }
+
         var result = await users.CreateAsync(
             request.Username,
             request.Role,
             request.Password,
             request.PasswordProvided,
+            actorUserId,
+            CalendarEndpoints.RemoteIpAddress(context),
             cancellationToken);
 
         return result switch
@@ -124,6 +137,7 @@ public static class UserEndpoints
     private static async Task<IResult> UpdateUserAsync(
         long id,
         HttpContext context,
+        ICurrentActorProvider actorProvider,
         UserManagementService users,
         CancellationToken cancellationToken)
     {
@@ -174,12 +188,22 @@ public static class UserEndpoints
             return ApiResults.ValidationError(errors);
         }
 
+        var (actorUserId, actorError) = await CalendarEndpoints
+            .ResolveActorAsync(actorProvider, cancellationToken)
+            .ConfigureAwait(false);
+        if (actorError is not null)
+        {
+            return actorError;
+        }
+
         var result = await users.UpdateAsync(
             id,
             username,
             renameRequested,
             roleText,
             roleRequested,
+            actorUserId,
+            CalendarEndpoints.RemoteIpAddress(context),
             cancellationToken);
 
         return result switch
@@ -194,6 +218,7 @@ public static class UserEndpoints
     private static async Task<IResult> ReplacePermissionsAsync(
         long id,
         HttpContext context,
+        ICurrentActorProvider actorProvider,
         UserManagementService users,
         CancellationToken cancellationToken)
     {
@@ -237,7 +262,20 @@ public static class UserEndpoints
             return ApiResults.ValidationError(errors);
         }
 
-        var result = await users.ReplacePermissionsAsync(id, permissions, cancellationToken);
+        var (actorUserId, actorError) = await CalendarEndpoints
+            .ResolveActorAsync(actorProvider, cancellationToken)
+            .ConfigureAwait(false);
+        if (actorError is not null)
+        {
+            return actorError;
+        }
+
+        var result = await users.ReplacePermissionsAsync(
+            id,
+            permissions,
+            actorUserId,
+            CalendarEndpoints.RemoteIpAddress(context),
+            cancellationToken);
 
         return result switch
         {
@@ -249,23 +287,42 @@ public static class UserEndpoints
 
     private static Task<IResult> DisableUserAsync(
         long id,
+        HttpContext context,
+        ICurrentActorProvider actorProvider,
         UserManagementService users,
         CancellationToken cancellationToken) =>
-        SetActiveAsync(id, activate: false, users, cancellationToken);
+        SetActiveAsync(id, activate: false, context, actorProvider, users, cancellationToken);
 
     private static Task<IResult> EnableUserAsync(
         long id,
+        HttpContext context,
+        ICurrentActorProvider actorProvider,
         UserManagementService users,
         CancellationToken cancellationToken) =>
-        SetActiveAsync(id, activate: true, users, cancellationToken);
+        SetActiveAsync(id, activate: true, context, actorProvider, users, cancellationToken);
 
     private static async Task<IResult> SetActiveAsync(
         long id,
         bool activate,
+        HttpContext context,
+        ICurrentActorProvider actorProvider,
         UserManagementService users,
         CancellationToken cancellationToken)
     {
-        var result = await users.SetActiveAsync(id, activate, cancellationToken);
+        var (actorUserId, actorError) = await CalendarEndpoints
+            .ResolveActorAsync(actorProvider, cancellationToken)
+            .ConfigureAwait(false);
+        if (actorError is not null)
+        {
+            return actorError;
+        }
+
+        var result = await users.SetActiveAsync(
+            id,
+            activate,
+            actorUserId,
+            CalendarEndpoints.RemoteIpAddress(context),
+            cancellationToken);
 
         return result switch
         {

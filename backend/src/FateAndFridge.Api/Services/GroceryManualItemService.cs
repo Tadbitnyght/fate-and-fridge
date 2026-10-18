@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.Json;
 using FateAndFridge.Api.Data;
 using FateAndFridge.Api.Domain;
 using Microsoft.EntityFrameworkCore;
@@ -66,7 +68,8 @@ public abstract record GroceryManualItemDeleteOutcome
 public sealed class GroceryManualItemService(
     AppDbContext dbContext,
     HouseholdClock clock,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    IAuditService auditService)
 {
     /// <summary>Inclusive lower bound for <c>range_days</c>.</summary>
     public const int MinRangeDays = 1;
@@ -74,10 +77,15 @@ public sealed class GroceryManualItemService(
     /// <summary>Inclusive upper bound for <c>range_days</c> (the 366-day cap).</summary>
     public const int MaxRangeDays = GroceryListService.MaxRangeDays;
 
-    /// <summary>Creates a manual item, promoting a staple when requested.</summary>
+    /// <summary>
+    /// Creates a manual item, promoting a staple when requested. The item, the
+    /// optional staple promotion, and one <c>groceries.manual_item_added</c>
+    /// audit row commit atomically.
+    /// </summary>
     public async Task<GroceryManualItemOutcome> CreateAsync(
         GroceryManualItemCreateRequest request,
         long? actorUserId,
+        string? ipAddress = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -122,19 +130,41 @@ public sealed class GroceryManualItemService(
         };
         dbContext.ManualGroceryItems.Add(item);
 
+        var staplePromoted = false;
         if (request.SaveForFuture)
         {
-            await PromoteStapleAsync(item, cancellationToken).ConfigureAwait(false);
+            staplePromoted = await PromoteStapleAsync(item, cancellationToken).ConfigureAwait(false);
         }
 
+        // Item, promotion, and audit commit atomically (docs/M12_PLAN.md §2.1).
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await auditService.WriteAsync(
+            new AuditEventEntry(
+                AuditEventTypes.GroceriesManualItemAdded,
+                AuditEntityTypes.GroceryManualItem,
+                EntityId: item.Id.ToString(CultureInfo.InvariantCulture),
+                AfterJson: SnapshotJson(item),
+                IpAddress: ipAddress,
+                ActorUserId: actorUserId,
+                Metadata: new Dictionary<string, object?> { ["staple_promoted"] = staplePromoted }),
+            cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken);
+
         return new GroceryManualItemOutcome.Success(ToRecord(item));
     }
 
-    /// <summary>Applies a partial update; an explicit null clears a nullable field.</summary>
+    /// <summary>
+    /// Applies a partial update; an explicit null clears a nullable field. The
+    /// item change and its <c>groceries.manual_item_updated</c> audit row commit
+    /// atomically.
+    /// </summary>
     public async Task<GroceryManualItemOutcome> UpdateAsync(
         long id,
         GroceryManualItemPatch patch,
+        long? actorUserId = null,
+        string? ipAddress = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(patch);
@@ -147,6 +177,7 @@ public sealed class GroceryManualItemService(
             return new GroceryManualItemOutcome.NotFound();
         }
 
+        var beforeJson = SnapshotJson(item);
         var context = await clock.GetContextAsync(cancellationToken).ConfigureAwait(false);
         var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
         var wasSaveForFuture = item.SaveForFuture;
@@ -212,22 +243,42 @@ public sealed class GroceryManualItemService(
 
         // Transitioning save_for_future to true promotes the staple; the
         // promotion is idempotent by normalized name (docs/M8_PLAN.md §1.8/§1.9).
+        var staplePromoted = false;
         if (patch.SaveForFutureProvided && patch.SaveForFuture && !wasSaveForFuture)
         {
-            await PromoteStapleAsync(item, cancellationToken).ConfigureAwait(false);
+            staplePromoted = await PromoteStapleAsync(item, cancellationToken).ConfigureAwait(false);
         }
 
+        // Item change, promotion, and audit commit atomically.
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await auditService.WriteAsync(
+            new AuditEventEntry(
+                AuditEventTypes.GroceriesManualItemUpdated,
+                AuditEntityTypes.GroceryManualItem,
+                EntityId: item.Id.ToString(CultureInfo.InvariantCulture),
+                BeforeJson: beforeJson,
+                AfterJson: SnapshotJson(item),
+                IpAddress: ipAddress,
+                ActorUserId: actorUserId,
+                Metadata: new Dictionary<string, object?> { ["staple_promoted"] = staplePromoted }),
+            cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken);
+
         return new GroceryManualItemOutcome.Success(ToRecord(item));
     }
 
     /// <summary>
     /// Deletes the item and its household check-state row (identity
     /// <c>manual|{id}</c>) so no orphan check state remains. A staple the item may
-    /// have promoted is deliberately retained.
+    /// have promoted is deliberately retained. The removal and its
+    /// <c>groceries.manual_item_removed</c> audit row commit atomically.
     /// </summary>
     public async Task<GroceryManualItemDeleteOutcome> DeleteAsync(
         long id,
+        long? actorUserId = null,
+        string? ipAddress = null,
         CancellationToken cancellationToken = default)
     {
         var item = await dbContext.ManualGroceryItems
@@ -238,22 +289,36 @@ public sealed class GroceryManualItemService(
             return new GroceryManualItemDeleteOutcome.NotFound();
         }
 
+        var beforeJson = SnapshotJson(item);
         var identity = GroceryItemIdentity.ForManualItem(id);
         var checkStates = await dbContext.GroceryCheckStates
             .Where(state => state.ItemIdentityHash == identity)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
+
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         if (checkStates.Count > 0)
         {
             dbContext.GroceryCheckStates.RemoveRange(checkStates);
         }
 
         dbContext.ManualGroceryItems.Remove(item);
+        await auditService.WriteAsync(
+            new AuditEventEntry(
+                AuditEventTypes.GroceriesManualItemRemoved,
+                AuditEntityTypes.GroceryManualItem,
+                EntityId: id.ToString(CultureInfo.InvariantCulture),
+                BeforeJson: beforeJson,
+                IpAddress: ipAddress,
+                ActorUserId: actorUserId),
+            cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken);
         return new GroceryManualItemDeleteOutcome.Deleted();
     }
 
-    private async Task PromoteStapleAsync(ManualGroceryItem item, CancellationToken cancellationToken)
+    /// <summary>Promotes a staple when no active staple shares the name.</summary>
+    private async Task<bool> PromoteStapleAsync(ManualGroceryItem item, CancellationToken cancellationToken)
     {
         var key = GroceryStapleName.Key(item.Name);
         var activeNames = await dbContext.GroceryStaples
@@ -265,7 +330,7 @@ public sealed class GroceryManualItemService(
 
         if (activeNames.Any(name => string.Equals(GroceryStapleName.Key(name), key, StringComparison.Ordinal)))
         {
-            return;
+            return false;
         }
 
         var now = timeProvider.GetUtcNow();
@@ -280,6 +345,7 @@ public sealed class GroceryManualItemService(
             CreatedAt = now,
             UpdatedAt = now,
         });
+        return true;
     }
 
     private async Task ValidateUnitAsync(
@@ -321,6 +387,21 @@ public sealed class GroceryManualItemService(
             errors["department_id"] = [$"department_id {id} does not exist."];
         }
     }
+
+    /// <summary>Secret-free manual item snapshot for audit before/after.</summary>
+    private static string SnapshotJson(ManualGroceryItem item) =>
+        JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["id"] = item.Id,
+            ["name"] = item.Name,
+            ["quantity_numeric"] = item.QuantityNumeric,
+            ["unit_id"] = item.UnitId,
+            ["ingredient_id"] = item.IngredientId,
+            ["department_id"] = item.DepartmentId,
+            ["range_start"] = item.RangeStart.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            ["range_days"] = item.RangeDays,
+            ["save_for_future"] = item.SaveForFuture,
+        });
 
     private static GroceryManualItemRecord ToRecord(ManualGroceryItem item) =>
         new(

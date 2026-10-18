@@ -541,8 +541,20 @@ public sealed class UserManagementIntegrationTests(M1SetupFixture fixture) : IAs
         // advisory lock serializes them, so exactly one succeeds and the other
         // is rejected by the last-admin guard.
         var results = await Task.WhenAll(
-            serviceA.UpdateAsync(second.Id, username: null, renameRequested: false, "member", roleRequested: true, cancellationToken),
-            serviceB.UpdateAsync(root.Id, username: null, renameRequested: false, "member", roleRequested: true, cancellationToken));
+            serviceA.UpdateAsync(
+                second.Id,
+                username: null,
+                renameRequested: false,
+                "member",
+                roleRequested: true,
+                cancellationToken: cancellationToken),
+            serviceB.UpdateAsync(
+                root.Id,
+                username: null,
+                renameRequested: false,
+                "member",
+                roleRequested: true,
+                cancellationToken: cancellationToken));
 
         results.Count(result => result is UserMutationResult.Success).Should().Be(1);
         results.Count(result => result is UserMutationResult.LastAdminProtected).Should().Be(1);

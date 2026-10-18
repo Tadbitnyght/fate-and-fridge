@@ -293,7 +293,11 @@ public static class GroceryEndpoints
         }
 
         var outcome = await manualItems
-            .CreateAsync(validation.Request, actorUserId, cancellationToken)
+            .CreateAsync(
+                validation.Request,
+                actorUserId,
+                CalendarEndpoints.RemoteIpAddress(context),
+                cancellationToken)
             .ConfigureAwait(false);
         if (outcome is GroceryManualItemOutcome.Success created)
         {
@@ -346,7 +350,12 @@ public static class GroceryEndpoints
         }
 
         var outcome = await manualItems
-            .UpdateAsync(id, validation.Patch, cancellationToken)
+            .UpdateAsync(
+                id,
+                validation.Patch,
+                actorUserId,
+                CalendarEndpoints.RemoteIpAddress(context),
+                cancellationToken)
             .ConfigureAwait(false);
         if (outcome is GroceryManualItemOutcome.Success updated)
         {
@@ -366,6 +375,7 @@ public static class GroceryEndpoints
 
     private static async Task<IResult> DeleteManualItemAsync(
         long id,
+        HttpContext context,
         ICurrentActorProvider actorProvider,
         GroceryManualItemService manualItems,
         ILiveSyncPublisher liveSync,
@@ -379,7 +389,9 @@ public static class GroceryEndpoints
             return actorError;
         }
 
-        var outcome = await manualItems.DeleteAsync(id, cancellationToken).ConfigureAwait(false);
+        var outcome = await manualItems
+            .DeleteAsync(id, actorUserId, CalendarEndpoints.RemoteIpAddress(context), cancellationToken)
+            .ConfigureAwait(false);
         if (outcome is GroceryManualItemDeleteOutcome.Deleted)
         {
             await liveSync.GroceriesUpdatedAsync(actorUserId, id, cancellationToken);
@@ -519,7 +531,13 @@ public static class GroceryEndpoints
             return ApiResults.ValidationError(validation.FieldErrors);
         }
 
-        var outcome = await staples.CreateAsync(validation.Request, cancellationToken).ConfigureAwait(false);
+        var outcome = await staples
+            .CreateAsync(
+                validation.Request,
+                actorUserId,
+                CalendarEndpoints.RemoteIpAddress(context),
+                cancellationToken)
+            .ConfigureAwait(false);
         if (outcome is GroceryStapleOutcome.Success created)
         {
             await liveSync.GroceriesUpdatedAsync(actorUserId, created.Staple.Id, cancellationToken);
@@ -571,7 +589,14 @@ public static class GroceryEndpoints
             return ApiResults.ValidationError(validation.FieldErrors);
         }
 
-        var outcome = await staples.UpdateAsync(id, validation.Patch, cancellationToken).ConfigureAwait(false);
+        var outcome = await staples
+            .UpdateAsync(
+                id,
+                validation.Patch,
+                actorUserId,
+                CalendarEndpoints.RemoteIpAddress(context),
+                cancellationToken)
+            .ConfigureAwait(false);
         if (outcome is GroceryStapleOutcome.Success updated)
         {
             await liveSync.GroceriesUpdatedAsync(actorUserId, updated.Staple.Id, cancellationToken);
@@ -624,7 +649,12 @@ public static class GroceryEndpoints
         }
 
         var outcome = await staples
-            .AddToListAsync(id, validation.Request, actorUserId, cancellationToken)
+            .AddToListAsync(
+                id,
+                validation.Request,
+                actorUserId,
+                CalendarEndpoints.RemoteIpAddress(context),
+                cancellationToken)
             .ConfigureAwait(false);
         if (outcome is GroceryStapleAddOutcome.Success added)
         {

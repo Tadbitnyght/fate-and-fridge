@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.Json;
 using FateAndFridge.Api.Data;
 using FateAndFridge.Api.Domain;
 using Microsoft.EntityFrameworkCore;
@@ -68,7 +70,8 @@ public abstract record GroceryStapleAddOutcome
 public sealed class GroceryStapleService(
     AppDbContext dbContext,
     TimeProvider timeProvider,
-    GroceryManualItemService manualItems)
+    GroceryManualItemService manualItems,
+    IAuditService auditService)
 {
     /// <summary>
     /// Lists the catalog ordered by name (case-insensitive, then ordinal), then id.
@@ -94,6 +97,8 @@ public sealed class GroceryStapleService(
     /// <summary>Creates a staple; an active duplicate name is rejected.</summary>
     public async Task<GroceryStapleOutcome> CreateAsync(
         GroceryStapleCreateRequest request,
+        long? actorUserId = null,
+        string? ipAddress = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -133,18 +138,36 @@ public sealed class GroceryStapleService(
             UpdatedAt = now,
         };
         dbContext.GroceryStaples.Add(staple);
+
+        // Staple and its audit row commit atomically (docs/M12_PLAN.md §2.1).
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await auditService.WriteAsync(
+            new AuditEventEntry(
+                AuditEventTypes.GroceriesStapleCreated,
+                AuditEntityTypes.GroceryStaple,
+                EntityId: staple.Id.ToString(CultureInfo.InvariantCulture),
+                AfterJson: SnapshotJson(staple),
+                IpAddress: ipAddress,
+                ActorUserId: actorUserId),
+            cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken);
         return new GroceryStapleOutcome.Success(ToRecord(staple));
     }
 
     /// <summary>
     /// Applies a partial update; an explicit null clears a nullable field. A name
     /// change (or reactivation) that would collide with another active staple is
-    /// rejected.
+    /// rejected. Deactivating an active staple is audited as
+    /// <c>groceries.staple_retired</c>, every other edit as
+    /// <c>groceries.staple_updated</c> (exactly one row per write).
     /// </summary>
     public async Task<GroceryStapleOutcome> UpdateAsync(
         long id,
         GroceryStaplePatch patch,
+        long? actorUserId = null,
+        string? ipAddress = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(patch);
@@ -157,6 +180,8 @@ public sealed class GroceryStapleService(
             return new GroceryStapleOutcome.NotFound();
         }
 
+        var beforeJson = SnapshotJson(staple);
+        var wasActive = staple.IsActive;
         var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
 
         if (patch.UnitProvided)
@@ -228,7 +253,23 @@ public sealed class GroceryStapleService(
         }
 
         staple.UpdatedAt = timeProvider.GetUtcNow();
+
+        // Staple and its audit row commit atomically (docs/M12_PLAN.md §2.1).
+        var retired = wasActive && !staple.IsActive;
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await auditService.WriteAsync(
+            new AuditEventEntry(
+                retired ? AuditEventTypes.GroceriesStapleRetired : AuditEventTypes.GroceriesStapleUpdated,
+                AuditEntityTypes.GroceryStaple,
+                EntityId: staple.Id.ToString(CultureInfo.InvariantCulture),
+                BeforeJson: beforeJson,
+                AfterJson: SnapshotJson(staple),
+                IpAddress: ipAddress,
+                ActorUserId: actorUserId),
+            cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken);
         return new GroceryStapleOutcome.Success(ToRecord(staple));
     }
 
@@ -241,6 +282,7 @@ public sealed class GroceryStapleService(
         long id,
         GroceryStapleAddToListRequest range,
         long? actorUserId,
+        string? ipAddress = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(range);
@@ -266,7 +308,9 @@ public sealed class GroceryStapleService(
             range.RangeDays,
             SaveForFuture: false);
 
-        var outcome = await manualItems.CreateAsync(request, actorUserId, cancellationToken).ConfigureAwait(false);
+        var outcome = await manualItems
+            .CreateAsync(request, actorUserId, ipAddress, cancellationToken)
+            .ConfigureAwait(false);
         return outcome switch
         {
             GroceryManualItemOutcome.Success success =>
@@ -340,6 +384,19 @@ public sealed class GroceryStapleService(
             errors["department_id"] = [$"department_id {id} does not exist."];
         }
     }
+
+    /// <summary>Secret-free staple snapshot for audit before/after.</summary>
+    private static string SnapshotJson(GroceryStaple staple) =>
+        JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["id"] = staple.Id,
+            ["name"] = staple.Name,
+            ["ingredient_id"] = staple.IngredientId,
+            ["department_id"] = staple.DepartmentId,
+            ["default_quantity_numeric"] = staple.DefaultQuantityNumeric,
+            ["unit_id"] = staple.UnitId,
+            ["is_active"] = staple.IsActive,
+        });
 
     private static GroceryStapleRecord ToRecord(GroceryStaple staple) =>
         new(

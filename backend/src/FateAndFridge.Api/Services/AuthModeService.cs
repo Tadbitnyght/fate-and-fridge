@@ -39,8 +39,12 @@ public sealed class AuthModeService(
     IPasswordHasher passwordHasher,
     SessionService sessionService,
     TimeProvider timeProvider,
+    IAuditService auditService,
     ILogger<AuthModeService> logger)
 {
+    /// <summary>Stable audit entity id for the auth-mode setting.</summary>
+    public const string AuthModeEntityId = "auth_mode";
+
     public async Task<AuthModeSwitchResult> SwitchToMultiuserAsync(
         string username,
         string normalizedUsername,
@@ -113,6 +117,22 @@ public sealed class AuthModeService(
             ipAddress,
             userAgent,
             cancellationToken);
+
+        // The settings switch and its audit row commit with the new Admin; the
+        // credential (password/hash) is never part of the payload. The caller is
+        // the single-user system actor, so actor_user_id stays null
+        // (docs/M9_PLAN.md §2.2).
+        await auditService.WriteAsync(
+            new AuditEventEntry(
+                AuditEventTypes.SettingsAuthModeSwitched,
+                AuditEntityTypes.Settings,
+                EntityId: AuthModeEntityId,
+                BeforeJson: """{"auth_mode":"single_user"}""",
+                AfterJson: """{"auth_mode":"multiuser"}""",
+                IpAddress: ipAddress,
+                Metadata: new Dictionary<string, object?> { ["admin_user_id"] = admin.Id }),
+            cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
 

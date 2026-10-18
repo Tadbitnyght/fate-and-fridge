@@ -218,7 +218,7 @@ public sealed class M1SessionHardeningTests(M1SetupFixture fixture)
     {
         using var scope = factory.Services.CreateScope();
         await scope.ServiceProvider.GetRequiredService<HouseholdSettingsService>()
-            .ApplyPatchAsync(patch, Ct);
+            .ApplyPatchAsync(patch, cancellationToken: Ct);
     }
 
     private static async Task CompleteSingleUserSetupAsync(ApiFactory factory)

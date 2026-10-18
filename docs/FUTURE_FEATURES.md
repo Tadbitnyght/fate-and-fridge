@@ -57,6 +57,7 @@ that plan.
 | [Import & recipe enhancements](#import--recipe-enhancements) | Enhancement | `M4_VERIFICATION.md` |
 | [Calendar enhancements](#calendar-enhancements) | Enhancement | `M5_VERIFICATION.md` |
 | [Randomizer enhancements](#randomizer-enhancements) | Enhancement | `M6_PLAN.md §6`, `RANDOMIZER.md` |
+| [Per-user & device preferences](#per-user--device-preferences) | V1.x | This file (raised 2026-10-18) |
 | [Infrastructure & performance](#infrastructure--performance) | Research | `DATABASE.md §16`, `TESTING.md §12` |
 | [Explicitly never in V1](#explicitly-never-in-v1) | Never-V1 | `AGENTS.md`, `M4_PLAN.md §6`, `PRODUCT_SPEC.md §45` |
 
@@ -291,6 +292,37 @@ Notes: V1 stores a full score breakdown in
 `calendar_entry_history.metadata_json` but exposes only a compact operation to
 clients (`docs/M6_PLAN.md §1.12`). Source: `docs/RANDOMIZER.md §7`,
 `docs/M6_PLAN.md`.
+
+## Per-user & device preferences
+Status: **V1.x**
+
+- Light/dark theme (and follow-system) as a **device-level** preference, applied
+  before first paint so there is no flash of the wrong theme.
+- A configurable **display** date format (the UI already renders `MM-DD-YY` via
+  `frontend/src/lib/dateFormat.ts`).
+- Other per-user UI/display preferences as they arise (the grocery range preset
+  is already a per-user preference — `user_grocery_preferences`).
+
+Notes: storage is **PostgreSQL, never a file** — persistent data must not depend
+on the replaceable container filesystem (`docs/AGENTS.md` Architecture Rules;
+`docs/DATABASE.md §1`). Server-authoritative user preferences go in a dedicated
+table keyed by `user_id`, mirroring `user_grocery_preferences` (`user_id` is the
+primary key), rather than generic JSON (`docs/DATABASE.md §11`). Because the
+single-user mode system actor has no `users` row, its preferences must fall back
+to `application_settings` under a reserved key, exactly as
+`system_grocery_preferences` does (`docs/DATABASE.md §2/§9/§11`). Per-user
+preference writes emit **nothing** on the live-sync bus
+(`docs/M9_TEST_MATRIX.md`), and any new payload needs its own validator and a
+migration with Lead approval. Two boundaries are fixed and are **not** part of
+this item: **timezone stays household-scoped** (`household_settings.timezone`
+drives calendar-date evaluation, the midnight rollover, randomizer windows, and
+the `historical_boundary_date` freeze — a per-user timezone would make "today"
+ambiguous for a shared plan), and the **API wire date format stays ISO** (see
+"Explicitly never in V1").
+
+Source: raised 2026-10-18 in a settings-storage design discussion (agent session);
+grounded in `docs/DATABASE.md §2/§9/§11`, `docs/MILESTONES.md` (M1 single-user
+mode), `docs/M9_TEST_MATRIX.md`.
 
 ## Infrastructure & performance
 Status: **Research**

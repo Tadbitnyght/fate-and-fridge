@@ -271,7 +271,21 @@ public static class AuthEndpoints
             return AuthRequired();
         }
 
-        await authService.LogoutAsync(sessionId, cancellationToken);
+        var userIdValue = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        long? actorUserId = long.TryParse(
+            userIdValue,
+            NumberStyles.Integer,
+            CultureInfo.InvariantCulture,
+            out var parsedUserId)
+            ? parsedUserId
+            : null;
+
+        await authService.LogoutAsync(
+            sessionId,
+            actorUserId,
+            context.User.Identity?.Name,
+            RemoteIpAddress(context),
+            cancellationToken);
         SessionCookie.Delete(context.Response);
 
         return Results.NoContent();

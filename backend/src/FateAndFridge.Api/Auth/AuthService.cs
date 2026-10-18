@@ -1,7 +1,10 @@
 using System.Data;
+using System.Globalization;
+using System.Text.Json;
 using FateAndFridge.Api.Data;
 using FateAndFridge.Api.Domain;
 using FateAndFridge.Api.LiveSync;
+using FateAndFridge.Api.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
@@ -91,6 +94,7 @@ public sealed class AuthService(
     ILoginIpThrottle loginIpThrottle,
     ILoginAttemptDelayer loginAttemptDelayer,
     ILiveSyncPublisher liveSync,
+    IAuditService auditService,
     TimeProvider timeProvider,
     ILogger<AuthService> logger)
 {
@@ -259,23 +263,69 @@ public sealed class AuthService(
                 userAgent),
             cancellationToken);
 
+        // M12-01 mirror: the audit stream records the successful login without
+        // any credential or session token (docs/PRODUCT_SPEC.md §43).
+        await auditService.WriteAsync(
+            new AuditEventEntry(
+                AuditEventTypes.AuthLoginSucceeded,
+                AuditEntityTypes.Session,
+                EntityId: session.Id.ToString(CultureInfo.InvariantCulture),
+                IpAddress: ipAddress,
+                ActorUserId: user.Id,
+                Metadata: new Dictionary<string, object?> { ["username"] = normalizedUsername }),
+            cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
         return new LoginResult.Success(user, session, rawToken);
     }
 
     /// <summary>
     /// Revokes one session server-side and notifies that session's live-sync
     /// connections (docs/M9_PLAN.md §1.13). The caller deletes the cookie.
-    /// Returns false when the session id does not exist.
+    /// Returns false when the session id does not exist. The revocation and the
+    /// <c>auth.logout</c> audit row commit atomically; an already-revoked
+    /// session is a no-op and writes no audit row.
     /// </summary>
-    public async Task<bool> LogoutAsync(long sessionId, CancellationToken cancellationToken = default)
+    public async Task<bool> LogoutAsync(
+        long sessionId,
+        long? actorUserId = null,
+        string? username = null,
+        string? ipAddress = null,
+        CancellationToken cancellationToken = default)
     {
+        var alreadyRevoked = await dbContext.UserSessions
+            .AsNoTracking()
+            .AnyAsync(
+                candidate => candidate.Id == sessionId && candidate.RevokedAt != null,
+                cancellationToken);
+
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         var revoked = await sessionService.RevokeAsync(sessionId, LogoutRevocationReason, cancellationToken);
-        if (revoked)
+        if (!revoked)
         {
-            await liveSync.PublishSessionRevokedAsync(sessionId, cancellationToken);
+            return false;
         }
 
-        return revoked;
+        if (!alreadyRevoked)
+        {
+            await auditService.WriteAsync(
+                new AuditEventEntry(
+                    AuditEventTypes.AuthLogout,
+                    AuditEntityTypes.Session,
+                    EntityId: sessionId.ToString(CultureInfo.InvariantCulture),
+                    IpAddress: ipAddress,
+                    ActorUserId: actorUserId,
+                    Metadata: username is null
+                        ? null
+                        : new Dictionary<string, object?> { ["username"] = username }),
+                cancellationToken);
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+
+        await liveSync.PublishSessionRevokedAsync(sessionId, cancellationToken);
+        return true;
     }
 
     /// <summary>
@@ -425,6 +475,26 @@ public sealed class AuthService(
                 new Dictionary<string, object?> { ["actor_user_id"] = actorUserId }),
             cancellationToken);
 
+        // M12-01: an Admin reset is a user-lifecycle audit event. Only the
+        // public fields and the fact that a temporary password was issued are
+        // recorded — never the credential itself (docs/SECURITY.md §17).
+        await auditService.WriteAsync(
+            new AuditEventEntry(
+                AuditEventTypes.UserPasswordReset,
+                AuditEntityTypes.User,
+                EntityId: user.Id.ToString(CultureInfo.InvariantCulture),
+                AfterJson: JsonSerializer.Serialize(new Dictionary<string, object?>
+                {
+                    ["id"] = user.Id,
+                    ["username"] = user.Username,
+                    ["must_change_password"] = user.MustChangePassword,
+                }),
+                IpAddress: ipAddress,
+                ActorUserId: actorUserId,
+                Metadata: new Dictionary<string, object?> { ["temporary_password_issued"] = true }),
+            cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
         await transaction.CommitAsync(cancellationToken);
 
         // Only after the commit: tell every revoked session's live-sync
@@ -513,14 +583,15 @@ public sealed class AuthService(
             reader.IsDBNull(4) ? null : reader.GetFieldValue<DateTimeOffset>(4));
     }
 
-    private Task WriteFailureAsync(
+    private async Task WriteFailureAsync(
         long? userId,
         string normalizedUsername,
         string? ipAddress,
         string? userAgent,
         string reason,
-        CancellationToken cancellationToken) =>
-        authEventWriter.WriteAsync(
+        CancellationToken cancellationToken)
+    {
+        await authEventWriter.WriteAsync(
             new AuthEventEntry(
                 AuthEventTypes.LoginFailure,
                 userId,
@@ -529,6 +600,23 @@ public sealed class AuthService(
                 userAgent,
                 new Dictionary<string, object?> { ["reason"] = reason }),
             cancellationToken);
+
+        // M12-01 mirror: the attempted username (never the password), the
+        // outcome category, and the IP; only the outcome category is stored.
+        await auditService.WriteAsync(
+            new AuditEventEntry(
+                AuditEventTypes.AuthLoginFailed,
+                AuditEntityTypes.Auth,
+                IpAddress: ipAddress,
+                ActorUserId: userId,
+                Metadata: new Dictionary<string, object?>
+                {
+                    ["username"] = normalizedUsername,
+                    ["reason"] = reason,
+                }),
+            cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
 
     private static IReadOnlyDictionary<string, object?>? LockedUntilMetadata(DateTimeOffset? lockedUntil) =>
         lockedUntil is null

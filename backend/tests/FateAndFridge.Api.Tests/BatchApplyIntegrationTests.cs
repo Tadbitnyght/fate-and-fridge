@@ -427,7 +427,9 @@ public sealed class BatchApplyIntegrationTests(M1SetupFixture fixture) : IAsyncL
         (await ApplyAsync(session, TokenOf(preview))).StatusCode.Should().Be(HttpStatusCode.OK);
 
         await using var context = fixture.CreateContext();
-        (await context.AuditEvents.CountAsync(Ct)).Should().Be(0);
+        (await context.AuditEvents.CountAsync(row => !row.EventType.StartsWith("auth."), Ct)).Should().Be(
+            0,
+            "a batch apply stages no audit row; M12-01 only mirrors auth events");
     }
 
     [Fact]
