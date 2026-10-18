@@ -273,6 +273,8 @@ describe('milestone manifest', () => {
     expect(m11?.status).toBe('complete')
     expect(m11?.completedOn).toBe('2026-10-18')
     // The tag is cut after the live redeploy is verified.
+    expect(m11?.tag).toBe('m11-complete')
+    expect(m11?.commit).toBe('141168a')
     for (const issue of [140, 141, 148]) {
       expect(m11?.issues).toContain(issue)
     }

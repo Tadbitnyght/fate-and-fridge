@@ -364,6 +364,8 @@ export const MILESTONES: Milestone[] = [
       'Read-only, month-grouped, filterable meal-history browser',
     ],
     completedOn: '2026-10-18',
+    tag: 'm11-complete',
+    commit: '141168a',
     evidence: [
       { label: 'Backend tests', value: '2183' },
       { label: 'Vitest', value: '420' },

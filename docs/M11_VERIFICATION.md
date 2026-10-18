@@ -1,6 +1,6 @@
 # M11 Verification — Statistics and History
 
-Status: **in progress** (live deployment gate pending)
+Status: **complete** (live deployment verified 2026-10-18)
 Runbook: `docs/M11_PLAN.md` (approved 2026-10-14; execution details locked
 2026-10-15). Coverage map: `docs/M11_TEST_MATRIX.md`.
 Tracking: #140; M11-01…M11-08: #141–#148.
@@ -159,13 +159,72 @@ the §1.29 index exception was **not** needed and no migration was added.
 
 ## Live deployment verification
 
-_Pending: the rebuild/redeploy and live checks are performed by `docker-admin`
-(`scripts/deploy.sh up`, i.e. `docker compose up -d --build`) from the completed
-commit, and the evidence is recorded here before the milestone is marked complete
-and tagged._
+Rebuild/redeploy was executed by `docker-admin` against the TrueNAS deploy host
+(`fatefridge`, `CPlanner@192.168.0.2`, deploy dir `/mnt/Data/calendarplanner`,
+app URL `http://192.168.0.2:50080/`) from the completed commit — the documented
+`scripts/deploy.sh up` (`docker compose up -d --build`).
+
+**Deployed revision.** The deploy checkout was verified to be the completed
+commit: `git -C /mnt/Data/calendarplanner rev-parse --short HEAD` → `141168a`
+(clean tree). The NAS build produced frontend bundle `index-BaF50CYt.js`, which
+is the asset the live instance serves.
+
+**Build and image.** `dotnet publish` succeeded (17.3 s) and the frontend
+`tsc -b && vite build` succeeded (238 modules). The stack was rebuilt to image
+**`sha256:e04aaf3b29ffaa5c71c3fec53bd3d5c123ad1a2d9bec58b04ac06262fe8a8aa4`**
+(`fate-and-fridge:0.1.0`, created `2026-10-18T08:13:14Z`). This is a locally built
+image, so it has **no registry digest** (`RepoDigests` is empty); the image id,
+build timestamp, and container id are the identifying evidence.
+
+**Containers.**
+
+```
+NAME                          IMAGE                   STATUS                    PORTS
+fate-and-fridge-app-1         fate-and-fridge:0.1.0   Up (healthy)              0.0.0.0:50080->8080/tcp
+fate-and-fridge-postgres-1    postgres:17-alpine      Up 4 days (healthy)       5432/tcp  (not published)
+```
+
+App container id `302ed32d9aa10a56874059bd77d4b89dc15a62bb7c1d6c79d66f862fd1c11b4c`.
+PostgreSQL remained running/healthy and **no volume or dataset was touched**;
+only port 50080 is published.
+
+**Migrations.** Startup logged "No migrations were applied. The database is
+already up to date.", as expected — M11 added none.
+
+**Health.**
+
+- `GET /api/v1/health` → `200`
+  `{"status":"ok","app":"Fate & Fridge","version":"0.1.0","environment":"production"}`
+- `GET /api/v1/health/db` → `200` `{"status":"ok","database":"connected"}`
+
+**Live M11 proof** (single-user/configured instance; real household data):
+
+- `GET /api/v1/statistics/overview` → `200` — household-local windows
+  (`today 2026-10-18`, `America/Chicago`, `October 2026`), `most_eaten` with
+  `Chicken Enchiladas` eaten 3× (last `2026-10-16`), `meal_count_month` 23,
+  `meal_count_year` 23, `protein_distribution` `{Beef 3, Chicken 3, Pork 1}` with
+  `no_primary_protein` 1, and the seven `special_event_counts`
+  (`eat_out` 1, `host_family_dinner` 2, `go_to_family_dinner` 2, …).
+- `GET /api/v1/statistics/history?month=2026-10` → `200` — default range
+  `2025-11-01 … 2026-10-18` (the last 12 months), `month` metadata with
+  **`days` as a sibling**, newest-first days ending at `2026-10-17` (strictly
+  past — today is `2026-10-18`), a `host_family_dinner` carrying a recipe with
+  protein `Beef`, and a recipe with no protein (`protein: null`).
+- `GET /api/v1/statistics/recipes/2` → `200`
+  `{"last_eaten":"2026-10-16","next_planned":"2026-10-18","times_eaten":3}` —
+  today's occurrence is **planned, not eaten**, as specified.
+- `/progress` — rendered live in Chromium against the deployed instance: the
+  summary reads `12 of 15 milestones complete (80%).`, and the M11 card shows
+  `M11 — Statistics and History`, `Complete`, `Completed 2026-10-18`. The served
+  bundle hash matches the fresh build output.
+
+**Runbook:** `git tag m11-complete` (annotated, "M11 — Statistics and History
+complete (2026-10-18)") is cut on the commit that records this verification.
 
 ---
 
 ## CI status after completion
 
-_Pending._
+_Pending the push of the completion commits to `main`; the M9/M10 precedent
+(`BUG-009`/`BUG-010`) required a green CI run on `main` before the milestone was
+declared done, and the same check is recorded there._
