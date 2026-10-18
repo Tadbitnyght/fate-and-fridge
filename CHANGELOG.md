@@ -240,6 +240,28 @@ versions follow [Semantic Versioning](https://semver.org/).
   assertions). **No new API endpoint and no schema change** — printing is
   client-rendered from the existing reads.
 
+- Milestone 11 — statistics and history (2026-10-18): a household `/statistics`
+  page computed on demand from `calendar_entries` — **most eaten** and **least
+  recently eaten** recipes (top 10 each, with status badges and snapshot
+  tombstones for deleted recipes), meal counts for the household calendar
+  **month** and **year**, an offline CSS **primary-protein distribution** with an
+  explicit "no primary protein" figure, and counts for all **seven special-event
+  types** — plus per-recipe **Last Eaten / Next Planned / Times Eaten** on the
+  recipe browser cards, the compact list, and the recipe detail/editor, and a
+  **read-only, month-grouped meal-history browser** with server-side
+  entry-type/recipe/protein filters and month paging. Three new reads —
+  `GET /api/v1/statistics/overview`, `GET /api/v1/statistics/recipes/{id}`, and
+  `GET /api/v1/statistics/history` (`recipes.view`; `calendar.view` for history)
+  — are aggregate queries over `calendar_entries`: **no cache, no statistics
+  table, no background job, no new infrastructure**. "Eaten" is strictly before
+  the household today (household timezone), retired recipes keep their history,
+  and a hard-deleted recipe's meals survive as a stored-snapshot tombstone rather
+  than being lost. The recipes list gained the three metrics (one aggregate query
+  for the page) and its `recently_eaten` / `least_recently_eaten` / `most_eaten`
+  sorts are now live; the statistics and history reads are invalidated over the
+  existing live-sync events. **No schema change, no migration, and no new
+  permission key.**
+
 ### Changed
 
 - Default published port is now **50080** (`HOST_PORT` in `.env`, default in

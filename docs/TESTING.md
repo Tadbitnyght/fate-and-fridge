@@ -260,6 +260,44 @@ hermetic assertion.
 
 ---
 
+## 10.2 Statistics and History Tests
+
+The M11 coverage map (§4 battery bullet → primary test) is
+`docs/M11_TEST_MATRIX.md`; the independent verdict and measured numbers are
+`docs/M11_VERIFICATION.md`.
+
+- **Occurrence and eaten rules:** today's entry is Next Planned and never eaten;
+  `host_family_dinner` / `holiday` / `misc` carrying a recipe count;
+  `eat_out` / `fend_for_yourself` / `go_to_family_dinner` / vacation never
+  contribute to recipe metrics but still count as meals and events.
+- **Historical integrity:** retired recipes keep their meals and the retired
+  badge; a hard-deleted recipe's meals survive as a stored-snapshot tombstone and
+  no total drops; a rename is never double-counted; `never_eaten` counts every
+  live recipe of any status with no eaten occurrence.
+- **Household-local windows:** the calendar month and year counts use the
+  household timezone (boundary tests use a non-UTC household and an injected
+  clock, so a UTC-naive implementation fails) and the month count is the
+  inclusive `[month start, month end]` window — never "first of the month
+  through December 31" (regression #148).
+- **Rankings and distribution:** top-10 bounds with deterministic tie-breaks;
+  least-recently-eaten excludes never-eaten recipes; a multi-protein occurrence
+  counts toward each protein bar; `no_primary_protein` is explicit.
+- **History contract:** one month per page, newest first, strictly past days with
+  no filler; bracket-capped at 366 days; malformed input → `VALIDATION_FAILED`;
+  AND-combined filters by entry type, recipe id **or** stored snapshot name, and
+  primary protein; walking the `newer`/`older` cursors visits every in-range
+  month exactly once.
+- **Permissions:** `recipes.view` for the overview and per-recipe metrics,
+  `calendar.view` for history; 401 / 403 / Admin / single-user system actor and
+  the edit-implies-view rule are all asserted, and the suite proves no eighth
+  permission key was introduced.
+- **Performance:** on the §12 baseline (2,000 recipes, 10 years of meal history)
+  the overview and a single history month each answer well under the 1-second bar
+  with a small fixed command count (no N+1); the recipes list with embedded
+  metrics stays bounded. No index migration was needed.
+
+---
+
 ## 11. Accessibility Tests
 - keyboard navigation
 - focus trapping in dialogs

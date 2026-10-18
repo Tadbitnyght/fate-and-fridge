@@ -196,9 +196,11 @@ Status: **V2**
 - Times planned, average days between repeats, favorite usage, cuisine trends,
   grocery ingredient frequency, household preference trends.
 
-Notes: V1 ships Last Eaten / Next Planned / Times Eaten (M11); "Times Planned"
-is explicitly deferred (`docs/PRODUCT_SPEC.md §12`). Source:
-`docs/V2_BACKLOG.md`.
+Notes: V1 (M11, 2026-10-18) ships Last Eaten / Next Planned / Times Eaten plus
+the `PRODUCT_SPEC.md §41` household statistics and the read-only meal-history
+browser; "Times Planned" is explicitly deferred (`docs/PRODUCT_SPEC.md §12`), and
+grocery ingredient frequency was **not** included in M11 (`docs/M11_PLAN.md`
+§1.2, §6). Source: `docs/V2_BACKLOG.md`, `docs/M11_PLAN.md §6`.
 
 ## Printing enhancements
 Status: **V2**

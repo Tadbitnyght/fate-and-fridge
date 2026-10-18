@@ -354,7 +354,7 @@ export const MILESTONES: Milestone[] = [
     id: 'M11',
     number: 11,
     name: 'Statistics and History',
-    status: 'in_progress',
+    status: 'complete',
     summary:
       'Household statistics and a read-only meal-history browser, computed on demand over the current calendar entries (no new tables, no caching).',
     features: [
@@ -362,6 +362,14 @@ export const MILESTONES: Milestone[] = [
       'Per-recipe Last Eaten / Next Planned / Times Eaten on the browser cards and detail',
       'Primary protein distribution (offline CSS bars) and the seven special-event counts',
       'Read-only, month-grouped, filterable meal-history browser',
+    ],
+    completedOn: '2026-10-18',
+    evidence: [
+      { label: 'Backend tests', value: '2183' },
+      { label: 'Vitest', value: '420' },
+      { label: 'Playwright (hermetic)', value: '67 passed / 3 pre-existing stack skips' },
+      { label: 'M11 verification', value: 'independent review + full §4 battery' },
+      { label: 'Backend gates', value: 'format/build/EF clean' },
     ],
     issues: [140, 141, 142, 143, 144, 145, 146, 147, 148],
     issuesNote: 'Tracking #140; M11-01…M11-08: #141–#148. Runbook: docs/M11_PLAN.md.',

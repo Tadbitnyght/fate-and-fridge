@@ -238,6 +238,9 @@ the working tree. `implementer` runs at `steps: 80`, `reviewer` 28,
 
 - Live-sync broadcast of grocery/check changes: M9.
 - Cross-app print CSS polish and calendar printing: M10.
-- Statistics over grocery ingredient frequency: M11.
+- Statistics over grocery ingredient frequency: **not in M11** — deferred to V2
+  (`docs/FUTURE_FEATURES.md` → "Statistics expansion"). M11 ships the
+  `PRODUCT_SPEC` §41/§12 household statistics and meal history without
+  grocery-ingredient frequency (`docs/M11_PLAN.md` §1.2).
 - Pantry/inventory, package intelligence, serving scaling, dietary scheduling,
   external API credentials: see `docs/FUTURE_FEATURES.md`.

@@ -255,6 +255,13 @@ Issues:
 4. special-event counts.
 5. meal-history browser.
 
+Approved decisions (2026-10-14): see `docs/M11_PLAN.md` for the authoritative
+metric set, occurrence/eaten rules, household-local windows, history range and
+paging, API contracts, and verification battery. Delivered 2026-10-18; runbook
+`docs/M11_PLAN.md`, coverage map `docs/M11_TEST_MATRIX.md`, and the independent
+verification record `docs/M11_VERIFICATION.md`. Tracking issue #140; issues
+M11-01…M11-08 are #141–#148.
+
 ---
 
 ## Milestone 12 — Administration
