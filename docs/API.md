@@ -1516,10 +1516,78 @@ endpoint (§23). The import route never bypasses ingredient-matching review.
 ---
 
 ## 16. Admin Audit
-- `GET /admin/audit`
-- filters by date/user/event/entity
 
-Admin only.
+Admin-only read access to the audit log (M12-02; docs/M12_PLAN.md §1.4, §1.5,
+§2.2). No new permission key is introduced: the existing `admin` role — and the
+single-user system actor, which is an Admin — is the authority. The endpoints are
+read-only (M12-04 owns export and retention; M12-03 owns the viewer UI).
+
+### `GET /api/v1/admin/audit`
+
+The merged, newest-first timeline of **all** `audit_events` rows
+(`source = "audit"`) and the reroll/batch `calendar_entry_history` rows whose
+`metadata_json.kind` is `reroll`, `batch_reroll`, `fill_empty`, or `undo`
+(`source = "entry_history"`). Rerolls are deliberately absent from
+`audit_events`; ordinary entry edits are **not** duplicated from the history
+table because they already appear as calendar audit rows.
+
+Query parameters (all AND-combined):
+
+| Parameter | Meaning |
+|-----------|---------|
+| `event_type` | Exact `event_type` match. For `entry_history` rows the stored `kind` maps to the viewer event type: `reroll` → `calendar.reroll`, `batch_reroll` → `calendar.batch_reroll`, `fill_empty` → `calendar.fill_empty`, `undo` → `calendar.undo`. |
+| `entity_type` | Exact `entity_type` match; `entry_history` rows are always `calendar_entry`. |
+| `actor_user_id` | Exact acting user id (`audit_events.actor_user_id` / `calendar_entry_history.changed_by_user_id`). |
+| `source` | `audit` or `entry_history`. |
+| `from`, `to` | Household-local `yyyy-MM-dd` dates, inclusive of the whole day, resolved through the household timezone. |
+| `limit` | Page size; default `50`, maximum `200`. |
+| `cursor` | Opaque keyset cursor from the previous page's `next_cursor`. |
+
+An invalid `limit`, `source`, `actor_user_id`, `from`, `to`, or `cursor` returns
+`400 VALIDATION_FAILED` with the offending field in `details.field_errors`. A
+well-formed cursor whose instant carries a non-UTC offset is accepted (the
+instant is normalised to UTC).
+
+Response:
+
+```json
+{
+  "items": [
+    {
+      "id": 42,
+      "source": "audit",
+      "recorded_at": "2026-11-15T18:00:00+00:00",
+      "actor_user_id": 1,
+      "actor_username": "root",
+      "event_type": "calendar.updated",
+      "entity_type": "calendar_entry",
+      "entity_id": "7",
+      "summary": "Calendar entry changed",
+      "reason": null,
+      "ip_address": "203.0.113.11",
+      "before": { "entry_type": "eat_out" },
+      "after": { "entry_type": "recipe" },
+      "metadata": { "meal_date": "2026-11-15" }
+    }
+  ],
+  "next_cursor": "MjAyNi0xMS0xNVQxODowMDowMC4wMDAwMDAwKzAwOjAwfGF1ZGl0fDQy"
+}
+```
+
+- Rows are ordered `recorded_at` desc, then `source` desc, then `id` desc — a
+  total order over both row kinds, so the opaque keyset cursor
+  (`recorded_at | source | id`, base64url) never skips or repeats a row.
+- `actor_username` is resolved by a join in the same statement (never a per-row
+  query); `before`, `after`, and `metadata` are the stored JSON documents (or
+  `null`), embedded as JSON values.
+- `summary` is a short server-computed human-readable line per event type.
+- `next_cursor` is `null` on the last page.
+- The read is bounded: one `UNION ALL` projection ordered and limited in the
+  database, independent of the page size (no N+1).
+- Audit rows are append-only and never surface credentials; the M12-01
+  secret-leak invariants continue to hold.
+- Anonymous → `401 AUTH_REQUIRED`; a member → `403 FORBIDDEN`; an Admin or the
+  single-user system actor → `200`.
 
 ---
 
