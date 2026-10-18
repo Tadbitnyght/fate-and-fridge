@@ -42,10 +42,16 @@ export function StatisticsPage(): JSX.Element {
 
   const requestedHistory = searchParams.get('tab') === 'history'
   const showHistory = requestedHistory && canViewHistory
+  // A History deep link the caller may not open has no tab to select: the
+  // requested History tab is unavailable, so the tablist is omitted entirely.
+  // Rendering it would claim `aria-controls="statistics-panel-overview"` for a
+  // tabpanel that the branch below does not render (issue #148).
+  const historyUnavailable = requestedHistory && !canViewHistory
   const tabs = canViewHistory ? TABS : TABS.filter((tab) => tab.id !== 'history')
   const requestedTab: StatisticsTab = requestedHistory ? 'history' : 'overview'
-  // A deep link to a tab the caller may not see falls back to the Overview tab
-  // stop (the only available one) while the panel below explains why.
+  // When the requested History tab is unavailable the tablist is not rendered
+  // at all, so this fallback only keeps `activeTab` a valid member of `tabs`;
+  // it never selects a tab for the user (see `historyUnavailable` below).
   const activeTab: StatisticsTab = tabs.some((tab) => tab.id === requestedTab)
     ? requestedTab
     : 'overview'
@@ -91,30 +97,32 @@ export function StatisticsPage(): JSX.Element {
         Statistics
       </h2>
 
-      <div className="stats-tabs" role="tablist" aria-label="Statistics views">
-        {tabs.map((tab, index) => {
-          const selected = activeTab === tab.id
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              role="tab"
-              id={`statistics-tab-${tab.id}`}
-              className={`stats-tab${selected ? ' stats-tab--active' : ''}`}
-              aria-selected={selected}
-              aria-controls={`statistics-panel-${tab.id}`}
-              tabIndex={selected ? 0 : -1}
-              ref={(element) => {
-                tabRefs.current[index] = element
-              }}
-              onClick={() => selectTab(index)}
-              onKeyDown={(event) => handleTabKeyDown(event, index)}
-            >
-              {tab.label}
-            </button>
-          )
-        })}
-      </div>
+      {!historyUnavailable && (
+        <div className="stats-tabs" role="tablist" aria-label="Statistics views">
+          {tabs.map((tab, index) => {
+            const selected = activeTab === tab.id
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                id={`statistics-tab-${tab.id}`}
+                className={`stats-tab${selected ? ' stats-tab--active' : ''}`}
+                aria-selected={selected}
+                aria-controls={`statistics-panel-${tab.id}`}
+                tabIndex={selected ? 0 : -1}
+                ref={(element) => {
+                  tabRefs.current[index] = element
+                }}
+                onClick={() => selectTab(index)}
+                onKeyDown={(event) => handleTabKeyDown(event, index)}
+              >
+                {tab.label}
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {showHistory ? (
         <div
@@ -155,7 +163,11 @@ export function StatisticsPage(): JSX.Element {
             </p>
           )}
 
-          {overviewQuery.isPending && <LoadingScreen label="Loading statistics…" />}
+          {/* `isLoading` is `isPending && isFetching`: a disabled query (no
+              `recipes.view`, so the fetch never starts) is pending forever but
+              never fetching, and must not show a spinner beside the permission
+              alert (issue #148). */}
+          {overviewQuery.isLoading && <LoadingScreen label="Loading statistics…" />}
 
           {overviewQuery.isError && (
             <ErrorScreen
@@ -371,12 +383,18 @@ function SpecialEventList({ counts }: { counts: SpecialEventCount[] }) {
   const byType = new Map(counts.map((count) => [count.entry_type, count.count]))
   return (
     <ul className="stats-events">
-      {SPECIAL_EVENT_TYPES.map((type) => (
-        <li key={type} className="stats-event">
-          <span className="stats-event__label">{SPECIAL_EVENT_LABELS[type]}</span>
-          <span className="stats-event__count">{byType.get(type) ?? 0}</span>
-        </li>
-      ))}
+      {SPECIAL_EVENT_TYPES.map((type) => {
+        // A type the server omitted is shown as an explicit absence marker, not
+        // as `0`: a real zero is a count, while a missing key means the response
+        // did not honour the contract and must stay visible (issue #148).
+        const count = byType.get(type)
+        return (
+          <li key={type} className="stats-event">
+            <span className="stats-event__label">{SPECIAL_EVENT_LABELS[type]}</span>
+            <span className="stats-event__count">{count === undefined ? '—' : count}</span>
+          </li>
+        )
+      })}
     </ul>
   )
 }

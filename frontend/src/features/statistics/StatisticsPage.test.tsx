@@ -185,6 +185,29 @@ describe('statistics overview page', () => {
     expect(screen.queryByRole('heading', { name: 'Most eaten' })).not.toBeInTheDocument()
   })
 
+  /* Issue #148: an omitted type must stay visible, not be faked as a zero. */
+  it('marks an omitted special-event type as absent rather than zero', async () => {
+    const counts = sampleOverview().special_event_counts.filter(
+      (count) => count.entry_type !== 'vacation',
+    )
+    renderPage({ response: { body: sampleOverview({ special_event_counts: counts }) } })
+
+    const region = await screen.findByRole('region', { name: 'Special events' })
+    expect(
+      within(region)
+        .getAllByRole('listitem')
+        .map((row) => row.textContent),
+    ).toEqual([
+      'Eat out4',
+      'Host family dinner1',
+      'Go to family dinner2',
+      'Holiday1',
+      'Misc0',
+      'Fend for yourself6',
+      'Vacation—',
+    ])
+  })
+
   it('shows an error state with a retry that refetches the overview', async () => {
     const mock = renderPage({
       response: {
@@ -219,6 +242,11 @@ describe('statistics overview page', () => {
     expect(screen.queryByRole('link', { name: 'Statistics' })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Calendar' })).toBeInTheDocument()
     expect(mock.callsFor('/statistics/overview')).toBe(0)
+
+    // Issue #148: the disabled overview query is pending forever but never
+    // fetching, so no spinner may sit beside the permission alert.
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument())
+    expect(screen.queryByText('Loading statistics…')).not.toBeInTheDocument()
   })
 
   it('shows the nav item and content for a member with recipes.view', async () => {
@@ -258,6 +286,19 @@ function renderTabsPage(options: TabRenderOptions = {}): MockFetch {
   ])
   renderWithProviders(<App />, { route: options.route ?? '/statistics' })
   return mock
+}
+
+/**
+ * The selected `role="tab"`'s `aria-controls` must point at a tabpanel that is
+ * actually rendered (issue #148). This page renders only the active panel, so
+ * the inactive tab's reference is checked implicitly by the single-tab case
+ * below; what must never happen is a selected tab pointing at nothing.
+ */
+function expectSelectedTabToResolveItsPanel(): void {
+  const selected = screen.getByRole('tab', { selected: true })
+  const panelId = selected.getAttribute('aria-controls')
+  expect(panelId).toBeTruthy()
+  expect(document.getElementById(panelId as string)).not.toBeNull()
 }
 
 describe('statistics tabs', () => {
@@ -338,6 +379,36 @@ describe('statistics tabs', () => {
     )
     expect(screen.queryByRole('tab', { name: 'History' })).not.toBeInTheDocument()
     expect(mock.callsFor('/statistics/history')).toBe(0)
+
+    // Issue #148: without a selectable History tab there is no tablist at all,
+    // so no `role="tab"` can dangle its `aria-controls` at an absent panel.
+    expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
+    expect(screen.queryAllByRole('tab')).toHaveLength(0)
+  })
+
+  /* Issue #148: a selected tab must never point at a panel that is not there. */
+  it('points the selected tab at its rendered tabpanel on both tabs', async () => {
+    renderTabsPage()
+    await screen.findByText('Eaten 9 times')
+    expectSelectedTabToResolveItsPanel()
+
+    fireEvent.click(screen.getByRole('tab', { name: 'History' }))
+    await screen.findByRole('region', { name: 'October 2026' })
+    expectSelectedTabToResolveItsPanel()
+  })
+
+  /* Issue #148: with only one tab available, every rendered tab resolves. */
+  it('keeps a lone Overview tab resolvable for an overview-only member', async () => {
+    renderTabsPage({ session: { ...memberSession, permissions: ['recipes.view'] } })
+
+    await screen.findByText('Eaten 9 times')
+    const tabs = screen.getAllByRole('tab')
+    expect(tabs).toHaveLength(1)
+    for (const tab of tabs) {
+      const panelId = tab.getAttribute('aria-controls')
+      expect(panelId).toBeTruthy()
+      expect(document.getElementById(panelId as string)).not.toBeNull()
+    }
   })
 })
 
