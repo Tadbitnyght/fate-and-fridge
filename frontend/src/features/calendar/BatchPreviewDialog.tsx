@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 
 import type { BatchRerollMode, BatchUnchangedReason, CalendarOperation } from '../../api/calendar'
+import { formatHouseholdDate } from '../../lib/dateFormat'
 import { Modal } from '../../components/Modal'
 import { BATCH_MODE_LABELS } from './batchModes'
 import { fullDateLabel } from './calendarDates'
@@ -103,7 +104,8 @@ export function BatchPreviewDialog({
       {data !== null && (
         <>
           <p className="page-note">
-            {data.draft.start_date} → {data.draft.end_date}
+            {formatHouseholdDate(data.draft.start_date)} →{' '}
+            {formatHouseholdDate(data.draft.end_date)}
           </p>
           {nothingToChange && (
             <p className="form__notice" role="status">

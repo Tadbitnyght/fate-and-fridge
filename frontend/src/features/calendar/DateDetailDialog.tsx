@@ -12,6 +12,7 @@ import {
 import { isApiError } from '../../api/client'
 import { ErrorCodes } from '../../api/errorCodes'
 import { Modal } from '../../components/Modal'
+import { formatHouseholdDate } from '../../lib/dateFormat'
 import { useRecipeList } from '../recipes/useRecipes'
 import { fullDateLabel } from './calendarDates'
 import { EventIcon } from './icons'
@@ -253,7 +254,7 @@ export function DateDetailDialog({
                         <span className="calendar-detail__result-name">{candidate.name}</span>
                         <span className="calendar-detail__result-meta">
                           {candidate.last_eaten
-                            ? `Last eaten ${candidate.last_eaten}`
+                            ? `Last eaten ${formatHouseholdDate(candidate.last_eaten)}`
                             : 'Not eaten yet'}
                           {candidate.times_eaten != null && ` · ${candidate.times_eaten}×`}
                         </span>

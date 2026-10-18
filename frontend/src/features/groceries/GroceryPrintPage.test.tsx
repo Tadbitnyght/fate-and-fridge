@@ -23,7 +23,7 @@ describe('grocery print page', () => {
 
     const heading = await screen.findByRole('heading', {
       level: 2,
-      name: /Grocery list: Oct 12 – Oct 18/,
+      name: /Grocery list: 10-12-26 – 10-18-26/,
     })
     expect(heading).toBeInTheDocument()
     expect(screen.getByText(/^Generated /)).toBeInTheDocument()

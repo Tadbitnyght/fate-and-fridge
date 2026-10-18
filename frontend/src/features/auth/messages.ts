@@ -1,5 +1,6 @@
 import { isApiError } from '../../api/client'
 import { ErrorCodes } from '../../api/errorCodes'
+import { formatTimestamp } from '../../lib/dateFormat'
 
 function firstFieldError(details: Record<string, unknown>): string | null {
   const fieldErrors = details.field_errors
@@ -19,11 +20,10 @@ function lockedUntilSuffix(details: Record<string, unknown>): string {
   if (typeof lockedUntil !== 'string') {
     return ''
   }
-  const when = new Date(lockedUntil)
-  if (Number.isNaN(when.getTime())) {
-    return ''
-  }
-  return ` until ${when.toLocaleString()}`
+  // `formatTimestamp` returns its input verbatim when it cannot parse, so an
+  // unreadable value contributes no suffix rather than a bogus time.
+  const formatted = formatTimestamp(lockedUntil)
+  return formatted === lockedUntil ? '' : ` until ${formatted}`
 }
 
 /** Human-readable login failures; the backend stays the source of truth. */

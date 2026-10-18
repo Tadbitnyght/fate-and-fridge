@@ -164,9 +164,9 @@ describe('recipe browser', () => {
     const loggedScope = within(loggedCard as HTMLElement)
     expect(loggedScope.getByText('Retired')).toBeInTheDocument()
     expect(loggedScope.getByText('Last eaten')).toBeInTheDocument()
-    expect(loggedScope.getByText('Sep 30, 2026')).toBeInTheDocument()
+    expect(loggedScope.getByText('09-30-26')).toBeInTheDocument()
     expect(loggedScope.getByText('Next planned')).toBeInTheDocument()
-    expect(loggedScope.getByText('Oct 20, 2026')).toBeInTheDocument()
+    expect(loggedScope.getByText('10-20-26')).toBeInTheDocument()
     expect(loggedScope.getByText('Times eaten')).toBeInTheDocument()
     expect(loggedScope.getByText('3')).toBeInTheDocument()
 
@@ -190,8 +190,8 @@ describe('recipe browser', () => {
       .getByRole('rowheader', { name: 'Delta Stew' })
       .closest('tr') as HTMLElement
     expect(within(loggedRow).getByText('Retired')).toBeInTheDocument()
-    expect(within(loggedRow).getByText('Sep 30, 2026')).toBeInTheDocument()
-    expect(within(loggedRow).getByText('Oct 20, 2026')).toBeInTheDocument()
+    expect(within(loggedRow).getByText('09-30-26')).toBeInTheDocument()
+    expect(within(loggedRow).getByText('10-20-26')).toBeInTheDocument()
     expect(within(loggedRow).getByText('3')).toBeInTheDocument()
 
     const emptyRow = within(table)

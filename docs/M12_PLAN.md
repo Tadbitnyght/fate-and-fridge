@@ -299,8 +299,10 @@ the working tree.
 
 ## 7. Tracked V1.x display change (outside M12's review surface)
 
-**Date display format → MM-DD-YY.** Product UI dates (calendar, statistics, meal
-history, per-recipe metrics, print output) render as **MM-DD-YY**; the API wire
-format stays ISO `yyyy-MM-dd` and no stored value changes. Delivered as its own
-V1.x issue with the same gates (update the affected formatters and their tests;
-no API, schema, or dependency change).
+**Date display format → MM-DD-YY (implemented, #160).** Product UI dates
+(calendar, statistics overview, meal history, per-recipe Last Eaten / Next
+Planned, print output, settings last-login, and lockout timestamps) render as
+**MM-DD-YY** through the shared `frontend/src/lib/dateFormat.ts`. Month labels,
+weekday labels, and calendar grid day numbers stay readable. The API wire format
+stays ISO `yyyy-MM-dd` and no stored value changes. Delivered as its own V1.x
+issue with the same gates; no API, schema, or dependency change.

@@ -1,24 +1,11 @@
 import { isApiError } from '../../api/client'
 import type { GroceryDepartment } from '../../api/groceries'
 import { ErrorCodes } from '../../api/errorCodes'
+import { formatClockTime, formatHouseholdDate, formatLocalDate } from '../../lib/dateFormat'
 import { parseIsoDate } from '../calendar/calendarDates'
 import { firstFieldError, extractServerFieldErrors } from '../../utils/fieldErrors'
 
 const WEEKDAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-const MONTH_NAMES = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-]
 
 /** Short meal attribution, e.g. `Tue 10/6` (docs/M8_PLAN.md §1.6). */
 export function formatSourceDate(iso: string): string {
@@ -36,13 +23,13 @@ export function orderDepartments(departments: GroceryDepartment[]): GroceryDepar
   return [...departments].sort((left, right) => Number(left.is_other) - Number(right.is_other))
 }
 
-/** Readable range summary, e.g. `Oct 10 – Oct 16`. */
+/**
+ * Readable range summary, e.g. `10-10-26 – 10-16-26`. A single-day range
+ * collapses to one date. Both ends go through the shared product date formatter.
+ */
 export function formatRangeSummary(start: string, end: string): string {
-  const startDate = parseIsoDate(start)
-  const endDate = parseIsoDate(end)
-  const startLabel = `${MONTH_NAMES[startDate.getMonth()]} ${startDate.getDate()}`
-  const endLabel = `${MONTH_NAMES[endDate.getMonth()]} ${endDate.getDate()}`
-  return start === end ? startLabel : `${startLabel} – ${endLabel}`
+  const startLabel = formatHouseholdDate(start)
+  return start === end ? startLabel : `${startLabel} – ${formatHouseholdDate(end)}`
 }
 
 /**
@@ -57,19 +44,13 @@ export function formatQuantityLabel(quantityText: string, unit: string | null): 
 }
 
 /**
- * Print-view "generated at" stamp, e.g. `Oct 12, 2026 3:04 PM`. Built by hand
- * from the local clock so it is deterministic under invariant globalization
- * (no `toLocaleString`, see `AGENTS.md`).
+ * Print-view "generated at" stamp, e.g. `10-12-26 3:04 PM`. Built by hand from
+ * the local clock so it is deterministic under invariant globalization (no
+ * `toLocaleString`, see `AGENTS.md`); the date itself is the shared product
+ * format.
  */
 export function formatGeneratedAt(date: Date): string {
-  const month = MONTH_NAMES[date.getMonth()]
-  const day = date.getDate()
-  const year = date.getFullYear()
-  const hours24 = date.getHours()
-  const meridiem = hours24 < 12 ? 'AM' : 'PM'
-  const hours = hours24 % 12 === 0 ? 12 : hours24 % 12
-  const minutes = String(date.getMinutes()).padStart(2, '0')
-  return `${month} ${day}, ${year} ${hours}:${minutes} ${meridiem}`
+  return `${formatLocalDate(date)} ${formatClockTime(date.getHours(), date.getMinutes())}`
 }
 
 /**

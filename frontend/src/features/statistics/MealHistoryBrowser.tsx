@@ -10,7 +10,7 @@ import type { MealHistoryDay, MealHistoryParams } from '../../api/statistics'
 import { ErrorScreen, LoadingScreen } from '../../components/Screens'
 import { useProteins } from '../reference-data/useReferenceData'
 import { useStatisticsAccess } from './access'
-import { formatHouseholdDate, formatHouseholdMonth } from './statisticsFormat'
+import { formatHouseholdDate, formatHouseholdMonth } from '../../lib/dateFormat'
 import { useMealHistory } from './useStatistics'
 
 /**

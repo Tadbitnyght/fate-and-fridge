@@ -1,4 +1,4 @@
-import { formatHouseholdDate } from '../statistics/statisticsFormat'
+import { formatHouseholdDate } from '../../lib/dateFormat'
 
 /**
  * Formatting for the per-recipe history metrics shared by the recipe browser

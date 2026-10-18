@@ -166,7 +166,7 @@ test('keeps the history log usable on a mobile viewport', async ({ page }) => {
 
   const month = page.getByRole('region', { name: 'October 2026' })
   await expect(month).toBeVisible()
-  await expect(month.getByText('Oct 15, 2026')).toBeVisible()
+  await expect(month.getByText('10-15-26')).toBeVisible()
   await expect(page.getByLabel('Recipe')).toBeVisible()
 
   // The controls stay reachable without horizontal scrolling.

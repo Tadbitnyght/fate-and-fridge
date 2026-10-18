@@ -612,7 +612,7 @@ test('groceries print: departments, attribution, manual badge, and the include-c
 
   await page.goto('/groceries/print')
   await expect(page.getByRole('heading', { level: 2, name: /Grocery list/ })).toContainText(
-    'Oct 12 – Oct 18',
+    '10-12-26 – 10-18-26',
   )
 
   const headings = await page.getByRole('heading', { level: 3 }).allTextContents()

@@ -13,7 +13,7 @@ import {
 import { ErrorScreen, LoadingScreen } from '../../components/Screens'
 import { MealHistoryBrowser } from './MealHistoryBrowser'
 import { useStatisticsAccess } from './access'
-import { formatHouseholdDate } from './statisticsFormat'
+import { formatHouseholdDate } from '../../lib/dateFormat'
 import { useStatisticsOverview } from './useStatistics'
 
 type StatisticsTab = 'overview' | 'history'

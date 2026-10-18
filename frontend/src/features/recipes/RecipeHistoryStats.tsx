@@ -1,4 +1,4 @@
-import { formatHouseholdDate } from '../statistics/statisticsFormat'
+import { formatHouseholdDate } from '../../lib/dateFormat'
 import { NO_HISTORY_LABEL, type RecipeHistoryMetrics } from './recipeMetrics'
 
 function MetricRow({

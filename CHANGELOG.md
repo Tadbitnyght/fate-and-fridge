@@ -264,6 +264,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Product UI dates now render as **MM-DD-YY** (e.g. `2026-10-05` → `10-05-26`)
+  through one shared formatter (`frontend/src/lib/dateFormat.ts`); month/weekday
+  labels and calendar grid day numbers stay readable. The API wire format
+  remains ISO `yyyy-MM-dd` and no stored value changes (issue #160).
 - Default published port is now **50080** (`HOST_PORT` in `.env`, default in
   `compose.yaml`, CI, Playwright, and docs). The container-internal port
   remains 8080.

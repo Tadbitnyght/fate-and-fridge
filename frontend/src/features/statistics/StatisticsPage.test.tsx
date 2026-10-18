@@ -110,7 +110,7 @@ describe('statistics overview page', () => {
 
     // A live recipe links to its recipe card.
     expect(screen.getByRole('link', { name: 'Tacos' })).toHaveAttribute('href', '/recipes/5/edit')
-    expect(screen.getByText('Last eaten Nov 1, 2026')).toBeInTheDocument()
+    expect(screen.getByText('Last eaten 11-01-26')).toBeInTheDocument()
     expect(screen.getAllByText('Normal').length).toBeGreaterThan(0)
     expect(screen.getByText('Retired')).toBeInTheDocument()
 
@@ -118,7 +118,7 @@ describe('statistics overview page', () => {
     expect(screen.getByText("Grandma's Stew")).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: "Grandma's Stew" })).not.toBeInTheDocument()
     expect(screen.getByText('Deleted')).toBeInTheDocument()
-    expect(screen.getByText('Last eaten Dec 24, 2025')).toBeInTheDocument()
+    expect(screen.getByText('Last eaten 12-24-25')).toBeInTheDocument()
     expect(screen.getByText('Manual only')).toBeInTheDocument()
 
     expect(screen.getByText('42 recipes have never been eaten.')).toBeInTheDocument()

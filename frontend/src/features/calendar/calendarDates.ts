@@ -1,5 +1,7 @@
 /** Calendar date helpers (M5-09). Dates are household-local ISO `YYYY-MM-DD`. */
 
+import { formatHouseholdDate } from '../../lib/dateFormat'
+
 export function isoDate(date: Date): string {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -86,9 +88,13 @@ export function monthLabel(year: number, monthIndex: number): string {
   return `${MONTH_NAMES[monthIndex]} ${year}`
 }
 
+/**
+ * A full household-local date in the product display format (`MM-DD-YY`), e.g.
+ * `10-05-26`. Delegates to the shared formatter so calendar views never keep
+ * their own parsing; month labels stay readable via `monthLabel`.
+ */
 export function fullDateLabel(iso: string): string {
-  const date = parseIsoDate(iso)
-  return `${MONTH_NAMES[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`
+  return formatHouseholdDate(iso)
 }
 
 const WEEKDAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']

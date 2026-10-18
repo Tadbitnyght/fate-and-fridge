@@ -4,6 +4,7 @@ import { isApiError } from '../../api/client'
 import type { UserSummary } from '../../api/users'
 import { ConfirmDialog } from '../../components/Modal'
 import { ErrorScreen, LoadingScreen } from '../../components/Screens'
+import { formatTimestamp } from '../../lib/dateFormat'
 import { useAdminAccess } from './access'
 import { AdminOnlyNotice } from './AdminOnlyNotice'
 import { OneTimePasswordPanel } from './OneTimePasswordPanel'
@@ -24,8 +25,7 @@ function formatLastLogin(value: string | null): string {
   if (!value) {
     return 'Never'
   }
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
+  return formatTimestamp(value)
 }
 
 /** User management (docs/API.md §6): Admin-only; the server enforces this. */

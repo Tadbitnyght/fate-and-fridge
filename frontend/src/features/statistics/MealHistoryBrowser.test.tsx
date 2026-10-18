@@ -79,8 +79,8 @@ describe('meal-history browser', () => {
 
     // Title, label, and the full calendar-month bounds come from the server.
     expect(within(month).getByRole('heading', { level: 3 })).toHaveTextContent('October 2026')
-    expect(within(month).getByText(/Oct 1, 2026/).textContent).toContain('Oct 31, 2026')
-    const rangeNote = within(month).getByText(/Showing Nov 1, 2025/)
+    expect(within(month).getByText(/10-01-26/).textContent).toContain('10-31-26')
+    const rangeNote = within(month).getByText(/Showing 11-01-25/)
     expect(rangeNote.textContent).toContain('America/Chicago')
 
     expect(
@@ -88,9 +88,9 @@ describe('meal-history browser', () => {
         .getAllByRole('listitem')
         .map((row) => row.textContent),
     ).toEqual([
-      'Oct 15, 2026RecipeTacosChicken',
-      'Oct 14, 2026Eat outSushi placeNo primary protein',
-      "Oct 5, 2026RecipeGrandma's StewNo primary protein",
+      '10-15-26RecipeTacosChicken',
+      '10-14-26Eat outSushi placeNo primary protein',
+      "10-05-26RecipeGrandma's StewNo primary protein",
     ])
 
     // A live recipe links to the recipe; a tombstone keeps its snapshot name.
