@@ -29,7 +29,7 @@ describe('settings navigation and visibility', () => {
     renderWithProviders(<App />, { route: '/settings/users' })
 
     const nav = await screen.findByRole('navigation', { name: 'Settings sections' })
-    for (const label of ['Household', 'Users', 'Security', 'Account']) {
+    for (const label of ['Household', 'Users', 'Security', 'Audit log', 'Account']) {
       expect(within(nav).getByRole('link', { name: label })).toBeInTheDocument()
     }
     expect(within(nav).getByRole('link', { name: 'Users' })).toHaveAttribute('aria-current', 'page')
@@ -49,6 +49,7 @@ describe('settings navigation and visibility', () => {
     expect(within(nav).getByRole('link', { name: 'Account' })).toBeInTheDocument()
     expect(within(nav).queryByRole('link', { name: 'Users' })).not.toBeInTheDocument()
     expect(within(nav).queryByRole('link', { name: 'Security' })).not.toBeInTheDocument()
+    expect(within(nav).queryByRole('link', { name: 'Audit log' })).not.toBeInTheDocument()
 
     expect(screen.getByText(/limited to admins/i)).toBeInTheDocument()
   })

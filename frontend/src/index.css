@@ -3566,6 +3566,172 @@ a.recipes__import:focus-visible {
   font-size: 0.9rem;
 }
 
+/* ---------- audit log viewer (#152, M12-03) ---------- */
+
+.audit-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+}
+
+.audit-filters .form__field {
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+
+.audit-filters select,
+.audit-filters input {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.audit-filters input:focus-visible,
+.audit-filters select:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+
+.audit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.audit-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+}
+
+.audit-row__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.75rem;
+}
+
+.audit-row__time {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.audit-row__event {
+  font-weight: 600;
+}
+
+.audit-row__kind {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.audit-row__summary {
+  margin: 0;
+}
+
+.audit-row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.9rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.audit-row__entity {
+  font-weight: 600;
+}
+
+.audit-source--history {
+  background: var(--bad-bg);
+  color: var(--bad-text);
+  border-color: transparent;
+}
+
+.audit-row__toggle {
+  align-self: flex-start;
+}
+
+.audit-row__detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.35rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border);
+}
+
+.audit-detail {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+}
+
+.audit-detail div {
+  display: grid;
+  grid-template-columns: minmax(7rem, 10rem) 1fr;
+  gap: 0.5rem;
+}
+
+.audit-detail dt {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.audit-detail dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.audit-json {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.audit-json__label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.audit-json__value {
+  margin: 0;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg);
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.audit-json__empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.audit-list__more {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.5rem;
+}
+
 .status-chip--normal {
   background: var(--ok-bg);
   color: var(--ok-text);
