@@ -225,6 +225,16 @@ complete (2026-10-18)") is cut on the commit that records this verification.
 
 ## CI status after completion
 
-_Pending the push of the completion commits to `main`; the M9/M10 precedent
-(`BUG-009`/`BUG-010`) required a green CI run on `main` before the milestone was
-declared done, and the same check is recorded there._
+Green on `main`. Run **39111407515** for commit **`1094be6`**
+("docs(m11): record live rebuild/redeploy verification and tag metadata") —
+`status: completed`, `conclusion: success`, all four jobs green:
+
+- Backend (format, build, migrations, tests): success
+- Frontend (lint, types, tests, build): success
+- Compose configuration: success
+- Docker stack acceptance + Playwright: success
+
+This satisfies the `BUG-009`/`BUG-010` precedent (a green CI run on `main` before
+the milestone is declared done). The completion commit `141168a` and the
+verification commit `1094be6` are pushed, and the annotation tag is cut on
+`1094be6`.
