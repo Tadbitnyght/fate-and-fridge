@@ -331,7 +331,12 @@ Suggested:
 - `changed_by_user_id`
 - `changed_at`
 - `change_reason` nullable
-- `is_historical_correction`
+- `is_historical_correction`: `true` only for an M12-06 Admin historical
+  correction of one past date (docs/M12_PLAN.md §1.9). A correction row also
+  carries the required `change_reason`, its own `operation_id`, and the
+  before/after images, and commits atomically with the entry update and the
+  `calendar.historical_correction` audit row. Ordinary calendar edits and M6/M7
+  rerolls leave it `false`.
 
 Do not rely on this table alone for the admin audit log; audit events should remain a separate stable security/administration record.
 

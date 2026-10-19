@@ -93,8 +93,8 @@ public static class AuditEventSummaries
             [AuditEventTypes.GroceriesManualItemUpdated] = "Manual grocery item updated",
             [AuditEventTypes.GroceriesManualItemRemoved] = "Manual grocery item removed",
             [AuditEventTypes.AuditPruned] = "Audit log pruned",
-            // Reserved for M12-06/M12-08; harmless before they are emitted.
-            ["calendar.historical_correction"] = "Historical calendar correction",
+            [AuditEventTypes.CalendarHistoricalCorrection] = "Historical calendar correction",
+            // Reserved for M12-08; harmless before it is emitted.
             ["recipe.hard_deleted"] = "Recipe permanently deleted",
         };
 

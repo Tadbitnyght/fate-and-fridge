@@ -102,6 +102,13 @@ public static class ErrorCodes
 
     public const string CalendarMiscLabelRequired = "CALENDAR_MISC_LABEL_REQUIRED";
 
+    // M12-06 historical correction codes (docs/M12_PLAN.md §2.2).
+    /// <summary>The correction target is today or a future date (past-only).</summary>
+    public const string CalendarDateNotPast = "CALENDAR_DATE_NOT_PAST";
+
+    /// <summary>The correction target is locked and was not acknowledged.</summary>
+    public const string CalendarDateLocked = "CALENDAR_DATE_LOCKED";
+
     // M6 randomizer codes (docs/M6_PLAN.md §2.2).
     /// <summary>No <c>Normal</c> recipe exists to auto-select.</summary>
     public const string RandomizerNoCandidates = "RANDOMIZER_NO_CANDIDATES";

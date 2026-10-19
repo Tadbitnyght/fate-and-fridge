@@ -54,6 +54,9 @@ public static class AuditEventTypes
 
     public const string CalendarUnlocked = "calendar.unlocked";
 
+    // M12-06: an Admin corrected one past date's entry.
+    public const string CalendarHistoricalCorrection = "calendar.historical_correction";
+
     // Recipe lifecycle: status -> retired.
     public const string RecipeRetired = "recipe.retired";
 

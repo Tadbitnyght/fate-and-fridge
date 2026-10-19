@@ -238,6 +238,7 @@ historical-correction API may change history.
 | `POST /api/v1/calendar/{date}/lock` | `calendar.edit` | Lock |
 | `POST /api/v1/calendar/{date}/unlock` | `calendar.edit` | Unlock |
 | `POST /api/v1/calendar/{date}/reroll` | `calendar.edit` | Reroll one date to a random `Normal` recipe (M6) |
+| `POST /api/v1/calendar/{date}/correction` | Admin | Correct one **past** date (M12; see §17) |
 | `POST /api/v1/operations/{operation_id}/undo` | `calendar.edit` | Undo a reroll operation (M6) |
 | `POST /api/v1/calendar/reroll/preview` | `calendar.edit` | Batch reroll preview: a persisted draft plus the per-day diff (M7) |
 | `POST /api/v1/calendar/reroll/apply` | `calendar.edit` | Atomically apply a batch reroll preview draft (M7) |
@@ -511,6 +512,8 @@ Behavior (docs/M7_PLAN.md §1.10):
 | Code | HTTP | Meaning |
 |------|------|---------|
 | `CALENDAR_DATE_IN_PAST` | 422 | The date is historical and read-only |
+| `CALENDAR_DATE_NOT_PAST` | 409 | Correction: the date is today or in the future (correction is past-only) |
+| `CALENDAR_DATE_LOCKED` | 409 | Correction: the date is locked and `lock_acknowledged` was not `true` |
 | `CALENDAR_BLANK_CANNOT_LOCK` | 422 | Cannot lock a date with no entry |
 | `CALENDAR_ENTRY_LOCKED` | 409 | Automatic mutation (reroll) of a locked date |
 | `RANDOMIZER_NOT_APPLICABLE` | 422 | Reroll of a vacation date |
@@ -1658,15 +1661,67 @@ Admin-only, explicitly confirmed, **age-based** deletion of audit rows
 ---
 
 ## 17. Historical Correction
-- `GET /admin/history/{date}`
-- `POST /admin/history/{date}/correct`
 
-Correction request must include:
-- reason
-- explicit confirmation flag
-- desired replacement
+Admin-only correction of **one past date** (M12-06; docs/M12_PLAN.md §1.9, §2.2;
+docs/SECURITY.md §10). No new permission key is introduced: the existing `admin`
+role — and the single-user system actor, which is an Admin — is the authority,
+verified server-side regardless of the frontend. The historical **read** model is
+the M11 meal-history / statistics surface (§14); this section covers only the
+write.
 
-Backend verifies Admin role regardless of frontend state.
+`POST /api/v1/calendar/{date}/correction` (Admin). Body:
+
+```json
+{
+  "entry_type": "recipe",
+  "recipe_id": 5,
+  "notes": "Corrected after the fact",
+  "diner_count": 6,
+  "reason": "The wrong meal was recorded",
+  "confirmation": "2026-11-10",
+  "lock_acknowledged": false
+}
+```
+
+- `entry_type` (required), `recipe_id?`, `notes?`, and `diner_count?` are the
+  meal-defining fields the correction edits. It is a **full replace** of the
+  write fields exactly like `PUT /calendar/{date}`: a field omitted from the body
+  is stored as `null`, and any optional `PUT` field the caller does send
+  (`restaurant_name`, `location_text`, `custom_label`, `icon_key`) is honored too,
+  so a correction can express every entry type. The same per-type rules apply
+  (`CALENDAR_RECIPE_REQUIRED`, `CALENDAR_MISC_LABEL_REQUIRED`, or
+  `400 VALIDATION_FAILED` with `details.field_errors`).
+- `reason` is required and at most 500 characters; `confirmation` must equal the
+  corrected date as `yyyy-MM-dd` (ordinal, case-sensitive, compared after
+  trimming). Both are verified by the shared `DangerousActionGuard`, so a direct
+  API call without them fails `REASON_REQUIRED`, `REASON_TOO_LONG`,
+  `REASON_INVALID`, or `CONFIRMATION_MISMATCH` with `details.field_errors`.
+- **Past-only.** A date that is today or later fails `409 CALENDAR_DATE_NOT_PAST`.
+  The ordinary calendar endpoints keep rejecting past dates
+  (`CALENDAR_DATE_IN_PAST`); this is the only path that may change history, and it
+  never touches a date other than the requested one.
+- **Locked dates.** When the date is locked and the correction does not set
+  `lock_acknowledged = true`, the request fails `409 CALENDAR_DATE_LOCKED`. With
+  the acknowledgement the correction proceeds and **leaves the entry locked**;
+  the ordinary endpoints still refuse past dates regardless of the lock.
+- A date with no entry fails `404 NOT_FOUND`, and a date outside the ±5-year
+  horizon fails `400 VALIDATION_FAILED`.
+- The correction **refreshes the frozen snapshot** (`snapshot_recipe_name` /
+  `snapshot_display_text`) from the recipe at correction time, so a later rename
+  or hard delete still renders the corrected history.
+- The entry update, exactly one `calendar_entry_history` row with
+  `is_historical_correction = true`, the `change_reason`, the before/after JSON,
+  and its own `operation_id`, and exactly one `calendar.historical_correction`
+  `audit_events` row (entity `calendar_entry`, with the reason, actor, IP, and
+  before/after) commit **atomically**: a failed audit write rolls the whole
+  correction back.
+- The response is the corrected M5 `day` document (see §7), and the write
+  publishes the existing coarse `calendar.updated` live-sync event (no new event
+  type).
+- Anonymous → `401 AUTH_REQUIRED`; a member → `403 FORBIDDEN`; an Admin or the
+  single-user system actor may correct.
+
+Bulk/date-range correction is deferred to V2 (docs/FUTURE_FEATURES.md).
 
 ---
 

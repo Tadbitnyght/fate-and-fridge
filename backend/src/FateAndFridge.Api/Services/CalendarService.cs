@@ -102,6 +102,24 @@ public sealed record CalendarWriteRequest(
     string? Notes,
     string? IconKey);
 
+/// <summary>
+/// The validated, sanitized fields of a calendar write (docs/M5_PLAN.md §1.6).
+/// <see cref="CalendarService.ValidateWriteRequestAsync"/> produces it once, then
+/// <see cref="CalendarService.ApplyFields"/> stores it, so the normal upsert and
+/// the M12 historical correction share exactly one rule set.
+/// </summary>
+internal sealed record CalendarWriteFields(
+    CalendarEntryType EntryType,
+    Recipe? Recipe,
+    int? DinerCount,
+    string? RestaurantName,
+    string? LocationText,
+    string? CustomLabel,
+    string? Notes,
+    string? IconKey,
+    string DisplayText,
+    bool IncludeGroceries);
+
 /// <summary>Outcome of a calendar mutation.</summary>
 public abstract record CalendarMutationResult
 {
@@ -241,80 +259,15 @@ public sealed class CalendarService(
             return PastDate();
         }
 
-        var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
-        var type = ReadEntryType(request.EntryType, errors);
-
-        var customLabel = Sanitize(request.CustomLabel, RecipeService.MaxNameLength);
-        var restaurantName = Sanitize(request.RestaurantName, RecipeService.MaxNameLength);
-        var locationText = Sanitize(request.LocationText, RecipeService.MaxNameLength);
-        var notes = Sanitize(request.Notes, RecipeService.MaxLongTextLength);
-
-        if (type == CalendarEntryType.Recipe && request.RecipeId is null)
+        var (fields, errors) = await ValidateWriteRequestAsync(
+                dbContext,
+                request,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (fields is null)
         {
-            errors["recipe_id"] = ["recipe_id is required for a recipe entry."];
+            return new CalendarMutationResult.ValidationFailed(errors, RequiredCode(errors));
         }
-
-        if (type == CalendarEntryType.Misc && customLabel is null)
-        {
-            errors["custom_label"] = ["custom_label is required for a misc entry."];
-        }
-
-        if (type is { } recipeType
-            && request.RecipeId is not null
-            && recipeType is not (CalendarEntryType.Recipe
-                or CalendarEntryType.HostFamilyDinner
-                or CalendarEntryType.Holiday
-                or CalendarEntryType.Misc))
-        {
-            errors["recipe_id"] = ["This entry type does not support a recipe."];
-        }
-
-        if (request.DinerCount is { } dinerCount
-            && (dinerCount < MinDinerCount || dinerCount > MaxDinerCount))
-        {
-            errors["diner_count"] = [$"diner_count must be between {MinDinerCount} and {MaxDinerCount}."];
-        }
-
-        var iconKey = Sanitize(request.IconKey, RecipeService.MaxNameLength);
-        if (iconKey is not null)
-        {
-            if (!CalendarIcons.IsKnown(iconKey))
-            {
-                errors["icon_key"] = ["icon_key is not a known icon."];
-                iconKey = null;
-            }
-            else if (type is { } resolvedType && !IconTypes.Contains(resolvedType))
-            {
-                errors["icon_key"] = ["This entry type does not support an icon."];
-                iconKey = null;
-            }
-        }
-
-        Recipe? recipe = null;
-        if (request.RecipeId is { } recipeId)
-        {
-            recipe = await dbContext.Recipes
-                .FirstOrDefaultAsync(candidate => candidate.Id == recipeId, cancellationToken)
-                .ConfigureAwait(false);
-            if (recipe is null)
-            {
-                errors["recipe_id"] = ["The recipe does not exist."];
-            }
-        }
-
-        if (errors.Count > 0 || type is not { } entryType)
-        {
-            return new CalendarMutationResult.ValidationFailed(
-                errors,
-                RequiredCode(errors));
-        }
-
-        var displayText = BuildDisplayText(
-            entryType,
-            customLabel,
-            restaurantName,
-            locationText,
-            recipe?.Name);
 
         var now = timeProvider.GetUtcNow();
         var existing = await dbContext.CalendarEntries
@@ -328,7 +281,7 @@ public sealed class CalendarService(
             entry = new CalendarEntry
             {
                 MealDate = date,
-                SnapshotDisplayText = displayText,
+                SnapshotDisplayText = fields.DisplayText,
                 CreatedAt = now,
                 CreatedByUserId = actorUserId,
             };
@@ -340,19 +293,7 @@ public sealed class CalendarService(
             beforeJson = SnapshotJson(entry);
         }
 
-        entry.EntryType = entryType;
-        entry.RecipeId = recipe?.Id;
-        entry.DinerCount = request.DinerCount;
-        entry.RestaurantName = restaurantName;
-        entry.LocationText = locationText;
-        entry.CustomLabel = customLabel;
-        entry.Notes = notes;
-        entry.IconKey = iconKey;
-        entry.IncludeGroceries = IncludesGroceries(entryType, recipe is not null);
-        entry.SnapshotRecipeName = recipe?.Name;
-        entry.SnapshotDisplayText = displayText;
-        entry.UpdatedAt = now;
-        entry.UpdatedByUserId = actorUserId;
+        ApplyFields(entry, fields, now, actorUserId);
 
         // Entry, history, and audit commit atomically (docs/M5_PLAN.md §4,
         // docs/M12_PLAN.md §2.1).
@@ -361,7 +302,7 @@ public sealed class CalendarService(
             .ConfigureAwait(false);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         var afterJson = SnapshotJson(entry);
-        StageHistory(entry.Id, entry.MealDate, beforeJson, afterJson, actorUserId);
+        StageHistoryRow(dbContext, entry.Id, entry.MealDate, beforeJson, afterJson, actorUserId, now);
         await auditService.WriteAsync(
             new AuditEventEntry(
                 beforeJson is null ? AuditEventTypes.CalendarCreated : AuditEventTypes.CalendarUpdated,
@@ -372,13 +313,17 @@ public sealed class CalendarService(
                 IpAddress: ipAddress,
                 ActorUserId: actorUserId,
                 Metadata: MealDateMetadata(entry.MealDate)),
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
-        var summary = recipe is null
+        var summary = fields.Recipe is null
             ? null
-            : new CalendarRecipeSummary(recipe.Id, recipe.Name, null, EnumTextConverters.RecipeStatusToText(recipe.Status));
+            : new CalendarRecipeSummary(
+                fields.Recipe.Id,
+                fields.Recipe.Name,
+                null,
+                EnumTextConverters.RecipeStatusToText(fields.Recipe.Status));
         return new CalendarMutationResult.Success(ToDayRecord(date, context, entry, summary, repeatWarning: null));
     }
 
@@ -594,7 +539,7 @@ public sealed class CalendarService(
         return type;
     }
 
-    private static string? RequiredCode(Dictionary<string, string[]> errors) =>
+    internal static string? RequiredCode(Dictionary<string, string[]> errors) =>
         errors.ContainsKey("recipe_id") ? ErrorCodes.CalendarRecipeRequired
         : errors.ContainsKey("custom_label") ? ErrorCodes.CalendarMiscLabelRequired
         : null;
@@ -796,13 +741,147 @@ public sealed class CalendarService(
             .ToArray();
     }
 
-    /// <summary>Stages one history row; the caller's SaveChanges commits it.</summary>
-    private void StageHistory(
+    /// <summary>
+    /// Validates and sanitizes a calendar write request (docs/M5_PLAN.md §1.6).
+    /// The normal upsert and the M12 historical correction call this one method,
+    /// so the per-type field rules cannot drift (docs/M12_PLAN.md §2.1).
+    /// Returns the resolved fields, or the per-field errors of an invalid request.
+    /// </summary>
+    internal static async Task<(CalendarWriteFields? Fields, Dictionary<string, string[]> Errors)> ValidateWriteRequestAsync(
+        AppDbContext dbContext,
+        CalendarWriteRequest request,
+        CancellationToken cancellationToken)
+    {
+        var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        var type = ReadEntryType(request.EntryType, errors);
+
+        var customLabel = Sanitize(request.CustomLabel, RecipeService.MaxNameLength);
+        var restaurantName = Sanitize(request.RestaurantName, RecipeService.MaxNameLength);
+        var locationText = Sanitize(request.LocationText, RecipeService.MaxNameLength);
+        var notes = Sanitize(request.Notes, RecipeService.MaxLongTextLength);
+
+        if (type == CalendarEntryType.Recipe && request.RecipeId is null)
+        {
+            errors["recipe_id"] = ["recipe_id is required for a recipe entry."];
+        }
+
+        if (type == CalendarEntryType.Misc && customLabel is null)
+        {
+            errors["custom_label"] = ["custom_label is required for a misc entry."];
+        }
+
+        if (type is { } recipeType
+            && request.RecipeId is not null
+            && recipeType is not (CalendarEntryType.Recipe
+                or CalendarEntryType.HostFamilyDinner
+                or CalendarEntryType.Holiday
+                or CalendarEntryType.Misc))
+        {
+            errors["recipe_id"] = ["This entry type does not support a recipe."];
+        }
+
+        if (request.DinerCount is { } dinerCount
+            && (dinerCount < MinDinerCount || dinerCount > MaxDinerCount))
+        {
+            errors["diner_count"] = [$"diner_count must be between {MinDinerCount} and {MaxDinerCount}."];
+        }
+
+        var iconKey = Sanitize(request.IconKey, RecipeService.MaxNameLength);
+        if (iconKey is not null)
+        {
+            if (!CalendarIcons.IsKnown(iconKey))
+            {
+                errors["icon_key"] = ["icon_key is not a known icon."];
+                iconKey = null;
+            }
+            else if (type is { } resolvedType && !IconTypes.Contains(resolvedType))
+            {
+                errors["icon_key"] = ["This entry type does not support an icon."];
+                iconKey = null;
+            }
+        }
+
+        Recipe? recipe = null;
+        if (request.RecipeId is { } recipeId)
+        {
+            recipe = await dbContext.Recipes
+                .FirstOrDefaultAsync(candidate => candidate.Id == recipeId, cancellationToken)
+                .ConfigureAwait(false);
+            if (recipe is null)
+            {
+                errors["recipe_id"] = ["The recipe does not exist."];
+            }
+        }
+
+        if (errors.Count > 0 || type is not { } entryType)
+        {
+            return (null, errors);
+        }
+
+        var displayText = BuildDisplayText(
+            entryType,
+            customLabel,
+            restaurantName,
+            locationText,
+            recipe?.Name);
+
+        return (
+            new CalendarWriteFields(
+                entryType,
+                recipe,
+                request.DinerCount,
+                restaurantName,
+                locationText,
+                customLabel,
+                notes,
+                iconKey,
+                displayText,
+                IncludesGroceries(entryType, recipe is not null)),
+            errors);
+    }
+
+    /// <summary>
+    /// Applies validated fields to an entry. The lock state is deliberately not
+    /// touched, so a historical correction leaves a locked date locked
+    /// (docs/M12_PLAN.md §1.9).
+    /// </summary>
+    internal static void ApplyFields(
+        CalendarEntry entry,
+        CalendarWriteFields fields,
+        DateTimeOffset now,
+        long? actorUserId)
+    {
+        entry.EntryType = fields.EntryType;
+        entry.RecipeId = fields.Recipe?.Id;
+        entry.DinerCount = fields.DinerCount;
+        entry.RestaurantName = fields.RestaurantName;
+        entry.LocationText = fields.LocationText;
+        entry.CustomLabel = fields.CustomLabel;
+        entry.Notes = fields.Notes;
+        entry.IconKey = fields.IconKey;
+        entry.IncludeGroceries = fields.IncludeGroceries;
+        entry.SnapshotRecipeName = fields.Recipe?.Name;
+        entry.SnapshotDisplayText = fields.DisplayText;
+        entry.UpdatedAt = now;
+        entry.UpdatedByUserId = actorUserId;
+    }
+
+    /// <summary>
+    /// Stages one <see cref="CalendarEntryHistory"/> row on the caller's unit of
+    /// work (docs/DATABASE.md §8). The normal calendar writes stage an ordinary
+    /// row; the M12 historical correction stages a flagged row carrying the
+    /// reason.
+    /// </summary>
+    internal static void StageHistoryRow(
+        AppDbContext dbContext,
         long? entryId,
         DateOnly mealDate,
         string? beforeJson,
         string? afterJson,
-        long? actorUserId) =>
+        long? actorUserId,
+        DateTimeOffset changedAt,
+        bool isHistoricalCorrection = false,
+        string? changeReason = null) =>
         dbContext.CalendarEntryHistory.Add(new CalendarEntryHistory
         {
             CalendarEntryId = entryId,
@@ -811,9 +890,25 @@ public sealed class CalendarService(
             BeforeJson = beforeJson,
             AfterJson = afterJson,
             ChangedByUserId = actorUserId,
-            ChangedAt = timeProvider.GetUtcNow(),
-            IsHistoricalCorrection = false,
+            ChangedAt = changedAt,
+            ChangeReason = changeReason,
+            IsHistoricalCorrection = isHistoricalCorrection,
         });
+    /// <summary>Stages one history row; the caller's SaveChanges commits it.</summary>
+    private void StageHistory(
+        long? entryId,
+        DateOnly mealDate,
+        string? beforeJson,
+        string? afterJson,
+        long? actorUserId) =>
+        StageHistoryRow(
+            dbContext,
+            entryId,
+            mealDate,
+            beforeJson,
+            afterJson,
+            actorUserId,
+            timeProvider.GetUtcNow());
 
     internal static string SnapshotJson(CalendarEntry entry) =>
         JsonSerializer.Serialize(new Dictionary<string, object?>
@@ -838,7 +933,7 @@ public sealed class CalendarService(
     /// Audit metadata naming the audited date target (the entry id changes on
     /// create/delete, so the date is the stable target discriminator).
     /// </summary>
-    private static IReadOnlyDictionary<string, object?> MealDateMetadata(DateOnly mealDate) =>
+    internal static IReadOnlyDictionary<string, object?> MealDateMetadata(DateOnly mealDate) =>
         new Dictionary<string, object?>
         {
             ["meal_date"] = mealDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),

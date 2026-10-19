@@ -179,6 +179,7 @@ public static class CalendarEndpoints
         group.MapPost("/{date}/lock", LockAsync).RequirePermission(PermissionKeys.CalendarEdit);
         group.MapPost("/{date}/unlock", UnlockAsync).RequirePermission(PermissionKeys.CalendarEdit);
         group.MapPost("/{date}/reroll", RerollAsync).RequirePermission(PermissionKeys.CalendarEdit);
+        group.MapPost("/{date}/correction", CorrectionAsync).RequireAdmin();
         group.MapPost("/reroll/preview", PreviewBatchRerollAsync).RequirePermission(PermissionKeys.CalendarEdit);
         group.MapPost("/reroll/apply", ApplyBatchRerollAsync).RequirePermission(PermissionKeys.CalendarEdit);
 
@@ -464,6 +465,95 @@ public static class CalendarEndpoints
         return Map(result);
     }
 
+    /// <summary>
+    /// M12-06 historical correction of one past date (docs/M12_PLAN.md §1.9,
+    /// §2.2; docs/SECURITY.md §10). Admin-only with no new permission key: the
+    /// shared dangerous-action guard verifies the reason and the typed date
+    /// confirmation server-side, the correction is past-only, and a locked date
+    /// needs the explicit <c>lock_acknowledged</c>.
+    /// </summary>
+    private static async Task<IResult> CorrectionAsync(
+        string date,
+        HttpContext context,
+        ICurrentActorProvider actorProvider,
+        HouseholdClock clock,
+        HistoricalCorrectionService corrections,
+        ILiveSyncPublisher liveSync,
+        CancellationToken cancellationToken)
+    {
+        if (!TryReadDate(date, out var parsedDate, out var error))
+        {
+            return error!;
+        }
+
+        var (root, bodyError) = await ReadObjectAsync(context, cancellationToken);
+        if (bodyError is not null)
+        {
+            return bodyError;
+        }
+
+        var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        var reason = ReadOptionalString(root, "reason", errors);
+        var confirmation = ReadOptionalString(root, "confirmation", errors);
+        var lockAcknowledged = ReadOptionalBool(root, "lock_acknowledged", errors);
+        if (errors.Count > 0)
+        {
+            return ApiResults.ValidationError(errors);
+        }
+
+        // The correction types the date being corrected (docs/M12_PLAN.md §1.11).
+        var validation = DangerousActionGuard.Validate(
+            reason,
+            confirmation,
+            CalendarDateText.Format(parsedDate));
+        if (validation is DangerousActionValidation.Failure guardFailure)
+        {
+            return ApiResults.Error(
+                StatusCodes.Status400BadRequest,
+                guardFailure.Code,
+                guardFailure.Message,
+                guardFailure.ToErrorDetails());
+        }
+
+        var trimmedReason = ((DangerousActionValidation.Success)validation).Reason;
+
+        var request = ParseWriteRequest(root, errors);
+        if (errors.Count > 0)
+        {
+            return ApiResults.ValidationError(errors);
+        }
+
+        var household = await clock.GetContextAsync(cancellationToken);
+        ValidateHorizon(parsedDate, "date", household.Today, errors);
+        if (errors.Count > 0)
+        {
+            return ApiResults.ValidationError(errors);
+        }
+
+        var (actorUserId, actorError) = await ResolveActorAsync(actorProvider, cancellationToken);
+        if (actorError is not null)
+        {
+            return actorError;
+        }
+
+        var result = await corrections.CorrectAsync(
+            parsedDate,
+            request,
+            trimmedReason,
+            lockAcknowledged,
+            actorUserId,
+            RemoteIpAddress(context),
+            cancellationToken);
+        if (result is HistoricalCorrectionOutcome.Success corrected)
+        {
+            await liveSync.CalendarUpdatedAsync(
+                actorUserId,
+                corrected.Day.Entry?.Id,
+                cancellationToken: cancellationToken);
+        }
+
+        return MapCorrection(result);
+    }
     private static async Task<IResult> RerollAsync(
         string date,
         ICurrentActorProvider actorProvider,
@@ -773,6 +863,29 @@ public static class CalendarEndpoints
         return null;
     }
 
+    private static bool ReadOptionalBool(
+        JsonElement root,
+        string field,
+        Dictionary<string, string[]> errors)
+    {
+        if (!root.TryGetProperty(field, out var element))
+        {
+            return false;
+        }
+
+        if (element.ValueKind == JsonValueKind.True || element.ValueKind == JsonValueKind.False)
+        {
+            return element.GetBoolean();
+        }
+
+        if (element.ValueKind == JsonValueKind.Null)
+        {
+            return false;
+        }
+
+        errors[field] = [$"{field} must be a boolean."];
+        return false;
+    }
     private static string? AddTypeError(
         Dictionary<string, string[]> errors,
         string field,
@@ -782,7 +895,24 @@ public static class CalendarEndpoints
         return null;
     }
 
+    private static IResult MapCorrection(HistoricalCorrectionOutcome result) => result switch
+    {
+        HistoricalCorrectionOutcome.Success success => Results.Ok(CalendarDayResponse.From(success.Day)),
+        HistoricalCorrectionOutcome.ValidationFailed failed => failed.Code is null
+            ? ApiResults.ValidationError(failed.FieldErrors)
+            : ApiResults.Error(
+                StatusCodes.Status400BadRequest,
+                failed.Code,
+                "The request failed validation.",
+                new Dictionary<string, object?> { ["field_errors"] = failed.FieldErrors }),
+        HistoricalCorrectionOutcome.Failure failure => ApiResults.Error(
+            failure.StatusCode,
+            failure.Code,
+            failure.Message),
+        _ => Results.StatusCode(StatusCodes.Status500InternalServerError),
+    };
     private static IResult Map(CalendarMutationResult result) => result switch
+
     {
         CalendarMutationResult.Success success => Results.Ok(CalendarDayResponse.From(success.Day)),
         CalendarMutationResult.ValidationFailed failed => failed.Code is null
