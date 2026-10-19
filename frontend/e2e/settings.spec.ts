@@ -57,6 +57,7 @@ async function mockSettingsApi(page: Page, session: unknown): Promise<void> {
       ip_allowlist_enabled: false,
       ip_allowlist_ranges: [] as string[],
       trusted_proxies: [] as string[],
+      audit_retention_days: 365,
     },
   }
 
