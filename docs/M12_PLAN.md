@@ -103,6 +103,13 @@ to the Lead before implementing.
     The reason is trimmed and capped at **500 characters**; the typed confirmation
     must match exactly (ordinal, case-sensitive) after trimming. `DangerousActionGuard`
     owns these rules so the endpoints cannot drift.
+    **Locked 2026-10-18 (M12-05 review):** the wire field carrying the typed value
+    is **`confirmation`** on every dangerous-action endpoint (matching
+    `DangerousActionGuard`), and the expected string is per action —
+    audit prune types `PRUNE`; historical correction types the date being
+    corrected (`yyyy-MM-dd`, e.g. `2026-10-05`); hard recipe delete types the
+    **recipe name**. A missing/blank/`null` expected value means that action
+    requires no typed confirmation.
 12. **UI placement.** The **audit log** is a new Admin-only section of the
     existing `/settings` console — **no new nav item and no new route family for
     navigation**. **Historical correction** is launched from the existing
@@ -160,16 +167,20 @@ to the Lead before implementing.
   download; CSV with a fixed header order; capped; `400 VALIDATION_FAILED` over
   the cap or for an unknown format.
 - `POST /api/v1/admin/audit/prune` (Admin) → body
-  `{ reason, confirm }` → `{ deleted_count, cutoff, retention_days }`; writes
-  `audit.pruned`; `400` when retention is "keep forever" or the confirmation is
-  wrong.
+  `{ reason, confirmation }` (`confirmation` must be `PRUNE`) →
+  `{ deleted_count, cutoff, retention_days }`; writes
+  `audit.pruned`; `400` when retention is "keep forever" or the reason/confirmation
+  is invalid (`REASON_REQUIRED`/`REASON_TOO_LONG`/`CONFIRMATION_MISMATCH` with
+  `details.field_errors`).
 - `POST /api/v1/calendar/{date}/correction` (Admin) → body
-  `{ entry_type, recipe_id?, notes?, diner_count?, reason, lock_acknowledged? }`
+  `{ entry_type, recipe_id?, notes?, diner_count?, reason, confirmation, lock_acknowledged? }`
+  (`confirmation` must be the `yyyy-MM-dd` date being corrected)
   → the corrected entry document; `409 CALENDAR_DATE_NOT_PAST` for a non-past
   date, `409 CALENDAR_DATE_LOCKED` when the date is locked without
   `lock_acknowledged`, `400 VALIDATION_FAILED` otherwise (same per-type field
   rules as the normal calendar writes).
-- `DELETE /api/v1/recipes/{id}` (Admin) → body/query `{ reason, confirm }` →
+- `DELETE /api/v1/recipes/{id}` (Admin) → body
+  `{ reason, confirmation }` (`confirmation` must be the exact recipe name) →
   `{ recipe_id, removed_planned_entries, tombstoned_entries, removed_images }`;
   `404 NOT_FOUND` for an unknown recipe.
 - Errors use the shared envelope; JSON stays snake_case.

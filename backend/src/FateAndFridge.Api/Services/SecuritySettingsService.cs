@@ -10,10 +10,12 @@ namespace FateAndFridge.Api.Services;
 public sealed record SecuritySettings(
     bool IpAllowlistEnabled,
     IReadOnlyList<string> IpAllowlistRanges,
-    IReadOnlyList<string> TrustedProxies)
+    IReadOnlyList<string> TrustedProxies,
+    int AuditRetentionDays)
 {
-    /// <summary>Allowlist disabled, no ranges, no trusted proxies.</summary>
-    public static readonly SecuritySettings Default = new(false, [], []);
+    /// <summary>Allowlist disabled, no ranges, no trusted proxies, default retention.</summary>
+    public static readonly SecuritySettings Default =
+        new(false, [], [], SecuritySettingsService.DefaultAuditRetentionDays);
 }
 
 /// <summary>
@@ -40,6 +42,27 @@ public sealed class SecuritySettingsService(
     /// <summary>Stable audit entity id for the security settings.</summary>
     public const string SecuritySettingsEntityId = "security";
 
+    /// <summary>
+    /// Reserved <c>application_settings</c> key for the audit retention window
+    /// (docs/M12_PLAN.md §1.8). <c>0</c> means "keep forever"; otherwise a value
+    /// between <see cref="MinAuditRetentionDays"/> and
+    /// <see cref="MaxAuditRetentionDays"/> days.
+    /// </summary>
+    public const string AuditRetentionDaysKey = "audit_retention_days";
+
+    /// <summary>Retention applied when the setting is absent (one year).</summary>
+    public const int DefaultAuditRetentionDays = 365;
+
+    /// <summary>Smallest bounded retention window, exclusive of "keep forever" (0).</summary>
+    public const int MinAuditRetentionDays = 7;
+
+    /// <summary>Largest bounded retention window (ten years).</summary>
+    public const int MaxAuditRetentionDays = 3650;
+
+    /// <summary><c>0</c> is "keep forever"; otherwise the value is bounded.</summary>
+    public static bool IsValidAuditRetentionDays(int value) =>
+        value == 0 || (value >= MinAuditRetentionDays && value <= MaxAuditRetentionDays);
+
     /// <summary>Short TTL so out-of-band database changes are picked up.</summary>
     public static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(5);
 
@@ -65,13 +88,17 @@ public sealed class SecuritySettingsService(
                 .AsNoTracking()
                 .Where(setting => setting.Key == SetupCompletionService.IpAllowlistEnabledKey
                     || setting.Key == SetupCompletionService.IpAllowlistRangesKey
-                    || setting.Key == SetupCompletionService.TrustedProxiesKey)
+                    || setting.Key == SetupCompletionService.TrustedProxiesKey
+                    || setting.Key == AuditRetentionDaysKey)
                 .ToDictionaryAsync(setting => setting.Key, setting => setting.ValueJson, cancellationToken);
 
             var settings = new SecuritySettings(
                 ReadBoolean(stored.GetValueOrDefault(SetupCompletionService.IpAllowlistEnabledKey)),
                 ReadNormalizedRanges(stored.GetValueOrDefault(SetupCompletionService.IpAllowlistRangesKey)),
-                ReadNormalizedRanges(stored.GetValueOrDefault(SetupCompletionService.TrustedProxiesKey)));
+                ReadNormalizedRanges(stored.GetValueOrDefault(SetupCompletionService.TrustedProxiesKey)),
+                ReadInt(
+                    stored.GetValueOrDefault(AuditRetentionDaysKey),
+                    DefaultAuditRetentionDays));
 
             SetCache(settings);
             return settings;
@@ -121,6 +148,11 @@ public sealed class SecuritySettingsService(
             JsonSerializer.Serialize(settings.TrustedProxies),
             now,
             cancellationToken);
+        await UpsertAsync(
+            AuditRetentionDaysKey,
+            JsonSerializer.Serialize(settings.AuditRetentionDays),
+            now,
+            cancellationToken);
 
         await auditService.WriteAsync(
             new AuditEventEntry(
@@ -144,7 +176,29 @@ public sealed class SecuritySettingsService(
             ["ip_allowlist_enabled"] = settings.IpAllowlistEnabled,
             ["ip_allowlist_ranges"] = settings.IpAllowlistRanges,
             ["trusted_proxies"] = settings.TrustedProxies,
+            ["audit_retention_days"] = settings.AuditRetentionDays,
         });
+
+    private static int ReadInt(string? valueJson, int fallback)
+    {
+        if (string.IsNullOrWhiteSpace(valueJson))
+        {
+            return fallback;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(valueJson);
+            return document.RootElement.ValueKind == JsonValueKind.Number
+                && document.RootElement.TryGetInt32(out var value)
+                ? value
+                : fallback;
+        }
+        catch (JsonException)
+        {
+            return fallback;
+        }
+    }
 
     private void SetCache(SecuritySettings settings)
     {

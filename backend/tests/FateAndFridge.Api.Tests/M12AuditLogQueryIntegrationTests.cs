@@ -17,6 +17,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace FateAndFridge.Api.Tests;
 
@@ -501,7 +502,8 @@ public sealed class M12AuditLogQueryIntegrationTests(M1SetupFixture fixture) : I
         await using var context = new AppDbContext(options);
         var service = new AuditLogQueryService(
             context,
-            new HouseholdClock(context, new TestTimeProvider(Now)));
+            new HouseholdClock(context, new TestTimeProvider(Now)),
+            new AuditService(context, new TestTimeProvider(Now), NullLogger<AuditService>.Instance));
         interceptor.Reset();
         var outcome = await service.QueryAsync(
             new AuditLogQueryRequest(

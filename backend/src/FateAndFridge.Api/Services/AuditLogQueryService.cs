@@ -92,6 +92,7 @@ public static class AuditEventSummaries
             [AuditEventTypes.GroceriesManualItemAdded] = "Manual grocery item added",
             [AuditEventTypes.GroceriesManualItemUpdated] = "Manual grocery item updated",
             [AuditEventTypes.GroceriesManualItemRemoved] = "Manual grocery item removed",
+            [AuditEventTypes.AuditPruned] = "Audit log pruned",
             // Reserved for M12-06/M12-08; harmless before they are emitted.
             ["calendar.historical_correction"] = "Historical calendar correction",
             ["recipe.hard_deleted"] = "Recipe permanently deleted",
@@ -184,6 +185,27 @@ public abstract record AuditLogQueryOutcome
 }
 
 /// <summary>
+/// An audit export read (docs/M12_PLAN.md §1.7): the whole filtered view, the
+/// resolved format, or the invalid fields (unknown format, over the row cap, or
+/// a malformed filter).
+/// </summary>
+public abstract record AuditLogExportOutcome
+{
+    private AuditLogExportOutcome()
+    {
+    }
+
+    public sealed record Success(string Format, IReadOnlyList<AuditLogItemRecord> Items)
+        : AuditLogExportOutcome;
+
+    public sealed record ValidationFailed(IReadOnlyDictionary<string, string[]> FieldErrors)
+        : AuditLogExportOutcome;
+}
+
+/// <summary>The counts and cutoff of one executed retention prune.</summary>
+public sealed record AuditLogPruneResult(int DeletedCount, DateTimeOffset Cutoff, int RetentionDays);
+
+/// <summary>
 /// The read-only, merged admin audit timeline (docs/M12_PLAN.md §1.5, §1.6,
 /// §2.1, §2.2): newest-first <c>audit_events</c> rows ∪ the reroll/batch
 /// <c>calendar_entry_history</c> rows, with the filters, the deterministic
@@ -207,13 +229,36 @@ public abstract record AuditLogQueryOutcome
 /// <see cref="HouseholdClock"/>'s timezone; the wire stays ISO.
 /// </para>
 /// </remarks>
-public sealed class AuditLogQueryService(AppDbContext dbContext, HouseholdClock clock)
+public sealed class AuditLogQueryService(
+    AppDbContext dbContext,
+    HouseholdClock clock,
+    IAuditService auditService)
 {
     /// <summary>The page size when the request omits <c>limit</c>.</summary>
     public const int DefaultLimit = 50;
 
     /// <summary>The largest page a caller may request.</summary>
     public const int MaxLimit = 200;
+
+    /// <summary>
+    /// Hard cap on one export (docs/M12_PLAN.md §1.7): an over-cap filtered view
+    /// returns <c>400 VALIDATION_FAILED</c> instead of silently truncating.
+    /// </summary>
+    public const int MaxExportRows = 100_000;
+
+    /// <summary>The CSV export format token.</summary>
+    public const string CsvFormat = "csv";
+
+    /// <summary>The JSON export format token.</summary>
+    public const string JsonFormat = "json";
+
+    /// <summary>The canonical CSV header order for <see cref="AuditLogCsv"/>.</summary>
+    public static readonly string[] CsvColumns =
+    [
+        "id", "source", "recorded_at", "actor_user_id", "actor_username", "event_type",
+        "entity_type", "entity_id", "summary", "reason", "ip_address", "before", "after",
+        "metadata",
+    ];
 
     private const string DateFormat = "yyyy-MM-dd";
 
@@ -249,6 +294,8 @@ public sealed class AuditLogQueryService(AppDbContext dbContext, HouseholdClock 
 
     private readonly HouseholdClock _clock = clock;
 
+    private readonly IAuditService _auditService = auditService;
+
     /// <summary>Reads one page of the merged timeline for the given filters.</summary>
     public async Task<AuditLogQueryOutcome> QueryAsync(
         AuditLogQueryRequest request,
@@ -258,14 +305,162 @@ public sealed class AuditLogQueryService(AppDbContext dbContext, HouseholdClock 
 
         var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
         var limit = ReadLimit(request.Limit, errors);
+        var cursor = ReadCursor(request.Cursor, errors);
+        var filtersResult = await ReadFiltersAsync(request, cancellationToken).ConfigureAwait(false);
+        if (filtersResult.Errors is not null)
+        {
+            return new AuditLogQueryOutcome.ValidationFailed(filtersResult.Errors);
+        }
+
+        if (errors.Count > 0)
+        {
+            return new AuditLogQueryOutcome.ValidationFailed(errors);
+        }
+
+        var rows = await ReadRowsAsync(
+                request,
+                filtersResult.Filters!,
+                limit,
+                cursor,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        var hasMore = rows.Count > limit;
+        var pageRows = hasMore ? rows.Take(limit).ToList() : rows;
+        var items = pageRows.Select(MapItem).ToArray();
+        var nextCursor = hasMore && pageRows.Count > 0
+            ? AuditLogCursor.Encode(pageRows[^1].RecordedAt, pageRows[^1].Source, pageRows[^1].Id)
+            : null;
+        return new AuditLogQueryOutcome.Success(new AuditLogPageRecord(items, nextCursor));
+    }
+
+    /// <summary>
+    /// Reads the whole current filtered view for export (docs/M12_PLAN.md §1.7).
+    /// The same filters and ordering as <see cref="QueryAsync"/> are used; paging
+    /// (<c>limit</c>/<c>cursor</c>) is ignored because an export is the full view.
+    /// </summary>
+    public async Task<AuditLogExportOutcome> ExportAsync(
+        AuditLogQueryRequest request,
+        string? format,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        if (format is not (CsvFormat or JsonFormat))
+        {
+            errors["format"] = [$"format must be '{CsvFormat}' or '{JsonFormat}'."];
+        }
+
+        var filtersResult = await ReadFiltersAsync(request, cancellationToken).ConfigureAwait(false);
+        if (filtersResult.Errors is not null)
+        {
+            foreach (var (field, messages) in filtersResult.Errors)
+            {
+                errors[field] = messages;
+            }
+        }
+
+        if (errors.Count > 0)
+        {
+            return new AuditLogExportOutcome.ValidationFailed(errors);
+        }
+
+        var rows = await ReadRowsAsync(
+                request,
+                filtersResult.Filters!,
+                MaxExportRows,
+                cursor: null,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (rows.Count > MaxExportRows)
+        {
+            return new AuditLogExportOutcome.ValidationFailed(FieldError(
+                "export",
+                $"The filtered view exceeds the {MaxExportRows} row export cap; narrow the filters and try again."));
+        }
+
+        return new AuditLogExportOutcome.Success(
+            format!,
+            rows.Select(MapItem).ToArray());
+    }
+
+    /// <summary>
+    /// Executes the explicit, age-based audit retention prune (docs/M12_PLAN.md
+    /// §1.8): one <c>DELETE ... WHERE created_at &lt; cutoff</c> over
+    /// <c>audit_events</c> only, then an <c>audit.pruned</c> row, in one
+    /// transaction. The prune row is written after the delete so it can never
+    /// delete itself, and it survives the commit. Rows exactly at the cutoff are
+    /// kept.
+    /// </summary>
+    public async Task<AuditLogPruneResult> PruneAsync(
+        DateTimeOffset cutoff,
+        int retentionDays,
+        string reason,
+        long? actorUserId,
+        string? ipAddress,
+        CancellationToken cancellationToken = default)
+    {
+        var cutoffUtc = cutoff.ToUniversalTime();
+
+        await using var transaction = await _dbContext.Database
+            .BeginTransactionAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var deletedCount = await _dbContext.Database.ExecuteSqlInterpolatedAsync(
+                $"DELETE FROM audit_events WHERE created_at < {cutoffUtc}",
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        await _auditService.WriteAsync(
+                new AuditEventEntry(
+                    AuditEventTypes.AuditPruned,
+                    AuditEntityTypes.AuditLog,
+                    Reason: reason,
+                    IpAddress: ipAddress,
+                    ActorUserId: actorUserId,
+                    Metadata: new Dictionary<string, object?>(StringComparer.Ordinal)
+                    {
+                        ["deleted_count"] = deletedCount,
+                        ["cutoff"] = cutoffUtc.ToString("O", CultureInfo.InvariantCulture),
+                        ["retention_days"] = retentionDays,
+                    }),
+                cancellationToken)
+            .ConfigureAwait(false);
+        await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+
+        return new AuditLogPruneResult(deletedCount, cutoffUtc, retentionDays);
+    }
+
+    /// <summary>The parsed, validated filter set shared by the viewer and export.</summary>
+    private sealed record AuditLogFilters(
+        string? Source,
+        long? ActorUserId,
+        DateTimeOffset? From,
+        DateTimeOffset? ToExclusive);
+
+    /// <summary>Either the parsed filters or the invalid query fields.</summary>
+    private sealed record FiltersResult(
+        AuditLogFilters? Filters,
+        Dictionary<string, string[]>? Errors);
+
+    /// <summary>
+    /// Parses and validates the §16 filters (all AND-combined). Both the viewer
+    /// and the export call this, so the two reads can never drift.
+    /// </summary>
+    private async Task<FiltersResult> ReadFiltersAsync(
+        AuditLogQueryRequest request,
+        CancellationToken cancellationToken)
+    {
+        var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
         var source = ReadSource(request.Source, errors);
         var actorUserId = ReadActorUserId(request.ActorUserId, errors);
-        var cursor = ReadCursor(request.Cursor, errors);
         var fromDate = ReadDate(request.From, "from", errors);
         var toDate = ReadDate(request.To, "to", errors);
         if (errors.Count > 0)
         {
-            return new AuditLogQueryOutcome.ValidationFailed(errors);
+            return new FiltersResult(null, errors);
         }
 
         DateTimeOffset? from = null;
@@ -288,42 +483,26 @@ public sealed class AuditLogQueryService(AppDbContext dbContext, HouseholdClock 
 
             if (from is { } fromValue && toExclusive is { } toValue && fromValue >= toValue)
             {
-                return new AuditLogQueryOutcome.ValidationFailed(FieldError(
-                    "to",
-                    "to must be on or after from."));
+                return new FiltersResult(
+                    null,
+                    FieldError("to", "to must be on or after from."));
             }
         }
 
-        var rows = await ReadRowsAsync(
-                request,
-                limit,
-                source,
-                actorUserId,
-                from,
-                toExclusive,
-                cursor,
-                cancellationToken)
-            .ConfigureAwait(false);
-
-        var hasMore = rows.Count > limit;
-        var pageRows = hasMore ? rows.Take(limit).ToList() : rows;
-        var items = pageRows.Select(MapItem).ToArray();
-        var nextCursor = hasMore && pageRows.Count > 0
-            ? AuditLogCursor.Encode(pageRows[^1].RecordedAt, pageRows[^1].Source, pageRows[^1].Id)
-            : null;
-        return new AuditLogQueryOutcome.Success(new AuditLogPageRecord(items, nextCursor));
+        return new FiltersResult(new AuditLogFilters(source, actorUserId, from, toExclusive), null);
     }
 
     private async Task<List<AuditLogRow>> ReadRowsAsync(
         AuditLogQueryRequest request,
+        AuditLogFilters filters,
         int limit,
-        string? source,
-        long? actorUserId,
-        DateTimeOffset? from,
-        DateTimeOffset? toExclusive,
         AuditLogCursor? cursor,
         CancellationToken cancellationToken)
     {
+        var source = filters.Source;
+        var actorUserId = filters.ActorUserId;
+        var from = filters.From;
+        var toExclusive = filters.ToExclusive;
         var arguments = new List<object>();
         var auditConditions = new List<string>();
         // Only rows that carry a reroll/batch kind belong to the timeline;
@@ -616,4 +795,94 @@ public sealed class AuditLogQueryService(AppDbContext dbContext, HouseholdClock 
         string? BeforeJson,
         string? AfterJson,
         string? MetadataJson);
+}
+
+/// <summary>
+/// RFC 4180 CSV projection of the audit export (docs/M12_PLAN.md §1.7,
+/// docs/API.md §16).
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Header order</b> is fixed by
+/// <see cref="AuditLogQueryService.CsvColumns"/>; a header row is always
+/// written, even for an empty view.
+/// </para>
+/// <para>
+/// <b>Quoting.</b> A cell is wrapped in double quotes when it contains a comma,
+/// a double quote, a carriage return, or a line feed; embedded double quotes are
+/// doubled. Rows are separated by CRLF, with no trailing newline.
+/// </para>
+/// <para>
+/// <b>Formula injection.</b> A leading <c>=</c>, <c>+</c>, <c>-</c>, <c>@</c>,
+/// tab (U+0009), or carriage return (U+000D) would let a spreadsheet evaluate
+/// stored text as a formula. Such a cell is prefixed with a single apostrophe
+/// (<c>'</c>) before the normal quoting rule runs, so the value is displayed
+/// literally and never executed.
+/// </para>
+/// </remarks>
+public static class AuditLogCsv
+{
+    /// <summary>Prefix inserted before a formula-like cell value.</summary>
+    public const string FormulaPrefix = "'";
+
+    private const string RowSeparator = "\r\n";
+
+    /// <summary>True when a value would be interpreted as a spreadsheet formula.</summary>
+    public static bool NeedsFormulaNeutralisation(string value) =>
+        value.Length > 0 && value[0] is '=' or '+' or '-' or '@' or '\t' or '\r';
+
+    /// <summary>
+    /// Neutralises a formula-like value with <see cref="FormulaPrefix"/>; all
+    /// other values pass through unchanged.
+    /// </summary>
+    public static string NeutraliseFormula(string value) =>
+        NeedsFormulaNeutralisation(value) ? FormulaPrefix + value : value;
+
+    /// <summary>Formats one cell: neutralise first, then apply RFC 4180 quoting.</summary>
+    public static string FormatCell(string? value) =>
+        Quote(NeutraliseFormula(value ?? string.Empty));
+
+    private static string Quote(string value) =>
+        value.IndexOfAny([',', '"', '\r', '\n']) < 0
+            ? value
+            : "\"" + value.Replace("\"", "\"\"", StringComparison.Ordinal) + "\"";
+
+    /// <summary>Writes the header plus one row per item, CRLF-separated.</summary>
+    public static string Write(IReadOnlyList<AuditLogItemRecord> items)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+
+        var builder = new StringBuilder();
+        builder.Append(string.Join(',', AuditLogQueryService.CsvColumns));
+        builder.Append(RowSeparator);
+
+        for (var index = 0; index < items.Count; index++)
+        {
+            var item = items[index];
+            builder.Append(string.Join(',', new[]
+            {
+                FormatCell(item.Id.ToString(CultureInfo.InvariantCulture)),
+                FormatCell(item.Source),
+                FormatCell(item.RecordedAt.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture)),
+                FormatCell(item.ActorUserId?.ToString(CultureInfo.InvariantCulture)),
+                FormatCell(item.ActorUsername),
+                FormatCell(item.EventType),
+                FormatCell(item.EntityType),
+                FormatCell(item.EntityId),
+                FormatCell(item.Summary),
+                FormatCell(item.Reason),
+                FormatCell(item.IpAddress),
+                FormatCell(item.BeforeJson),
+                FormatCell(item.AfterJson),
+                FormatCell(item.MetadataJson),
+            }));
+
+            if (index < items.Count - 1)
+            {
+                builder.Append(RowSeparator);
+            }
+        }
+
+        return builder.ToString();
+    }
 }

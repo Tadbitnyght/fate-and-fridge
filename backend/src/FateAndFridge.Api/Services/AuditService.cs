@@ -103,6 +103,9 @@ public static class AuditEventTypes
     public const string BackupCreated = "backup.created";
 
     public const string BackupRestored = "backup.restored";
+
+    // M12-04: the explicit, age-based audit retention prune.
+    public const string AuditPruned = "audit.pruned";
 }
 
 /// <summary>
@@ -145,6 +148,9 @@ public static class AuditEntityTypes
     public const string Auth = "auth";
 
     public const string Backup = "backup";
+
+    /// <summary>The audit log itself (used by the retention prune row).</summary>
+    public const string AuditLog = "audit_log";
 }
 
 /// <summary>

@@ -88,6 +88,24 @@ public static class SettingsEndpoints
             trustedProxies = ReadNormalizedRanges(proxiesElement, "trusted_proxies", errors);
         }
 
+        int? retentionDays = null;
+        if (root.TryGetProperty("audit_retention_days", out var retentionElement))
+        {
+            if (retentionElement.ValueKind == JsonValueKind.Number
+                && retentionElement.TryGetInt32(out var parsedRetention)
+                && SecuritySettingsService.IsValidAuditRetentionDays(parsedRetention))
+            {
+                retentionDays = parsedRetention;
+            }
+            else
+            {
+                errors["audit_retention_days"] = [
+                    "audit_retention_days must be 0 (keep forever) or an integer between " +
+                    $"{SecuritySettingsService.MinAuditRetentionDays} and " +
+                    $"{SecuritySettingsService.MaxAuditRetentionDays}."];
+            }
+        }
+
         bool? confirmed = null;
         if (root.TryGetProperty("confirmed", out var confirmedElement))
         {
@@ -101,10 +119,10 @@ public static class SettingsEndpoints
             }
         }
 
-        if (enabled is null && ranges is null && trustedProxies is null)
+        if (enabled is null && ranges is null && trustedProxies is null && retentionDays is null)
         {
             errors["body"] = [
-                "At least one of ip_allowlist_enabled, ip_allowlist_ranges, or trusted_proxies must be provided."];
+                "At least one of ip_allowlist_enabled, ip_allowlist_ranges, trusted_proxies, or audit_retention_days must be provided."];
         }
 
         if (errors.Count > 0)
@@ -116,6 +134,7 @@ public static class SettingsEndpoints
         var resultingEnabled = enabled ?? current.IpAllowlistEnabled;
         var resultingRanges = ranges ?? current.IpAllowlistRanges;
         var resultingProxies = trustedProxies ?? current.TrustedProxies;
+        var resultingRetention = retentionDays ?? current.AuditRetentionDays;
 
         if (resultingEnabled)
         {
@@ -157,7 +176,7 @@ public static class SettingsEndpoints
             return actorError;
         }
 
-        var updated = new SecuritySettings(resultingEnabled, resultingRanges, resultingProxies);
+        var updated = new SecuritySettings(resultingEnabled, resultingRanges, resultingProxies, resultingRetention);
         await securitySettings.SaveAsync(
             updated,
             actorUserId,
