@@ -1,6 +1,6 @@
 # M12 Verification — Administration
 
-Status: **in progress** (live deployment gate pending)
+Status: **complete** (live deployment verified 2026-10-19)
 Runbook: `docs/M12_PLAN.md` (approved 2026-10-18). Coverage map:
 `docs/M12_TEST_MATRIX.md`. Tracking: #149; M12-01…M12-10: #150–#159. The V1.x
 date-display change (#160) ships with this deploy.
@@ -167,13 +167,83 @@ share times out Vitest/Playwright workers) with a real local `node_modules`.
 
 ## Live deployment verification
 
-_Pending: the rebuild/redeploy is performed by `docker-admin`
-(`scripts/deploy.sh up`) from the completed commit, and the audit log, a
-historical correction and a hard delete are verified on the running instance
-before the milestone is marked complete and tagged._
+Rebuild/redeploy was executed by `docker-admin` against the TrueNAS deploy host
+(`fatefridge`, `CPlanner@192.168.0.2`, deploy dir `/mnt/Data/calendarplanner`,
+app URL `http://192.168.0.2:50080/`) from the completed commit, via the
+documented `scripts/deploy.sh up` (`docker compose up -d --build`).
+
+**Deployed revision.** The deploy checkout was verified to be the completed
+commit: `git -C /mnt/Data/calendarplanner rev-parse --short HEAD` → `820a20c`
+(clean tree). The fresh build produced the SPA bundle `index-CKAWJziJ.js`
+(`index-OIqghAI6.css`), which is exactly the asset the live instance serves.
+
+**Build and image.** The frontend build and the backend publish succeeded; the
+stack was rebuilt to image
+**`sha256:99a114cd1c7cce5aebb33b75901718ccfdd66c120051f3978076686730e6757f`**
+(`fate-and-fridge:0.1.0`). This is a locally built image, so it has **no registry
+digest** (`RepoDigests` is empty); the image id, build output, and container id
+are the identifying evidence.
+
+**Containers.**
+
+```
+NAME                          IMAGE                  STATUS                 PORTS
+fate-and-fridge-app-1         fate-and-fridge:0.1.0  Up (healthy)           0.0.0.0:50080->8080/tcp
+fate-and-fridge-postgres-1    postgres:17-alpine     Up 5 days (healthy)    5432/tcp  (not published)
+```
+
+App container id `5b7559ee00683a0da6def4a6062e94b8975323b0986cc2d02cde707117e33f03`.
+PostgreSQL stayed running/healthy and **no volume or dataset was touched**; only
+port 50080 is published.
+
+**Migrations.** Startup logged "No migrations were applied. The database is
+already up to date.", as expected — M12 added none.
+
+**Health.** `GET /api/v1/health` → `200`
+`{"status":"ok","app":"Fate & Fridge","version":"0.1.0","environment":"production"}`;
+`GET /api/v1/health/db` → `200` `{"status":"ok","database":"connected"}`.
+
+**M12 live proof (read-only; nothing destructive was performed).**
+
+- `GET /api/v1/admin/audit?limit=5` → **200** with real rows: the newest are
+  `source: "entry_history"`, `event_type: "calendar.batch_reroll"` (ids 70→66,
+  recorded `2026-10-17T16:04:25Z`, system actor) carrying full before/after JSON
+  and the M7 metadata — i.e. the merged viewer really does surface reroll records
+  from the entry history. `next_cursor` is present (keyset paging is live).
+- `GET /api/v1/admin/audit/export?format=csv` → **200**,
+  `Content-Type: text/csv; charset=utf-8`,
+  `Content-Disposition: attachment; filename=audit-log.csv; filename*=UTF-8''audit-log.csv`
+  (136,920 bytes), header line:
+  `id,source,recorded_at,actor_user_id,actor_username,event_type,entity_type,entity_id,summary,reason,ip_address,before,after,metadata`.
+- **The new mutating routes are live and their guards refuse unsafe calls**
+  (deliberately non-destructive — a real correction/delete/prune was **not**
+  performed on live household data):
+  - `POST /api/v1/calendar/{past}/correction` with `{}` → **400
+    `REASON_REQUIRED`** (`field_errors.reason`); with an empty body → 400
+    `VALIDATION_FAILED`.
+  - `DELETE /api/v1/recipes/1` with a wrong `confirmation` → **400
+    `CONFIRMATION_MISMATCH`** (`field_errors.confirmation`).
+  - `POST /api/v1/admin/audit/prune` with a wrong confirmation → 400
+    `CONFIRMATION_MISMATCH`; without a reason → 400 `REASON_REQUIRED`. No valid
+    `PRUNE` confirmation was ever sent.
+  - **Nothing changed:** `GET /api/v1/recipes/1` returned a byte-identical
+    document (still `Bacon-Wrapped Hot Dogs`, still 5 recipes), the calendar
+    entry for the probed date was untouched, and the row counts were stable
+    (`audit_events` 56, `calendar_entry_history` 70, max ids unchanged) with **no**
+    `calendar.historical_correction`, `recipe.hard_deleted`, or `audit.pruned` row
+    written.
+- `/progress` — rendered live in Chromium against the deployed instance: the
+  summary reads **`13 of 15 milestones complete (87%).`**, no milestone reports
+  "In progress", and the **`M12 — Administration`** card shows the **Complete**
+  status chip with **`Completed 2026-10-19`**. The served bundle hash matches the
+  fresh build output.
+
+**Runbook:** `git tag m12-complete` (annotated, "M12 — Administration complete
+(2026-10-19)") is cut on the commit that records this verification.
 
 ---
 
 ## CI status after completion
 
-_Pending._
+_Pending the push of the completion commits to `main`; recorded next, then the
+tag is cut._

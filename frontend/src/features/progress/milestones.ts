@@ -392,6 +392,8 @@ export const MILESTONES: Milestone[] = [
       'Admin-only dangerous-action confirmation framework (reused by M13)',
     ],
     completedOn: '2026-10-19',
+    tag: 'm12-complete',
+    commit: '820a20c',
     evidence: [
       { label: 'Backend tests', value: '2293' },
       { label: 'Vitest', value: '489' },

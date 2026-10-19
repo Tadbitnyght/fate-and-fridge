@@ -1,6 +1,6 @@
 # Fate & Fridge — Milestone 12 Plan (Administration)
 
-Status: **approved, ready to execute**
+Status: **delivered** (complete and live-verified 2026-10-19; verification: `docs/M12_VERIFICATION.md`)
 Approved: 2026-10-18 (product owner answered the full M12 decision set)
 Purpose: authoritative M12 runbook. A fresh session should execute M12 from this
 file plus `AGENTS.md`, `docs/MILESTONES.md`, and the existing product, API,
