@@ -380,7 +380,7 @@ export const MILESTONES: Milestone[] = [
     id: 'M12',
     number: 12,
     name: 'Administration',
-    status: 'in_progress',
+    status: 'complete',
     summary:
       'The admin surface: an Admin-only audit log with filters, export and retention, a past-date historical correction workflow, hard recipe deletion with snapshot/tombstone integrity, and a shared dangerous-action confirmation framework.',
     features: [
@@ -390,6 +390,14 @@ export const MILESTONES: Milestone[] = [
       'Historical correction of a single past date (reason, audit, snapshot refresh, locked-date acknowledgement)',
       'Hard recipe deletion: snapshot backfill, planned-entry removal, tombstones, image removal, audited',
       'Admin-only dangerous-action confirmation framework (reused by M13)',
+    ],
+    completedOn: '2026-10-19',
+    evidence: [
+      { label: 'Backend tests', value: '2293' },
+      { label: 'Vitest', value: '489' },
+      { label: 'Playwright (hermetic)', value: '69 passed / 3 pre-existing stack skips' },
+      { label: 'M12 verification', value: 'independent review + full §4 battery' },
+      { label: 'Backend gates', value: 'format/build/EF clean' },
     ],
     issues: [149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159],
     issuesNote: 'Tracking #149; M12-01…M12-10: #150–#159. Runbook: docs/M12_PLAN.md.',

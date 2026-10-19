@@ -29,18 +29,18 @@ describe('progress page', () => {
     renderWithProviders(<App />, { route: '/progress' })
 
     expect(await screen.findByRole('heading', { level: 2, name: 'Progress' })).toBeInTheDocument()
-    expect(screen.getByText('12 of 15 milestones complete (80%).')).toBeInTheDocument()
+    expect(screen.getByText('13 of 15 milestones complete (87%).')).toBeInTheDocument()
 
     const progressbar = screen.getByRole('progressbar', { name: 'Milestones complete' })
-    expect(progressbar).toHaveAttribute('aria-valuenow', '80')
-    expect(progressbar).toHaveAttribute('aria-valuetext', '80%')
+    expect(progressbar).toHaveAttribute('aria-valuenow', '87')
+    expect(progressbar).toHaveAttribute('aria-valuetext', '87%')
 
-    expect(screen.getAllByText('Complete', { exact: true })).toHaveLength(12)
+    expect(screen.getAllByText('Complete', { exact: true })).toHaveLength(13)
     // Each of the two remaining planned milestones renders "Planned" twice: the
-    // status chip and the dates line. M12 is in progress, so it renders
-    // "In progress" from both the chip and the dates line.
+    // status chip and the dates line. Every milestone through M12 is complete,
+    // so no milestone is in progress.
     expect(screen.getAllByText('Planned', { exact: true })).toHaveLength(4)
-    expect(screen.getAllByText('In progress', { exact: true })).toHaveLength(2)
+    expect(screen.queryAllByText('In progress', { exact: true })).toHaveLength(0)
 
     const m1Card = screen
       .getByRole('heading', { level: 3, name: 'M1 — Setup and Authentication' })
@@ -164,7 +164,7 @@ describe('progress page', () => {
     expect(milestonesTab).toHaveAttribute('tabindex', '0')
     expect(futureTab).toHaveAttribute('aria-selected', 'false')
     expect(futureTab).toHaveAttribute('tabindex', '-1')
-    expect(screen.getByText('12 of 15 milestones complete (80%).')).toBeInTheDocument()
+    expect(screen.getByText('13 of 15 milestones complete (87%).')).toBeInTheDocument()
     expect(
       screen.queryByRole('heading', { level: 4, name: 'Pantry / inventory' }),
     ).not.toBeInTheDocument()
@@ -184,7 +184,7 @@ describe('progress page', () => {
     expect(
       screen.queryByRole('heading', { level: 3, name: 'M1 — Setup and Authentication' }),
     ).not.toBeInTheDocument()
-    expect(screen.queryByText('12 of 15 milestones complete (80%).')).not.toBeInTheDocument()
+    expect(screen.queryByText('13 of 15 milestones complete (87%).')).not.toBeInTheDocument()
   })
 
   it('supports Left/Right/Home/End keyboard navigation with roving focus', async () => {

@@ -298,6 +298,53 @@ The M11 coverage map (§4 battery bullet → primary test) is
 
 ---
 
+## 10.3 Audit, Historical Correction and Hard Delete Tests (M12)
+
+Coverage map: `docs/M12_TEST_MATRIX.md`; independent verdict and live evidence:
+`docs/M12_VERIFICATION.md`.
+
+- **Audit coverage:** every M12 write path (calendar meal changes and locks,
+  recipe lifecycle, users and permissions, settings, grocery manual items and
+  staples, logins, historical corrections, hard delete) writes exactly one
+  `audit_events` row with actor, target and before/after; a failed audit write
+  aborts the change; **no plaintext or temporary password, reset secret, recovery
+  key or session token can reach any audit column** (asserted by a scan over the
+  persisted `before_json`/`after_json`/`metadata_json`); rerolls are **not**
+  written to `audit_events`; no page views are logged.
+- **Merged audit viewer:** the timeline merges `audit_events` with the reroll
+  rows of `calendar_entry_history` (kind → event-type mapping), never duplicating
+  ordinary edits; filters AND-combine; keyset paging walks the log exactly once;
+  the read is a single bounded query (no N+1, page-size independent).
+- **Export:** CSV quoting for commas/quotes/newlines, formula-injection
+  neutralisation, JSON equality with the filtered view, and the row cap
+  returning `VALIDATION_FAILED` instead of truncating.
+- **Retention/prune:** `audit_retention_days` validation (`0` = keep forever,
+  else `7..3650`); the prune keeps a row exactly at the cutoff, deletes only
+  `audit_events`, records `audit.pruned` after the delete in the same
+  transaction, refuses "keep forever", and enforces the reason and typed `PRUNE`
+  confirmation **server-side**.
+- **Historical correction:** past-only; locked dates require the acknowledgement
+  and stay locked; the reason and typed date confirmation are server-enforced;
+  the entry change, the `is_historical_correction` history row and the audit row
+  commit atomically (a forced audit failure rolls all three back); the frozen
+  snapshot is refreshed so a later rename or hard delete still renders; other
+  dates are untouched.
+- **Hard delete:** past meals survive as tombstones with their snapshots and
+  `include_groceries` true, and the statistics/meal-history totals do not drop;
+  entries dated today or later are removed (and the recipe leaves the grocery
+  projection and the randomizer's eligibility); a **stale** snapshot is never
+  overwritten; image rows **and files** are removed; the `recipe.hard_deleted`
+  audit row keeps the before-image; child rows cascade with no orphans; `404`
+  for an unknown recipe; Admin-only; irreversible.
+- **Dangerous actions (a11y/authority):** the shared dialog is keyboard-operable
+  with a focus trap and labelled controls, and a direct API call that omits the
+  reason or the typed confirmation fails regardless of the dialog.
+- **Permissions:** the audit routes, the correction route and the delete route
+  are Admin-only (anonymous 401, member 403, Admin/single-user 200) and the
+  seven-key permission model is unchanged — no eighth key.
+
+---
+
 ## 11. Accessibility Tests
 - keyboard navigation
 - focus trapping in dialogs

@@ -196,7 +196,7 @@ test('progress roadmap is reachable from the dashboard card and the footer', asy
   await page.getByRole('link', { name: 'Open the milestone roadmap' }).click()
   await expect(page).toHaveURL(/\/progress$/)
   await expect(page.getByRole('heading', { level: 2, name: 'Progress' })).toBeVisible()
-  await expect(page.getByText('12 of 15 milestones complete (80%).')).toBeVisible()
+  await expect(page.getByText('13 of 15 milestones complete (87%).')).toBeVisible()
   await expect(
     page.getByRole('heading', { level: 3, name: 'M1 — Setup and Authentication' }),
   ).toBeVisible()
@@ -225,6 +225,12 @@ test('progress roadmap is reachable from the dashboard card and the footer', asy
     .getByRole('listitem')
     .filter({ has: page.getByRole('heading', { level: 3, name: 'M11 — Statistics and History' }) })
   await expect(m11Card.getByText('Complete', { exact: true })).toBeVisible()
+
+  // The newly completed M12 milestone renders with its completion status.
+  const m12Card = page
+    .getByRole('listitem')
+    .filter({ has: page.getByRole('heading', { level: 3, name: 'M12 — Administration' }) })
+  await expect(m12Card.getByText('Complete', { exact: true })).toBeVisible()
 
   // The footer link points at the same roadmap.
   await expect(page.getByRole('link', { name: 'Milestone progress' })).toBeVisible()

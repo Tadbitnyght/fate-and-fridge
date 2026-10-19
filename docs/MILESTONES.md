@@ -274,6 +274,14 @@ Issues:
 6. snapshot/tombstone handling.
 7. admin-only dangerous-action confirmation framework.
 
+Approved decisions (2026-10-18): see `docs/M12_PLAN.md` for the authoritative
+audit coverage set, viewer/export/retention rules, correction limits, hard-delete
+behaviour, dangerous-action framework, and verification battery. Admin-only with
+no new permission keys. Delivered 2026-10-19; runbook `docs/M12_PLAN.md`, coverage
+map `docs/M12_TEST_MATRIX.md`, verification record `docs/M12_VERIFICATION.md`
+(including `BUG-011`, the residual reroll-vs-hard-delete race). Tracking issue
+#149; issues M12-01…M12-10 are #150–#159.
+
 ---
 
 ## Milestone 13 — Backup / Restore / Updates

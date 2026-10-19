@@ -262,6 +262,36 @@ versions follow [Semantic Versioning](https://semver.org/).
   existing live-sync events. **No schema change, no migration, and no new
   permission key.**
 
+- Milestone 12 — administration (2026-10-19): the Admin surface for
+  `docs/PRODUCT_SPEC.md` §42/§43. **Audit coverage** now extends past reference
+  data to calendar meal changes and lock/unlock, recipe lifecycle (including the
+  retire transition), users and permission changes, household/security settings
+  (including the auth-mode switch), grocery manual items and staples, and
+  successful/failed logins — plus backup/restore stub types for M13; rerolls stay
+  in `calendar_entry_history`, where they already carry their score metadata.
+  The **Admin audit log** (`/settings/audit`) is a newest-first merged timeline of
+  `audit_events` and the reroll records from `calendar_entry_history`, with
+  event-type/entity/actor/source/date filters, keyset paging, and expandable
+  before/after detail, plus **CSV/JSON export** of the filtered view (correct
+  quoting; spreadsheet formula-injection neutralised) and a configurable
+  **`audit_retention_days`** window with an Admin-confirmed, age-based **prune**
+  that deletes only `audit_events` older than the cutoff and records `audit.pruned`.
+  A **historical correction workflow** lets an Admin rewrite a single past date
+  (entry type, recipe, notes, diners and the other write fields) with a required
+  reason and a typed date confirmation, atomic `calendar_entry_history`
+  (`is_historical_correction`) and audit rows, a refreshed frozen snapshot, and an
+  explicit acknowledgement to touch a locked date without unlocking it.
+  **Hard recipe deletion** backfills durable snapshot text, removes entries dated
+  today or later, tombstones past meals (`recipe_id` cleared while `include_groceries`
+  stays true, so statistics and meal history keep their counts), deletes the
+  recipe's image rows and files, and records a `recipe.hard_deleted` audit row with
+  the recipe before-image — irreversible, with no broken foreign keys. Correction,
+  hard delete and prune all use one shared **dangerous-action dialog** (reason,
+  warnings, acknowledgement, typed confirmation) verified **server-side**, reused by
+  M13's restore. Audit read, correction and hard delete are **Admin-only with no
+  new permission key**; **no schema change and no migration**. One known rare race
+  (a reroll racing a hard delete) is recorded as `BUG-011`.
+
 ### Changed
 
 - Product UI dates now render as **MM-DD-YY** (e.g. `2026-10-05` → `10-05-26`)

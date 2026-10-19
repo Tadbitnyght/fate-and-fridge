@@ -21,6 +21,7 @@ Status legend: `open` (confirmed, not started) · `fixing` · `verifying` ·
 | BUG-008 | open | Groceries / Data | A live grocery line renders the ingredient label `Onion {owder`; likely stored/seeded data, needs a check that no code path emits a stray `{` | — |
 | BUG-009 | closed | CI / Dependencies | CI red on `main` since the M9 completion commits because the M9 test-only `Microsoft.AspNetCore.SignalR.Client 10.0.12` pulled the vulnerable `Microsoft.AspNetCore.SignalR.Common 10.0.12` (CVE-2026-70159) | [#139](https://github.com/Tadbitnyght/fate-and-fridge/issues/139) |
 | BUG-010 | closed | CI / E2E | Stack acceptance job red since the M9 completion commits: the M9-08 real-stack live-sync spec ran before the acceptance spec and consumed the single-shot first-run setup | [#139](https://github.com/Tadbitnyght/fate-and-fridge/issues/139) |
+| BUG-011 | open | Recipes / Calendar / Concurrency | A randomizer or batch-reroll apply that loaded a recipe as a candidate immediately before an Admin hard-deletes it can hit the recipe FK and return 500 (rare race; the transaction rolls back, so nothing is corrupted or half-deleted) | [#161](https://github.com/Tadbitnyght/fate-and-fridge/issues/161) |
 
 ---
 
