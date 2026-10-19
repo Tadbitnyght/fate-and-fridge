@@ -67,6 +67,10 @@ to the Lead before implementing.
    never a per-row delete.
 9. **Historical correction.** **Single past date, full edit**: an Admin may
    change one past date's **entry type, recipe, notes, and diner count**.
+   **Locked 2026-10-18 (M12-06):** the correction is a **full replace** and also
+   accepts the normal write's optional type-specific fields (`restaurant_name`,
+   `location_text`, `custom_label`, `icon_key`) so every entry type is
+   expressible; it never changes the lock state.
    - Requires a **reason** and a confirmation; recorded in `audit_events`
      (`calendar.historical_correction`) **and** as a `calendar_entry_history` row
      with `is_historical_correction = true` and the reason, in one transaction.
