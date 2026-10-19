@@ -171,6 +171,14 @@ export const FUTURE_FEATURES: FutureFeature[] = [
     source: 'docs/PRODUCT_SPEC.md §47',
   },
   {
+    id: 'administration-audit-expansion',
+    title: 'Administration & audit expansion',
+    status: 'v2',
+    summary:
+      'Bulk / date-range historical correction; per-capability permission keys (audit.view, history.correct, recipes.delete) so an Admin can delegate admin capabilities to a member; automatic or scheduled audit pruning and recurring audit exports; tamper-evident audit storage beyond the current append-only rows; and a dedicated /admin navigation area. V1 (M12) keeps audit read, historical correction and hard delete Admin-only on the seven-key model, prunes only on an explicit Admin action, and keeps the audit log inside /settings.',
+    source: 'docs/M12_PLAN.md §6',
+  },
+  {
     id: 'import-recipe-enhancements',
     title: 'Import & recipe enhancements',
     status: 'enhancement',
@@ -193,6 +201,14 @@ export const FUTURE_FEATURES: FutureFeature[] = [
     summary:
       'Add debugging and analysis tooling over the stored operation metadata, plus additional configurable knobs as advanced variety rules land. V1 stores a full score breakdown but exposes only a compact operation to clients.',
     source: 'docs/RANDOMIZER.md §7, docs/M6_PLAN.md',
+  },
+  {
+    id: 'per-user-device-preferences',
+    title: 'Per-user & device preferences',
+    status: 'v1x',
+    summary:
+      'Per-user and per-device display preferences: light/dark theme (and follow-system) applied before first paint so there is no flash, a configurable display date format (the UI already renders MM-DD-YY), and other UI/display preferences as they arise. Storage stays in PostgreSQL, never a file: a user-keyed table mirroring user_grocery_preferences, with the single-user system actor falling back to application_settings.',
+    source: 'docs/FUTURE_FEATURES.md (raised 2026-10-18), docs/DATABASE.md §11',
   },
   {
     id: 'infrastructure-performance',
