@@ -1516,6 +1516,7 @@ public sealed class M9LiveSyncEventMatrixTests(M1SetupFixture fixture) : IAsyncL
         "DELETE /api/v1/calendar/{date}",
         "POST /api/v1/calendar/{date}/reroll",
         "POST /api/v1/calendar/reroll/apply",
+        "POST /api/v1/calendar/{date}/correction",
         "POST /api/v1/operations/{operation_id}/undo",
         "POST /api/v1/batch-operations/{batch_operation_id}/undo",
         // calendar.lock_changed (and only that)
@@ -1537,6 +1538,7 @@ public sealed class M9LiveSyncEventMatrixTests(M1SetupFixture fixture) : IAsyncL
         "POST /api/v1/recipes/{id}/image/from-url",
         "PATCH /api/v1/recipes/{id}/image",
         "DELETE /api/v1/recipes/{id}/image",
+        "DELETE /api/v1/recipes/{id}",
         // settings.updated
         "PATCH /api/v1/settings/household",
         "POST /api/v1/settings/auth-mode",
@@ -1594,6 +1596,10 @@ public sealed class M9LiveSyncEventMatrixTests(M1SetupFixture fixture) : IAsyncL
         "POST /api/v1/users/{id}/disable",
         "POST /api/v1/users/{id}/enable",
         "POST /api/v1/users/{id}/reset-password",
+        // Audit-log maintenance: deletes old audit rows and records its own
+        // audit.pruned row. No audit live-sync entity exists, so the admin
+        // audit viewer simply refetches.
+        "POST /api/v1/admin/audit/prune",
     ];
 
     private static HashSet<string> DiscoverMutatingRoutes(ApiFactory factory)
