@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 
 import {
   RECIPE_SORT_LABELS,
@@ -82,6 +82,14 @@ function RecipeName({ recipe, canEdit }: { recipe: RecipeListItem; canEdit: bool
  */
 export function RecipesBrowser() {
   const { canEdit } = useRecipeAccess()
+  const location = useLocation()
+
+  // The M12-09 hard delete navigates here with the counts to report, because
+  // the deleted recipe's editor no longer exists to show them.
+  const notice =
+    typeof (location.state as { notice?: unknown } | null)?.notice === 'string'
+      ? (location.state as { notice: string }).notice
+      : null
 
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
@@ -169,6 +177,12 @@ export function RecipesBrowser() {
           </div>
         )}
       </div>
+
+      {notice !== null && (
+        <p className="form__notice" role="status">
+          {notice}
+        </p>
+      )}
 
       <form className="recipes__filters" onSubmit={handleSearch}>
         <div className="form__field recipes__search">

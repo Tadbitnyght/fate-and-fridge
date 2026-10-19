@@ -4,15 +4,21 @@ import {
   createRecipe,
   deleteRecipeImage,
   getRecipe,
+  hardDeleteRecipe,
   listRecipes,
   updateRecipe,
   updateRecipeImageAltText,
   uploadRecipeImage,
   type Recipe,
+  type RecipeHardDeleteRequest,
+  type RecipeHardDeleteResult,
   type RecipeListParams,
   type RecipeListResponse,
   type RecipeWriteRequest,
 } from '../../api/recipes'
+import { calendarQueryKey } from '../calendar/useCalendar'
+import { auditQueryKey } from '../settings/useAuditLog'
+import { statisticsQueryKey } from '../statistics/useStatistics'
 
 /**
  * Query-key prefix for every recipe query. Image mutations and recipe writes
@@ -84,5 +90,30 @@ export function useDeleteRecipeImage() {
   return useMutation({
     mutationFn: (id: number) => deleteRecipeImage(id),
     onSuccess: refresh,
+  })
+}
+
+/**
+ * Irreversible Admin-only hard delete (M12-09). A delete removes today/future
+ * planned entries and tombstones past ones, so the recipe lists, the calendar,
+ * the statistics/meal-history views, and the audit log all change at once.
+ * (Live sync also emits `recipe.updated` and `calendar.updated`.)
+ */
+export function useHardDeleteRecipe() {
+  const queryClient = useQueryClient()
+  return useMutation<
+    RecipeHardDeleteResult,
+    unknown,
+    { id: number; request: RecipeHardDeleteRequest }
+  >({
+    mutationFn: ({ id, request }) => hardDeleteRecipe(id, request),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: recipesQueryKey }),
+        queryClient.invalidateQueries({ queryKey: calendarQueryKey }),
+        queryClient.invalidateQueries({ queryKey: statisticsQueryKey }),
+        queryClient.invalidateQueries({ queryKey: auditQueryKey }),
+      ])
+    },
   })
 }

@@ -1820,6 +1820,50 @@ a.button--primary:focus-visible {
   gap: 0.75rem;
 }
 
+/* M12-09 hard-delete danger zone: visually separated from the save actions. */
+.recipe-form__danger {
+  margin-top: 2rem;
+  padding: 1rem;
+  border: 1px solid var(--bad-text);
+  border-radius: 0.5rem;
+  background: var(--bad-bg);
+  color: var(--bad-text);
+}
+
+.recipe-form__danger h3 {
+  margin: 0 0 0.4rem;
+  font-size: 1.05rem;
+}
+
+.recipe-form__danger p {
+  margin: 0 0 0.75rem;
+}
+
+.button--danger {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--bad-text);
+  border-radius: 0.5rem;
+  background: var(--bad-text);
+  color: var(--bg);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.button--danger:hover {
+  filter: brightness(1.1);
+}
+
+.button--danger:focus-visible {
+  outline: 2px solid var(--bad-text);
+  outline-offset: 2px;
+}
+
+.button--danger:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .recipe-photo-preview {
   max-width: 22rem;
   width: 100%;

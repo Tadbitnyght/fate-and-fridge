@@ -3,7 +3,17 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 
 import { isApiError } from '../../api/client'
 import { ErrorCodes } from '../../api/errorCodes'
-import { RECIPE_STATUS_LABELS, RECIPE_STATUSES, type RecipeStatus } from '../../api/recipes'
+import {
+  RECIPE_STATUS_LABELS,
+  RECIPE_STATUSES,
+  type RecipeHardDeleteResult,
+  type RecipeStatus,
+} from '../../api/recipes'
+import {
+  DangerousActionDialog,
+  MAX_DANGEROUS_ACTION_REASON_LENGTH,
+  type DangerousActionValues,
+} from '../../components/DangerousActionDialog'
 import { Field } from '../../components/Field'
 import { fieldProps } from '../../components/fieldProps'
 import {
@@ -25,7 +35,7 @@ import {
   validateRecipeForm,
   type RecipeFormState,
 } from './recipeForm'
-import { useCreateRecipe, useRecipe, useUpdateRecipe } from './useRecipes'
+import { useCreateRecipe, useHardDeleteRecipe, useRecipe, useUpdateRecipe } from './useRecipes'
 
 function checkboxRow(
   id: string,
@@ -47,15 +57,58 @@ function checkboxRow(
 }
 
 /**
+ * Human-readable summary of a successful hard delete. It is reported on
+ * `/recipes` (via router state) because the deleted recipe's editor is gone by
+ * the time the mutation resolves.
+ */
+function hardDeleteNotice(result: RecipeHardDeleteResult): string {
+  const planned = result.removed_planned_entries === 1 ? 'meal' : 'meals'
+  const past = result.tombstoned_entries === 1 ? 'meal' : 'meals'
+  return `Recipe deleted permanently. Removed ${result.removed_planned_entries} planned ${planned}; kept ${result.tombstoned_entries} past ${past} as read-only history.`
+}
+
+/**
+ * Turns a hard-delete failure into a readable message. Server codes are the
+ * contract (docs/API.md §4, §10); `details.field_errors` is surfaced first
+ * because it is the most specific message the server can give.
+ */
+function describeHardDeleteError(caught: unknown): string {
+  if (!isApiError(caught)) {
+    return 'Deleting the recipe failed. Check the server and try again.'
+  }
+
+  const fieldMessage = firstFieldError(extractServerFieldErrors(caught.details))
+  switch (caught.code) {
+    case ErrorCodes.ConfirmationMismatch:
+      return 'The typed confirmation did not match. Type the recipe name exactly to confirm.'
+    case ErrorCodes.ReasonRequired:
+      return fieldMessage ?? 'Enter a reason for deleting this recipe.'
+    case ErrorCodes.ReasonTooLong:
+      return `The reason must be at most ${MAX_DANGEROUS_ACTION_REASON_LENGTH} characters.`
+    case ErrorCodes.ReasonInvalid:
+      return fieldMessage ?? 'The reason contains characters the server rejects.'
+    case ErrorCodes.NotFound:
+      return 'This recipe no longer exists. It may already have been deleted.'
+    case ErrorCodes.Forbidden:
+      return 'Only an Admin can permanently delete a recipe.'
+    default:
+      return fieldMessage ?? caught.message
+  }
+}
+
+/**
  * Accessible recipe create/edit form (M3-10, issue #37). Every collection is a
  * full replacement on save (docs/API.md §23). Picker selects only choose
  * existing references — no inline creation or free-text fallback (M3 §1.20).
+ *
+ * Admins additionally get the M12-09 danger zone (hard delete) on the
+ * detail/editor route only; the server enforces the Admin role.
  */
 export function RecipeFormPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const location = useLocation()
-  const { canEdit } = useRecipeAccess()
+  const { canEdit, isAdmin } = useRecipeAccess()
 
   // The import review flow navigates here after saving; if the optional photo
   // download failed it passes a non-fatal warning through router state (M4-08).
@@ -70,12 +123,15 @@ export function RecipeFormPage() {
   const recipeQuery = useRecipe(isEdit ? recipeId : undefined)
   const createRecipe = useCreateRecipe()
   const updateRecipe = useUpdateRecipe()
+  const hardDelete = useHardDeleteRecipe()
 
   const [state, setState] = useState<RecipeFormState>(emptyRecipeFormState)
   const [loadedRecipeId, setLoadedRecipeId] = useState<number | null>(null)
   const [errors, setErrors] = useState<FieldErrors>({})
   const [formError, setFormError] = useState<string | null>(null)
   const [savedNotice, setSavedNotice] = useState<string | null>(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const errorSummaryRef = useRef<HTMLDivElement>(null)
 
   const ingredientsQuery = useIngredients('', false)
@@ -138,6 +194,22 @@ export function RecipeFormPage() {
       setFormError(
         isApiError(caught) ? caught.message : 'Saving failed. Check the server and try again.',
       )
+    }
+  }
+
+  async function handleHardDelete(values: DangerousActionValues): Promise<void> {
+    if (recipeId === undefined) {
+      return
+    }
+    setDeleteError(null)
+    try {
+      const result = await hardDelete.mutateAsync({
+        id: recipeId,
+        request: { reason: values.reason, confirmation: values.confirmation ?? '' },
+      })
+      navigate('/recipes', { state: { notice: hardDeleteNotice(result) } })
+    } catch (caught) {
+      setDeleteError(describeHardDeleteError(caught))
     }
   }
 
@@ -465,6 +537,55 @@ export function RecipeFormPage() {
           </button>
         </div>
       </form>
+
+      {isEdit && isAdmin && recipeQuery.data && (
+        <section className="recipe-form__danger" aria-labelledby="recipe-danger-heading">
+          <h3 id="recipe-danger-heading">Danger zone</h3>
+          <p>
+            Permanently deleting a recipe removes it and its photo forever. Retire it instead if you
+            only want to stop planning it.
+          </p>
+          <button
+            type="button"
+            className="button--danger"
+            onClick={() => {
+              setDeleteError(null)
+              setDeleteOpen(true)
+            }}
+          >
+            Delete this recipe permanently
+          </button>
+        </section>
+      )}
+
+      {deleteOpen && recipeQuery.data && (
+        <DangerousActionDialog
+          title="Delete recipe permanently"
+          description={`Permanently delete "${recipeQuery.data.name}".`}
+          warnings={[
+            'This is irreversible. There is no undo and nothing can be restored.',
+            "The recipe's photo is deleted.",
+            'Planned meals for this recipe today and in the future are removed.',
+            'Past meals are kept as read-only history: their statistics and meal history remain, but the meals no longer link to a recipe.',
+          ]}
+          reasonLabel="Reason"
+          acknowledgementLabel="I understand this permanently deletes the recipe and cannot be undone."
+          confirmation={{
+            label: 'Type the recipe name to confirm',
+            expected: recipeQuery.data.name,
+            hint: 'The confirmation is case-sensitive and must match the recipe name exactly.',
+          }}
+          confirmLabel="Delete permanently"
+          busy={hardDelete.isPending}
+          error={deleteError}
+          onConfirm={(values) => void handleHardDelete(values)}
+          onClose={() => {
+            if (!hardDelete.isPending) {
+              setDeleteOpen(false)
+            }
+          }}
+        />
+      )}
     </section>
   )
 }

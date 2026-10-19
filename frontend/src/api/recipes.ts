@@ -273,6 +273,43 @@ export function updateRecipe(id: number, request: RecipeWriteRequest): Promise<R
   return apiRequest<Recipe>(`/recipes/${id}`, { method: 'PATCH', body: request })
 }
 
+/* ---------- hard delete (Admin-only, M12-08) ---------- */
+
+/**
+ * Body of the irreversible hard delete (docs/API.md §10). `reason` is required
+ * (≤ 500 chars) and `confirmation` must equal the exact recipe name; the server
+ * re-validates both through the shared `DangerousActionGuard`.
+ */
+export interface RecipeHardDeleteRequest {
+  reason: string
+  confirmation: string
+}
+
+/** Result counts reported by `DELETE /recipes/{id}` (docs/API.md §10). */
+export interface RecipeHardDeleteResult {
+  recipe_id: number
+  /** Today/future planned entries removed so nothing references the recipe. */
+  removed_planned_entries: number
+  /** Past entries kept as read-only tombstones (`include_groceries` stays true). */
+  tombstoned_entries: number
+  removed_images: number
+}
+
+/**
+ * Irreversibly deletes a recipe and its image (Admin-only; the server is the
+ * authority). Today/future planned meals are removed; past meals are kept as
+ * read-only tombstones so history and statistics stay coherent.
+ */
+export function hardDeleteRecipe(
+  id: number,
+  request: RecipeHardDeleteRequest,
+): Promise<RecipeHardDeleteResult> {
+  return apiRequest<RecipeHardDeleteResult>(`/recipes/${id}`, {
+    method: 'DELETE',
+    body: request,
+  })
+}
+
 /* ---------- image ---------- */
 
 export function uploadRecipeImage(id: number, file: File, altText?: string): Promise<RecipeImage> {

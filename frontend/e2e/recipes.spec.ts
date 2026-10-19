@@ -253,6 +253,18 @@ async function mockRecipeApi(page: Page): Promise<{ requests: RecordedRequest[] 
       await route.fulfill({ json: state.detail })
       return
     }
+    if (path === '/recipes/1' && method === 'DELETE') {
+      state.recipes = state.recipes.filter((recipe) => recipe.id !== 1)
+      await route.fulfill({
+        json: {
+          recipe_id: 1,
+          removed_planned_entries: 2,
+          tombstoned_entries: 1,
+          removed_images: 0,
+        },
+      })
+      return
+    }
 
     await route.fulfill({
       status: 404,
@@ -336,6 +348,45 @@ test('recipes: create a recipe with the keyboard only', async ({ page }) => {
 
   await expect(page).toHaveURL('/recipes/1/edit')
   expect(requests.some((entry) => entry.method === 'POST' && entry.path === '/recipes')).toBe(true)
+})
+
+test('recipes: an Admin permanently deletes a recipe from the danger zone', async ({ page }) => {
+  const { requests } = await mockRecipeApi(page)
+  // The danger zone and the shared dialog must be usable on a phone.
+  await page.setViewportSize({ width: 390, height: 844 })
+
+  await page.goto('/recipes/1/edit')
+  await expect(page.getByRole('heading', { level: 2, name: 'Edit recipe' })).toBeVisible()
+
+  await expect(page.getByText('Danger zone')).toBeVisible()
+  await page.getByRole('button', { name: 'Delete this recipe permanently' }).click()
+
+  const dialog = page.getByRole('dialog', { name: 'Delete recipe permanently' })
+  await expect(dialog).toBeVisible()
+
+  // The typed name must match exactly: a case near-miss keeps Delete disabled.
+  await dialog.getByLabel('Reason').fill('Duplicate recipe created by mistake')
+  await dialog.getByRole('checkbox').check()
+  await dialog.getByLabel('Type the recipe name to confirm').fill('alpha chicken')
+  const confirm = dialog.getByRole('button', { name: 'Delete permanently' })
+  await expect(confirm).toBeDisabled()
+
+  await dialog.getByLabel('Type the recipe name to confirm').fill('Alpha Chicken')
+  await expect(confirm).toBeEnabled()
+  await confirm.click()
+
+  // The deleted recipe's editor is gone; the counts are reported on /recipes.
+  await expect(page).toHaveURL('/recipes')
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Removed 2 planned meals' }),
+  ).toBeVisible()
+  const deleteRequest = requests.find(
+    (entry) => entry.method === 'DELETE' && entry.path === '/recipes/1',
+  )
+  expect(deleteRequest?.body).toMatchObject({
+    reason: 'Duplicate recipe created by mistake',
+    confirmation: 'Alpha Chicken',
+  })
 })
 
 test('recipes: the card grid collapses to one column on a phone viewport', async ({ page }) => {

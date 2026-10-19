@@ -6,7 +6,7 @@ import type { Recipe } from '../../api/recipes'
 import type { Ingredient, Unit } from '../../api/referenceData'
 import { adminSession, setupCompleteStatus } from '../../test/fixtures'
 import { installMockFetch, type MockFetch, type MockRoute } from '../../test/mockFetch'
-import { renderWithProviders } from '../../test/utils'
+import { createTestQueryClient, renderWithProviders } from '../../test/utils'
 
 const chicken: Ingredient = {
   id: 5,
@@ -77,10 +77,10 @@ const historyDetail: Recipe = {
   statistics: { last_eaten: '2026-09-30', next_planned: '2026-10-20', times_eaten: 4 },
 }
 
-function baseMocks(routes: MockRoute[]): MockFetch {
+function baseMocks(routes: MockRoute[], session: unknown = adminSession): MockFetch {
   return installMockFetch([
     { path: '/setup/status', body: setupCompleteStatus },
-    { path: '/auth/session', body: adminSession },
+    { path: '/auth/session', body: session },
     { path: '/health/db', body: { status: 'ok', database: 'connected' } },
     {
       path: '/health',
@@ -90,6 +90,7 @@ function baseMocks(routes: MockRoute[]): MockFetch {
     { path: '/units?', body: [grams] },
     { path: '/proteins?', body: [{ id: 5, name: 'Chicken', is_active: true }] },
     { path: '/tags?', body: [] },
+    { path: '/recipes?', method: 'GET', body: { items: [], total: 0, limit: 24, offset: 0 } },
     ...routes,
   ])
 }
@@ -219,5 +220,219 @@ describe('recipe form', () => {
 
     expect(await screen.findByText('Fix these problems before saving')).toBeInTheDocument()
     expect(screen.getAllByText('Enter a recipe name.').length).toBeGreaterThan(0)
+  })
+})
+
+/* ---------- M12-09 hard delete (Admin-only danger zone) ---------- */
+
+/** A member who may edit recipes but is not an Admin. */
+const memberEditorSession = {
+  authenticated: true,
+  auth_mode: 'multiuser',
+  user: { id: 2, username: 'sam', role: 'member' },
+  permissions: ['recipes.view', 'recipes.edit'],
+  must_change_password: false,
+}
+
+const deleteResult = {
+  recipe_id: 1,
+  removed_planned_entries: 2,
+  tombstoned_entries: 1,
+  removed_images: 1,
+}
+
+const DELETE_TRIGGER = 'Delete this recipe permanently'
+const DELETE_CONFIRM = 'Delete permanently'
+
+function deleteBody(mock: MockFetch): Record<string, unknown> | undefined {
+  const call = mock.fetchMock.mock.calls.find(
+    ([url, init]) =>
+      String(url).includes('/recipes/1') &&
+      ((init as RequestInit | undefined)?.method ?? 'GET').toUpperCase() === 'DELETE',
+  )
+  return call
+    ? (JSON.parse(String((call[1] as RequestInit).body)) as Record<string, unknown>)
+    : undefined
+}
+
+async function openDeleteDialog(): Promise<HTMLElement> {
+  fireEvent.click(await screen.findByRole('button', { name: DELETE_TRIGGER }))
+  return screen.findByRole('dialog', { name: 'Delete recipe permanently' })
+}
+
+function fillDeleteDialog(
+  dialog: HTMLElement,
+  {
+    reason = 'Duplicate recipe created by mistake',
+    confirmation = 'Chicken Dinner',
+    acknowledge = true,
+  }: { reason?: string; confirmation?: string; acknowledge?: boolean } = {},
+): void {
+  fireEvent.change(within(dialog).getByLabelText('Reason'), { target: { value: reason } })
+  if (acknowledge) {
+    fireEvent.click(within(dialog).getByRole('checkbox'))
+  }
+  fireEvent.change(within(dialog).getByLabelText('Type the recipe name to confirm'), {
+    target: { value: confirmation },
+  })
+}
+
+describe('recipe hard delete', () => {
+  it('is absent for a member who can edit recipes', async () => {
+    baseMocks([{ path: '/recipes/1', method: 'GET', body: detail }], memberEditorSession)
+
+    renderWithProviders(<App />, { route: '/recipes/1/edit' })
+
+    expect(await screen.findByLabelText('Name')).toHaveValue('Chicken Dinner')
+    expect(screen.queryByRole('button', { name: DELETE_TRIGGER })).not.toBeInTheDocument()
+    expect(screen.queryByText('Danger zone')).not.toBeInTheDocument()
+  })
+
+  it('is absent on the create route for an Admin', async () => {
+    baseMocks([])
+
+    renderWithProviders(<App />, { route: '/recipes/new' })
+    await screen.findByRole('heading', { level: 2, name: 'New recipe' })
+
+    expect(screen.queryByRole('button', { name: DELETE_TRIGGER })).not.toBeInTheDocument()
+    expect(screen.queryByText('Danger zone')).not.toBeInTheDocument()
+  })
+
+  it('appears for an Admin on a saved recipe and opens the shared dialog', async () => {
+    baseMocks([{ path: '/recipes/1', method: 'GET', body: detail }])
+
+    renderWithProviders(<App />, { route: '/recipes/1/edit' })
+
+    const trigger = await screen.findByRole('button', { name: DELETE_TRIGGER })
+    expect(trigger).toBeInTheDocument()
+
+    fireEvent.click(trigger)
+    const dialog = await screen.findByRole('dialog', { name: 'Delete recipe permanently' })
+    expect(dialog).toBeVisible()
+    // The irreversibility and tombstone warnings are stated.
+    expect(within(dialog).getByText(/irreversible\. There is no undo/i)).toBeVisible()
+    expect(within(dialog).getByText(/photo is deleted/i)).toBeVisible()
+    expect(within(dialog).getByText(/today and in the future are removed/i)).toBeVisible()
+    expect(within(dialog).getByText(/kept as read-only history/i)).toBeVisible()
+  })
+
+  it('keeps Delete disabled until the reason, acknowledgement, and exact name are given', async () => {
+    baseMocks([{ path: '/recipes/1', method: 'GET', body: detail }])
+
+    renderWithProviders(<App />, { route: '/recipes/1/edit' })
+
+    const dialog = await openDeleteDialog()
+    const confirm = within(dialog).getByRole('button', { name: DELETE_CONFIRM })
+    expect(confirm).toBeDisabled()
+
+    // Reason and acknowledgement, but a case near-miss on the name.
+    fillDeleteDialog(dialog, { confirmation: 'chicken dinner' })
+    expect(confirm).toBeDisabled()
+    expect(within(dialog).getByText('Type "Chicken Dinner" exactly to confirm.')).toBeVisible()
+
+    fireEvent.change(within(dialog).getByLabelText('Type the recipe name to confirm'), {
+      target: { value: 'Chicken Dinner' },
+    })
+    expect(confirm).toBeEnabled()
+  })
+
+  it('posts the reason and the exact name to DELETE /recipes/{id}', async () => {
+    const mock = baseMocks([
+      { path: '/recipes/1', method: 'GET', body: detail },
+      { path: '/recipes/1', method: 'DELETE', body: deleteResult },
+    ])
+
+    renderWithProviders(<App />, { route: '/recipes/1/edit' })
+
+    const dialog = await openDeleteDialog()
+    fillDeleteDialog(dialog, { reason: 'Duplicate recipe created by mistake' })
+    fireEvent.click(within(dialog).getByRole('button', { name: DELETE_CONFIRM }))
+
+    await waitFor(() => expect(deleteBody(mock)).toBeDefined())
+    expect(deleteBody(mock)).toEqual({
+      reason: 'Duplicate recipe created by mistake',
+      confirmation: 'Chicken Dinner',
+    })
+  })
+
+  it('reports the counts and returns to /recipes on success', async () => {
+    baseMocks([
+      { path: '/recipes/1', method: 'GET', body: detail },
+      { path: '/recipes/1', method: 'DELETE', body: deleteResult },
+    ])
+
+    renderWithProviders(<App />, { route: '/recipes/1/edit' })
+
+    const dialog = await openDeleteDialog()
+    fillDeleteDialog(dialog)
+    fireEvent.click(within(dialog).getByRole('button', { name: DELETE_CONFIRM }))
+
+    expect(await screen.findByRole('heading', { level: 2, name: 'Recipes' })).toBeVisible()
+    expect(
+      await screen.findByText(/Removed 2 planned meals; kept 1 past meal as read-only history/),
+    ).toBeVisible()
+  })
+
+  it.each([
+    {
+      name: 'CONFIRMATION_MISMATCH',
+      status: 400,
+      error: { code: 'CONFIRMATION_MISMATCH', message: 'mismatch', details: {} },
+      expected: /typed confirmation did not match/i,
+    },
+    {
+      name: 'REASON_REQUIRED',
+      status: 400,
+      error: {
+        code: 'REASON_REQUIRED',
+        message: 'reason required',
+        details: { field_errors: { reason: ['Enter a reason.'] } },
+      },
+      expected: 'Enter a reason.',
+    },
+    {
+      name: 'NOT_FOUND',
+      status: 404,
+      error: { code: 'NOT_FOUND', message: 'missing', details: {} },
+      expected: /no longer exists/i,
+    },
+  ])('surfaces $name readably and keeps the dialog open', async ({ status, error, expected }) => {
+    baseMocks([
+      { path: '/recipes/1', method: 'GET', body: detail },
+      { path: '/recipes/1', method: 'DELETE', status, body: { error } },
+    ])
+
+    renderWithProviders(<App />, { route: '/recipes/1/edit' })
+
+    const dialog = await openDeleteDialog()
+    fillDeleteDialog(dialog)
+    fireEvent.click(within(dialog).getByRole('button', { name: DELETE_CONFIRM }))
+
+    expect(await screen.findByText(expected)).toBeVisible()
+    expect(screen.getByRole('dialog', { name: 'Delete recipe permanently' })).toBeVisible()
+  })
+
+  it('invalidates the recipes, calendar, statistics, and audit query families', async () => {
+    baseMocks([
+      { path: '/recipes/1', method: 'GET', body: detail },
+      { path: '/recipes/1', method: 'DELETE', body: deleteResult },
+    ])
+    const queryClient = createTestQueryClient()
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+
+    renderWithProviders(<App />, { route: '/recipes/1/edit', queryClient })
+
+    const dialog = await openDeleteDialog()
+    fillDeleteDialog(dialog)
+    fireEvent.click(within(dialog).getByRole('button', { name: DELETE_CONFIRM }))
+
+    await waitFor(() => {
+      const keys = invalidate.mock.calls.map(
+        ([filters]) => (filters as { queryKey: unknown[] }).queryKey,
+      )
+      expect(keys).toEqual(
+        expect.arrayContaining([['recipes'], ['calendar'], ['statistics'], ['audit']]),
+      )
+    })
   })
 })
