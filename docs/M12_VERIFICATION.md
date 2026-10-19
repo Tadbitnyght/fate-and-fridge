@@ -309,3 +309,36 @@ must be updated with any security/API field change.
 
 This satisfies the `BUG-009`/`BUG-010` precedent (a green CI run on `main` before
 the milestone is declared done).
+
+**Redeploy from the final tree.** Because one of the post-completion fixes is
+**user-visible** (the two new `/progress` → *Future & ideas* entries), the stack
+was rebuilt/redeployed again from `f7b1b78` and re-verified live:
+
+- image **`sha256:73ef22ebcf8ceb0720938ddae103cbcd88ece7771b1a191921750da297d698ac`**
+  (local build, no registry digest), app container
+  `5b89ef97da584d82139122301a559e3bef658f3d1fc1258eb4ae566882aeb9be`, healthy;
+  PostgreSQL untouched (no published host port), **no migrations applied**.
+- `GET /api/v1/health` and `/api/v1/health/db` → 200.
+- Served bundle `index-XubSTjSq.js` matches the fresh build output
+  (served-vs-container SHA-256 identical).
+- `/progress` renders `13 of 15 milestones complete (87%)` with the
+  **`M12 — Administration`** card **Complete**, `Completed 2026-10-19`,
+  `· tag m12-complete`, `· commit 820a20c`; M13/M14 remain Planned.
+- **`/progress` → *Future & ideas*** now lists **"Administration & audit
+  expansion" (V2)** and **"Per-user & device preferences" (V1.x)** — the
+  user-visible proof that the live app reflects `f7b1b78` and not the earlier
+  `820a20c` build.
+- `GET /api/v1/admin/audit?limit=1` → 200 with real rows.
+
+**Note on the unauthenticated 200.** The deploy agent flagged that
+`GET /api/v1/admin/audit` answered 200 without a session. That is **expected, not
+an authorization gap**: the instance is in **single-user mode**
+(`GET /api/v1/setup/status` → `auth_mode: "single_user"`), where — by the locked
+M1 design (`docs/SECURITY.md` §5) — there is no login and any client reaching the
+port acts as the Admin system actor; the network perimeter (trusted LAN + IP
+allowlist) is the only protection, and the wizard warns about it. In multiuser
+mode `RequireAdmin()` enforces the Admin role and the same routes were audited
+401/403 in the integration suite.
+
+**Tag:** `m12-complete` now marks this verification commit (the final tree, which
+is code-identical to the deployed `f7b1b78` apart from documentation).
