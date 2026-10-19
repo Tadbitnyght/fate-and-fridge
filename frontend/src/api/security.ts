@@ -6,6 +6,8 @@ export interface SecuritySettings {
   ip_allowlist_enabled: boolean
   ip_allowlist_ranges: string[]
   trusted_proxies: string[]
+  /** `0` = keep audit entries forever; otherwise the prune window, 7–3650 days. */
+  audit_retention_days: number
 }
 
 /** Partial PATCH body; `confirmed: true` is required when enabling the allowlist. */
@@ -13,6 +15,7 @@ export interface SecuritySettingsPatch {
   ip_allowlist_enabled?: boolean
   ip_allowlist_ranges?: string[]
   trusted_proxies?: string[]
+  audit_retention_days?: number
   confirmed?: boolean
 }
 

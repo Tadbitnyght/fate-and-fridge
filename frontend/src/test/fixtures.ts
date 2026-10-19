@@ -68,6 +68,7 @@ export const securitySettings = {
   ip_allowlist_enabled: false,
   ip_allowlist_ranges: [],
   trusted_proxies: [],
+  audit_retention_days: 365,
 }
 
 export const adminUserRecord = {

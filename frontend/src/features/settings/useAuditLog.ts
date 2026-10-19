@@ -1,6 +1,13 @@
-import { useInfiniteQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
-import { getAuditLog, type AuditLogParams, type AuditLogResponse } from '../../api/audit'
+import {
+  getAuditLog,
+  pruneAuditLog,
+  type AuditLogParams,
+  type AuditLogResponse,
+  type AuditPruneRequest,
+  type AuditPruneResult,
+} from '../../api/audit'
 
 /**
  * Query-key prefix for every audit read (docs/API.md §16). M12-04's export and
@@ -24,5 +31,20 @@ export function useAuditLog(params: AuditLogParams = {}, enabled = true) {
     getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
     retry: false,
     enabled,
+  })
+}
+
+/**
+ * The confirmed, age-based audit retention prune (M12-04). On success the
+ * viewer is invalidated so the pruned rows disappear without a reload. The
+ * export is an imperative download rather than a query, so it has no hook here.
+ */
+export function usePruneAuditLog() {
+  const queryClient = useQueryClient()
+  return useMutation<AuditPruneResult, unknown, AuditPruneRequest>({
+    mutationFn: (body) => pruneAuditLog(body),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: auditQueryKey })
+    },
   })
 }

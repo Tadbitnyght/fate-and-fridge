@@ -1519,8 +1519,9 @@ endpoint (§23). The import route never bypasses ingredient-matching review.
 
 Admin-only read access to the audit log (M12-02; docs/M12_PLAN.md §1.4, §1.5,
 §2.2). No new permission key is introduced: the existing `admin` role — and the
-single-user system actor, which is an Admin — is the authority. The endpoints are
-read-only (M12-04 owns export and retention; M12-03 owns the viewer UI).
+single-user system actor, which is an Admin — is the authority. The viewer is
+read-only; M12-04 adds the export download and the explicit, confirmed retention
+prune below.
 
 ### `GET /api/v1/admin/audit`
 
@@ -1588,6 +1589,71 @@ Response:
   secret-leak invariants continue to hold.
 - Anonymous → `401 AUTH_REQUIRED`; a member → `403 FORBIDDEN`; an Admin or the
   single-user system actor → `200`.
+
+### `GET /api/v1/admin/audit/export`
+
+Admin-only download of the **current filtered view** (M12-04; docs/M12_PLAN.md
+§1.7) with the same filters and ordering as `GET /admin/audit`. Paging is
+ignored — an export is always the whole filtered view, not one page.
+
+`format` is required and is `csv` or `json`; a missing or unknown value is
+`400 VALIDATION_FAILED` with `details.field_errors.format`.
+
+| `format` | Response |
+|----------|----------|
+| `csv` | `Content-Type: text/csv; charset=utf-8`, `Content-Disposition: attachment; filename=audit-log.csv` |
+| `json` | `Content-Type: application/json; charset=utf-8`, `Content-Disposition: attachment; filename=audit-log.json` |
+
+- The JSON body is the same **array of item objects** as the viewer's `items`.
+- The CSV has a fixed header in this order:
+  `id,source,recorded_at,actor_user_id,actor_username,event_type,entity_type,entity_id,summary,reason,ip_address,before,after,metadata`,
+  followed by one row per item, CRLF-separated with no trailing newline.
+- **Quoting.** A CSV cell is wrapped in double quotes when it contains a comma, a
+  double quote, a carriage return, or a line feed; embedded double quotes are
+  doubled.
+- **Formula injection.** A cell whose first character is `=`, `+`, `-`, `@`,
+  tab (U+0009), or carriage return (U+000D) is prefixed with a single apostrophe
+  (`'`) before quoting, so stored text is always displayed literally and never
+  evaluated as a spreadsheet formula.
+- **Cap.** An export is limited to **100,000 rows**. A larger filtered view
+  returns `400 VALIDATION_FAILED` with `details.field_errors.export` rather than
+  truncating silently.
+- Anonymous → `401 AUTH_REQUIRED`; a member → `403 FORBIDDEN`; an Admin or the
+  single-user system actor → `200`.
+
+### `POST /api/v1/admin/audit/prune`
+
+Admin-only, explicitly confirmed, **age-based** deletion of audit rows
+(M12-04; docs/M12_PLAN.md §1.8). Request body:
+
+```json
+{ "reason": "Retention window has passed", "confirmation": "PRUNE" }
+```
+
+- `reason` is required and at most 500 characters; `confirmation` must match
+  `PRUNE` exactly (ordinal, case-sensitive, compared after trimming). The server
+  enforces this independently of the UI dialog: `REASON_REQUIRED`,
+  `REASON_TOO_LONG`, `REASON_INVALID`, or `CONFIRMATION_MISMATCH` with
+  `details.field_errors`.
+- The cutoff is `now - audit_retention_days`, using the injected server clock
+  (`TimeProvider`), never the wall clock. When `audit_retention_days` is `0`
+  ("keep forever") the request is refused with `400 VALIDATION_FAILED` and
+  `details.field_errors.audit_retention_days`.
+- Only `audit_events` rows with `created_at < cutoff` are deleted; a row exactly
+  at the cutoff is kept. `calendar_entry_history` and every other table are never
+  touched, and there is no per-row delete.
+- In the **same transaction, after the delete**, one `audit.pruned` row is written
+  (`entity_type = "audit_log"`, the reason, and
+  `metadata = { deleted_count, cutoff, retention_days }`), so the prune's own row
+  always survives the commit.
+- Response:
+
+```json
+{ "deleted_count": 128, "cutoff": "2025-10-18T18:00:00+00:00", "retention_days": 365 }
+```
+
+- Anonymous → `401 AUTH_REQUIRED`; a member → `403 FORBIDDEN`; an Admin or the
+  single-user system actor may prune.
 
 ---
 
@@ -1755,7 +1821,7 @@ The API should expose domain actions cleanly enough that future service accounts
 
 - `GET /settings/household`, `PATCH /settings/household` — name, timezone (IANA, validated), `week_starts_on`, `default_diner_count` (1–20), `startup_page`. Admin-only for PATCH; any authenticated/single-user caller may GET. `household_name` length is measured in UTF-16 code units (the same unit the server validates), so astral characters such as emoji count as two. `PATCH` is a last-write-wins partial update: concurrent disjoint patches all persist, and concurrent writes to the same field keep the last committed value (no optimistic concurrency). `ETag`/`If-Match` preconditions are deferred to V1.x.
   - The same routes expose the ten randomizer scoring settings (docs/M6_PLAN.md §1.3). `GET` and the `PATCH` response return all ten; `PATCH` validates each against its range (default in parentheses): `randomizer_repeat_lookback_days` (0–60, 7), `randomizer_repeat_lookahead_days` (0–60, 14), `randomizer_repeat_multiplier` (0.01–1.00, 0.10), `randomizer_special_day_multiplier` (0.00–1.00, 0.02), `randomizer_protein_multiplier` (0.10–1.00, 0.70), `randomizer_protein_neighbor_distance` (1–7, 1), `randomizer_favorite_multiplier` (1.00–2.00, 1.10), `randomizer_spacing_near_days` (1–30, 3), `randomizer_spacing_far_days` (1–60, 8), and `randomizer_spacing_search_days` (7–365, 90). Integer fields reject non-integers; multiplier fields reject values outside the range. After per-field validation passes, the effective `randomizer_spacing_far_days` (patch value or the stored value when omitted) must be greater than or equal to the effective `randomizer_spacing_near_days`; a violation returns `400 VALIDATION_FAILED` with a field error on `randomizer_spacing_far_days`. The Household settings UI exposes all ten.
-- `GET /settings/security`, `PATCH /settings/security` — Admin-only. Fields: `ip_allowlist_enabled` (bool), `ip_allowlist_ranges` (array of IPv4/IPv6 addresses or CIDRs), `trusted_proxies` (array, same rules). Bare addresses normalize to single-host ranges (`/32` or `/128`); legacy IPv4 shorthand/hex forms and scope IDs are rejected. Enabling the allowlist requires `confirmed: true` in the same PATCH, at least one range, and coverage of the caller's resolved client address (a loopback caller is exempt because loopback is always allowed); otherwise `400 VALIDATION_FAILED` with `details.field_errors`. Disabling requires no confirmation. GET returns the normalized stored values and changes apply to the next request.
+- `GET /settings/security`, `PATCH /settings/security` — Admin-only. Fields: `ip_allowlist_enabled` (bool), `ip_allowlist_ranges` (array of IPv4/IPv6 addresses or CIDRs), `trusted_proxies` (array, same rules), and `audit_retention_days` (integer; `0` = keep audit entries forever, otherwise `7`–`3650` days, default `365`; a non-integer or out-of-range value returns `400 VALIDATION_FAILED` with `details.field_errors.audit_retention_days`). The retention value feeds the M12-04 audit prune (§16). Bare addresses normalize to single-host ranges (`/32` or `/128`); legacy IPv4 shorthand/hex forms and scope IDs are rejected. Enabling the allowlist requires `confirmed: true` in the same PATCH, at least one range, and coverage of the caller's resolved client address (a loopback caller is exempt because loopback is always allowed); otherwise `400 VALIDATION_FAILED` with `details.field_errors`. Disabling requires no confirmation. GET returns the normalized stored values and changes apply to the next request.
 - Allowlist enforcement: when enabled, every route except `/api/v1/health/*` is limited to loopback and clients covered by `ip_allowlist_ranges`; blocked clients receive `403 IP_NOT_ALLOWED` **before** authentication and setup gating, so a blocked client cannot observe setup state (an allowed client pre-setup still receives `409 SETUP_REQUIRED`).
 - Trusted proxies: forwarded headers are honored only when the immediate socket peer is inside `trusted_proxies`. `X-Forwarded-Proto: https` then sets the request scheme, so `Secure` session/CSRF cookies work behind a TLS-terminating proxy, and `X-Forwarded-For` is walked right-to-left skipping trusted proxies to resolve the real client address. Forwarded headers from untrusted peers are ignored entirely. `/api/v1/health/*` bypasses both the forwarded-header resolution and the allowlist.
 - If the security settings cannot be read (database outage), the allowlist is treated as disabled and forwarded headers as untrusted, with a warning log (fail open); the primary authentication boundary is unaffected.

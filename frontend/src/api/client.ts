@@ -146,6 +146,53 @@ function toApiError(status: number, payload: unknown): ApiError {
   return new ApiError(status, code, message, details)
 }
 
+/** A downloaded file response plus the filename to save it under. */
+export interface DownloadedFile {
+  blob: Blob
+  filename: string
+}
+
+/**
+ * Downloads a file response (docs/API.md §16 export) with the same credentials
+ * as {@link apiRequest}. A non-2xx response is still the shared JSON error
+ * envelope, so failures surface as an {@link ApiError} rather than a broken
+ * download; the filename comes from `Content-Disposition` when present and
+ * otherwise falls back to the caller's suggestion.
+ */
+export async function apiDownload(path: string, fallbackFilename: string): Promise<DownloadedFile> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: 'GET',
+    credentials: 'include',
+    headers: { Accept: 'application/json, text/csv' },
+  })
+
+  if (!response.ok) {
+    const text = await response.text()
+    let payload: unknown
+    if (text.length > 0) {
+      try {
+        payload = JSON.parse(text)
+      } catch {
+        payload = undefined
+      }
+    }
+    throw toApiError(response.status, payload)
+  }
+
+  const blob = await response.blob()
+  return { blob, filename: attachmentFilename(response) ?? fallbackFilename }
+}
+
+/** Extracts a `Content-Disposition` filename, quoted or bare, or null. */
+function attachmentFilename(response: Response): string | null {
+  const header = response.headers.get('Content-Disposition')
+  if (header === null) {
+    return null
+  }
+  const match = /filename\*?=(?:UTF-8'')?["']?([^"';]+)["']?/i.exec(header)
+  return match === null ? null : match[1]
+}
+
 export interface Health {
   status: string
   app: string

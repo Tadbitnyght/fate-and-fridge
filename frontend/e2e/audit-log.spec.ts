@@ -56,8 +56,8 @@ const historyItem = {
   metadata: { kind: 'reroll' },
 }
 
-/** Hermetic audit API: session, users for the actor picker, and the log. */
-async function mockApi(page: Page, searches: string[]): Promise<void> {
+/** Hermetic audit API: session, users, security settings, export, prune, and the log. */
+async function mockApi(page: Page, searches: string[], exports: string[] = []): Promise<void> {
   await page.route('**/api/v1/**', async (route) => {
     const url = new URL(route.request().url())
     const path = url.pathname
@@ -88,6 +88,35 @@ async function mockApi(page: Page, searches: string[]): Promise<void> {
       })
       return
     }
+    if (path.endsWith('/settings/security')) {
+      await route.fulfill({
+        json: {
+          ip_allowlist_enabled: false,
+          ip_allowlist_ranges: [],
+          trusted_proxies: [],
+          audit_retention_days: 365,
+        },
+      })
+      return
+    }
+    if (path.endsWith('/admin/audit/export')) {
+      exports.push(url.search)
+      await route.fulfill({
+        status: 200,
+        headers: {
+          'Content-Type': 'text/csv',
+          'Content-Disposition': 'attachment; filename=audit-log.csv',
+        },
+        body: 'id,source\r\n',
+      })
+      return
+    }
+    if (path.endsWith('/admin/audit/prune')) {
+      await route.fulfill({
+        json: { deleted_count: 2, cutoff: '2025-10-18T18:00:00+00:00', retention_days: 365 },
+      })
+      return
+    }
     if (path.endsWith('/admin/audit')) {
       searches.push(url.search)
       const filtered = url.searchParams.get('event_type') === 'calendar.created'
@@ -106,7 +135,8 @@ async function mockApi(page: Page, searches: string[]): Promise<void> {
 
 test('reads the admin audit log, expands a detail, and filters it', async ({ page }) => {
   const searches: string[] = []
-  await mockApi(page, searches)
+  const exports: string[] = []
+  await mockApi(page, searches, exports)
 
   await page.goto('/settings/audit')
 
@@ -135,6 +165,26 @@ test('reads the admin audit log, expands a detail, and filters it', async ({ pag
   await expect(list.getByRole('listitem')).toHaveCount(1)
   expect(searches.at(-1)).toContain('event_type=calendar.created')
   expect(searches.at(-1)).not.toContain('cursor=')
+
+  // M12-04: the current filtered view exports to CSV/JSON without paging params.
+  await page.getByRole('button', { name: 'Export CSV' }).click()
+  await expect.poll(() => exports.at(-1) ?? '').toContain('format=csv')
+  expect(exports.at(-1)).toContain('event_type=calendar.created')
+  expect(exports.at(-1)).not.toContain('limit=')
+
+  await page.getByRole('button', { name: 'Export JSON' }).click()
+  await expect.poll(() => exports.at(-1) ?? '').toContain('format=json')
+
+  // M12-04: the confirmed prune opens the shared dialog and reports its count.
+  await page.getByRole('button', { name: 'Prune audit log' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Prune audit log' })
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByText(/365-day retention window/i)).toBeVisible()
+  await dialog.getByLabel('Reason').fill('Retention window has passed')
+  await dialog.getByLabel(/cannot be recovered/i).check()
+  await dialog.getByLabel('Type PRUNE to confirm').fill('PRUNE')
+  await dialog.getByRole('button', { name: 'Prune audit log' }).click()
+  await expect(page.getByRole('status')).toContainText('Pruned 2 audit entries')
 
   // Read-only: no row-level edit or delete affordance exists anywhere.
   await expect(page.getByRole('button', { name: /edit|delete|remove/i })).toHaveCount(0)

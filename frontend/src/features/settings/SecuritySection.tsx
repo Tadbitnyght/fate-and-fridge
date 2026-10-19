@@ -11,6 +11,7 @@ import { validateAllowlistText } from '../../utils/ipRanges'
 import { validateAdminPassword, validateAdminUsername } from '../../utils/validation'
 import { useAdminAccess } from './access'
 import { AdminOnlyNotice } from './AdminOnlyNotice'
+import { MAX_AUDIT_RETENTION_DAYS, validateAuditRetentionDays } from './securityValidation'
 import {
   useSecuritySettings,
   useSwitchToMultiuser,
@@ -21,6 +22,7 @@ interface SecurityFormValues {
   enabled: boolean
   rangesText: string
   proxiesText: string
+  retentionDays: string
   confirmed: boolean
 }
 
@@ -29,6 +31,7 @@ function formValuesFrom(settings: SecuritySettings): SecurityFormValues {
     enabled: settings.ip_allowlist_enabled,
     rangesText: settings.ip_allowlist_ranges.join('\n'),
     proxiesText: settings.trusted_proxies.join('\n'),
+    retentionDays: String(settings.audit_retention_days),
     confirmed: settings.ip_allowlist_enabled,
   }
 }
@@ -37,6 +40,7 @@ const SECURITY_FIELD_ERROR_KEYS: Record<keyof SecurityFormValues, string[]> = {
   enabled: ['ip_allowlist_enabled', 'confirmed', 'ip_allowlist_ranges'],
   rangesText: ['ip_allowlist_ranges'],
   proxiesText: ['trusted_proxies'],
+  retentionDays: ['audit_retention_days'],
   confirmed: ['confirmed'],
 }
 
@@ -219,6 +223,10 @@ function SecurityForm({ initial }: { initial: SecuritySettings }) {
     if (proxies.errors.length > 0) {
       clientErrors['trusted_proxies'] = proxies.errors.join(' ')
     }
+    const retention = validateAuditRetentionDays(values.retentionDays)
+    if (retention.error !== undefined) {
+      clientErrors['audit_retention_days'] = retention.error
+    }
     if (values.enabled && needsConfirmation && !values.confirmed) {
       clientErrors['confirmed'] =
         'Confirm that you understand the lockout risk before enabling the allowlist.'
@@ -235,6 +243,11 @@ function SecurityForm({ initial }: { initial: SecuritySettings }) {
         ip_allowlist_enabled: values.enabled,
         ip_allowlist_ranges: ranges.ranges,
         trusted_proxies: proxies.ranges,
+        // Only send the retention when it changed, keeping the last-write-wins
+        // partial-update semantics for the other fields.
+        ...(retention.value !== initial.audit_retention_days
+          ? { audit_retention_days: retention.value }
+          : {}),
         ...(values.enabled ? { confirmed: values.confirmed } : {}),
       })
       setErrors({})
@@ -377,6 +390,28 @@ function SecurityForm({ initial }: { initial: SecuritySettings }) {
             ))}
           </ul>
         )}
+
+        <Field
+          id="security-retention"
+          label="Audit retention (days)"
+          error={errors['audit_retention_days']}
+          hint="0 = keep forever. Otherwise 7–3650 days: audit entries older than this window can be pruned manually."
+        >
+          <input
+            type="number"
+            min={0}
+            max={MAX_AUDIT_RETENTION_DAYS}
+            step={1}
+            inputMode="numeric"
+            spellCheck={false}
+            {...fieldProps('security-retention', {
+              error: errors['audit_retention_days'],
+              hint: true,
+            })}
+            value={values.retentionDays}
+            onChange={(event) => handleChange('retentionDays', event.target.value)}
+          />
+        </Field>
 
         <div className="settings-actions">
           <button type="submit" className="button--primary" disabled={updateSettings.isPending}>

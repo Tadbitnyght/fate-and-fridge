@@ -1,4 +1,4 @@
-import { apiRequest } from './client'
+import { apiDownload, apiRequest, type DownloadedFile } from './client'
 
 /**
  * Typed client for the M12 admin audit contract (docs/API.md §16,
@@ -179,8 +179,7 @@ export function auditEntityTypeLabel(entityType: string): string {
   return ENTITY_TYPE_LABELS.get(entityType) ?? humanize(entityType)
 }
 
-function auditQuery(params: AuditLogParams): string {
-  const query = new URLSearchParams()
+function appendFilterParams(query: URLSearchParams, params: AuditLogParams): void {
   if (params.event_type !== undefined && params.event_type.length > 0) {
     query.set('event_type', params.event_type)
   }
@@ -199,6 +198,11 @@ function auditQuery(params: AuditLogParams): string {
   if (params.to !== undefined && params.to.length > 0) {
     query.set('to', params.to)
   }
+}
+
+function auditQuery(params: AuditLogParams): string {
+  const query = new URLSearchParams()
+  appendFilterParams(query, params)
   if (params.limit !== undefined) {
     query.set('limit', String(params.limit))
   }
@@ -212,4 +216,55 @@ function auditQuery(params: AuditLogParams): string {
 /** Reads one newest-first page of the merged audit timeline (Admin only). */
 export function getAuditLog(params: AuditLogParams = {}): Promise<AuditLogResponse> {
   return apiRequest<AuditLogResponse>(`/admin/audit${auditQuery(params)}`)
+}
+
+/** The two file formats the audit export offers (docs/API.md §16). */
+export type AuditExportFormat = 'csv' | 'json'
+
+/**
+ * Builds the export query for the **current filtered view**: every viewer
+ * filter is forwarded, but the paging controls (`limit`, `cursor`) are
+ * deliberately omitted because an export is the whole filtered view.
+ */
+export function auditExportPath(params: AuditLogParams, format: AuditExportFormat): string {
+  const query = new URLSearchParams()
+  appendFilterParams(query, params)
+  query.set('format', format)
+  return `/admin/audit/export?${query.toString()}`
+}
+
+/**
+ * Downloads the current filtered audit view as CSV or JSON (Admin only). A
+ * `400 VALIDATION_FAILED` (unknown format or over the 100k row cap) rejects with
+ * an {@link ApiError}; the caller surfaces the message.
+ */
+export function downloadAuditLog(
+  params: AuditLogParams,
+  format: AuditExportFormat,
+): Promise<DownloadedFile> {
+  return apiDownload(auditExportPath(params, format), `audit-log.${format}`)
+}
+
+/** Body of the confirmed retention prune (`POST /admin/audit/prune`). */
+export interface AuditPruneRequest {
+  reason: string
+  /** Must be exactly `PRUNE`; the server verifies it independently of the UI. */
+  confirmation: string
+}
+
+/** Result of one executed prune (docs/API.md §16). */
+export interface AuditPruneResult {
+  deleted_count: number
+  /** ISO-8601 instant of the age cutoff that was applied. */
+  cutoff: string
+  retention_days: number
+}
+
+/**
+ * Permanently deletes audit entries older than the configured retention window
+ * (Admin only). The server enforces the reason, the exact confirmation, and the
+ * "keep forever" refusal.
+ */
+export function pruneAuditLog(body: AuditPruneRequest): Promise<AuditPruneResult> {
+  return apiRequest<AuditPruneResult>('/admin/audit/prune', { method: 'POST', body })
 }

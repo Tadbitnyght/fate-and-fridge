@@ -1,17 +1,21 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { App } from '../../App'
 import type { AuditLogItem } from '../../api/audit'
+import { saveDownloadedFile } from '../../lib/download'
 import {
   adminSession,
   adminUserRecord,
   memberSession,
   memberUserRecord,
+  securitySettings,
   setupCompleteStatus,
 } from '../../test/fixtures'
 import { installMockFetch, type MockFetch, type MockRoute } from '../../test/mockFetch'
 import { renderWithProviders } from '../../test/utils'
+
+vi.mock('../../lib/download', () => ({ saveDownloadedFile: vi.fn() }))
 
 const auditItem: AuditLogItem = {
   id: 42,
@@ -51,6 +55,9 @@ const historyItem: AuditLogItem = {
 function renderAudit(
   options: {
     audit?: Partial<MockRoute>
+    export?: Partial<MockRoute>
+    prune?: Partial<MockRoute>
+    security?: unknown
     users?: unknown
     session?: unknown
   } = {},
@@ -59,10 +66,30 @@ function renderAudit(
     { path: '/setup/status', body: setupCompleteStatus },
     { path: '/auth/session', body: options.session ?? adminSession },
     { path: '/users', body: options.users ?? [adminUserRecord, memberUserRecord] },
+    { path: '/settings/security', body: options.security ?? securitySettings },
+    // Export is matched before the viewer because its path contains
+    // `/admin/audit`; the viewer route would otherwise answer it.
+    options.export
+      ? { path: '/admin/audit/export', ...options.export }
+      : {
+          path: '/admin/audit/export',
+          status: 200,
+          raw: 'id,source\r\n',
+          headers: {
+            'Content-Type': 'text/csv',
+            'Content-Disposition': 'attachment; filename=audit-log.csv',
+          },
+        },
     {
       path: '/admin/audit',
       body: { items: [auditItem, historyItem], next_cursor: null },
       ...options.audit,
+    },
+    {
+      path: '/admin/audit/prune',
+      method: 'POST',
+      body: { deleted_count: 3, cutoff: '2026-11-08T18:00:00+00:00', retention_days: 365 },
+      ...options.prune,
     },
   ])
   renderWithProviders(<App />, { route: '/settings/audit' })
@@ -71,8 +98,31 @@ function renderAudit(
 
 function auditRequestUrls(mock: MockFetch): URL[] {
   return mock.fetchMock.mock.calls
-    .filter(([url]) => String(url).includes('/admin/audit'))
+    .filter(([url]) => {
+      const value = String(url)
+      return (
+        value.includes('/admin/audit') &&
+        !value.includes('/admin/audit/export') &&
+        !value.includes('/admin/audit/prune')
+      )
+    })
     .map(([url]) => new URL(String(url), 'http://localhost'))
+}
+
+function exportRequestUrls(mock: MockFetch): URL[] {
+  return mock.fetchMock.mock.calls
+    .filter(([url]) => String(url).includes('/admin/audit/export'))
+    .map(([url]) => new URL(String(url), 'http://localhost'))
+}
+
+function pruneBodies(mock: MockFetch): Array<Record<string, unknown>> {
+  return mock.fetchMock.mock.calls
+    .filter(
+      ([url, init]) =>
+        String(url).endsWith('/admin/audit/prune') &&
+        (init as RequestInit | undefined)?.method === 'POST',
+    )
+    .map(([, init]) => JSON.parse(String((init as RequestInit).body)) as Record<string, unknown>)
 }
 
 function pagedAudit(): Partial<MockRoute> {
@@ -91,6 +141,10 @@ function pagedAudit(): Partial<MockRoute> {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+})
+
+beforeEach(() => {
+  vi.clearAllMocks()
 })
 
 describe('audit log section', () => {
@@ -247,5 +301,150 @@ describe('audit log section', () => {
       'href',
       '/settings/audit',
     )
+  })
+
+  it('exports the current filtered view as CSV and JSON', async () => {
+    const mock = renderAudit()
+
+    await screen.findByRole('list', { name: 'Audit entries' })
+
+    // Activate two filters, then export each format.
+    fireEvent.change(screen.getByLabelText('Event type'), { target: { value: 'calendar.created' } })
+    fireEvent.change(screen.getByLabelText('Source'), { target: { value: 'entry_history' } })
+    await waitFor(() =>
+      expect(auditRequestUrls(mock).at(-1)?.searchParams.get('source')).toBe('entry_history'),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }))
+    await waitFor(() => {
+      const url = exportRequestUrls(mock).at(-1)
+      expect(url?.searchParams.get('format')).toBe('csv')
+      expect(url?.searchParams.get('event_type')).toBe('calendar.created')
+      expect(url?.searchParams.get('source')).toBe('entry_history')
+      // Paging controls never reach an export: it is always the whole view.
+      expect(url?.searchParams.has('limit')).toBe(false)
+      expect(url?.searchParams.has('cursor')).toBe(false)
+    })
+    await waitFor(() =>
+      expect(saveDownloadedFile).toHaveBeenCalledWith(
+        expect.objectContaining({ filename: 'audit-log.csv' }),
+      ),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export JSON' }))
+    await waitFor(() =>
+      expect(exportRequestUrls(mock).at(-1)?.searchParams.get('format')).toBe('json'),
+    )
+  })
+
+  it('surfaces an export failure from the server', async () => {
+    renderAudit({
+      export: {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+        body: {
+          error: {
+            code: 'VALIDATION_FAILED',
+            message: 'The filtered view exceeds the 100000 row export cap.',
+            details: { field_errors: { export: ['too many rows'] } },
+          },
+        },
+      },
+    })
+
+    await screen.findByRole('list', { name: 'Audit entries' })
+    fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }))
+
+    expect(await screen.findByText(/exceeds the 100000 row export cap/i)).toBeInTheDocument()
+    expect(saveDownloadedFile).not.toHaveBeenCalled()
+  })
+
+  it('prunes only after a reason and the exact PRUNE confirmation', async () => {
+    const mock = renderAudit()
+
+    await screen.findByRole('list', { name: 'Audit entries' })
+    fireEvent.click(screen.getByRole('button', { name: 'Prune audit log' }))
+
+    const dialog = await screen.findByRole('dialog', { name: 'Prune audit log' })
+    // The retention window and permanence are explained before confirming.
+    expect(within(dialog).getByText(/365-day retention window/i)).toBeInTheDocument()
+    expect(within(dialog).getByText(/Deletion is permanent/i)).toBeInTheDocument()
+
+    const confirm = within(dialog).getByRole('button', { name: 'Prune audit log' })
+    expect(confirm).toBeDisabled()
+
+    fireEvent.change(within(dialog).getByLabelText('Reason'), {
+      target: { value: 'Retention window has passed' },
+    })
+    expect(confirm).toBeDisabled()
+
+    fireEvent.click(within(dialog).getByLabelText(/cannot be recovered/i))
+    expect(confirm).toBeDisabled()
+
+    fireEvent.change(within(dialog).getByLabelText('Type PRUNE to confirm'), {
+      target: { value: 'prune' },
+    })
+    expect(confirm).toBeDisabled()
+
+    fireEvent.change(within(dialog).getByLabelText('Type PRUNE to confirm'), {
+      target: { value: 'PRUNE' },
+    })
+    expect(confirm).toBeEnabled()
+
+    fireEvent.click(confirm)
+
+    await waitFor(() =>
+      expect(pruneBodies(mock)).toEqual([
+        { reason: 'Retention window has passed', confirmation: 'PRUNE' },
+      ]),
+    )
+    expect(await screen.findByRole('status')).toHaveTextContent('Pruned 3 audit entries')
+    expect(screen.queryByRole('dialog', { name: 'Prune audit log' })).not.toBeInTheDocument()
+  })
+
+  it('keeps the prune dialog open and shows a server refusal', async () => {
+    renderAudit({
+      security: { ...securitySettings, audit_retention_days: 0 },
+      prune: {
+        status: 400,
+        body: {
+          error: {
+            code: 'VALIDATION_FAILED',
+            message: 'Audit retention is set to keep forever, so there is nothing to prune.',
+            details: { field_errors: { audit_retention_days: ['keep forever'] } },
+          },
+        },
+      },
+    })
+
+    await screen.findByRole('list', { name: 'Audit entries' })
+    fireEvent.click(screen.getByRole('button', { name: 'Prune audit log' }))
+
+    const dialog = await screen.findByRole('dialog', { name: 'Prune audit log' })
+    expect(within(dialog).getByText(/keep entries forever/i)).toBeInTheDocument()
+
+    fireEvent.change(within(dialog).getByLabelText('Reason'), { target: { value: 'housekeeping' } })
+    fireEvent.click(within(dialog).getByLabelText(/cannot be recovered/i))
+    fireEvent.change(within(dialog).getByLabelText('Type PRUNE to confirm'), {
+      target: { value: 'PRUNE' },
+    })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Prune audit log' }))
+
+    expect(await within(dialog).findByText(/nothing to prune/i)).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Prune audit log' })).toBeInTheDocument()
+  })
+
+  it('hides the export and prune controls from a member', async () => {
+    installMockFetch([
+      { path: '/setup/status', body: setupCompleteStatus },
+      { path: '/auth/session', body: memberSession },
+    ])
+
+    renderWithProviders(<App />, { route: '/settings/audit' })
+
+    expect(await screen.findByText(/limited to admins/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Export CSV' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Export JSON' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Prune audit log' })).not.toBeInTheDocument()
   })
 })

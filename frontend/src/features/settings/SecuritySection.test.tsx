@@ -211,4 +211,71 @@ describe('security settings section', () => {
       expect(screen.getByText(/downgrading to single-user is not supported/i)).toBeInTheDocument(),
     )
   })
+
+  it('renders the audit retention field and patches a valid change', async () => {
+    const mock = installMockFetch([
+      { path: '/setup/status', body: setupCompleteStatus },
+      { path: '/auth/session', body: adminSession },
+      { path: '/settings/security', body: securitySettings },
+      {
+        path: '/settings/security',
+        method: 'PATCH',
+        body: { ...securitySettings, audit_retention_days: 30 },
+      },
+    ])
+
+    renderWithProviders(<App />, { route: '/settings/security' })
+
+    const field = await screen.findByLabelText('Audit retention (days)')
+    expect(field).toHaveValue(365)
+    expect(screen.getByText(/0 = keep forever/i)).toBeInTheDocument()
+
+    fireEvent.change(field, { target: { value: '30' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save security settings' }))
+
+    expect(await screen.findByText('Security settings saved.')).toBeInTheDocument()
+    expect(patchCalls(mock)).toEqual([
+      {
+        ip_allowlist_enabled: false,
+        ip_allowlist_ranges: [],
+        trusted_proxies: [],
+        audit_retention_days: 30,
+      },
+    ])
+  })
+
+  it('rejects an out-of-range retention value client-side', async () => {
+    const mock = installMockFetch([
+      { path: '/setup/status', body: setupCompleteStatus },
+      { path: '/auth/session', body: adminSession },
+      { path: '/settings/security', body: securitySettings },
+      {
+        path: '/settings/security',
+        method: 'PATCH',
+        body: { ...securitySettings, audit_retention_days: 0 },
+      },
+    ])
+
+    renderWithProviders(<App />, { route: '/settings/security' })
+
+    const field = await screen.findByLabelText('Audit retention (days)')
+    fireEvent.change(field, { target: { value: '5' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save security settings' }))
+
+    expect((await screen.findAllByText(/between 7 and 3650/i)).length).toBeGreaterThan(0)
+    expect(patchCalls(mock)).toHaveLength(0)
+
+    // 0 is the documented "keep forever" escape hatch and is accepted.
+    fireEvent.change(field, { target: { value: '0' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save security settings' }))
+    expect(await screen.findByText('Security settings saved.')).toBeInTheDocument()
+    expect(patchCalls(mock)).toEqual([
+      {
+        ip_allowlist_enabled: false,
+        ip_allowlist_ranges: [],
+        trusted_proxies: [],
+        audit_retention_days: 0,
+      },
+    ])
+  })
 })

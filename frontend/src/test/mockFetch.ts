@@ -35,6 +35,7 @@ export function createResponse(
     headers: new Headers({ 'Content-Type': 'application/json', ...headers }),
     json: async () => JSON.parse(text) as unknown,
     text: async () => text,
+    blob: async () => new Blob([text], { type: headers['Content-Type'] ?? 'application/json' }),
   } as unknown as Response
 }
 

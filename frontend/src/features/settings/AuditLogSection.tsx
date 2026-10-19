@@ -7,15 +7,25 @@ import {
   AUDIT_SOURCES,
   auditEntityTypeLabel,
   auditEventTypeLabel,
+  downloadAuditLog,
+  type AuditExportFormat,
   type AuditLogItem,
   type AuditLogParams,
+  type AuditPruneResult,
   type AuditSource,
 } from '../../api/audit'
+import { isApiError } from '../../api/client'
+import {
+  DangerousActionDialog,
+  type DangerousActionValues,
+} from '../../components/DangerousActionDialog'
 import { ErrorScreen, LoadingScreen } from '../../components/Screens'
 import { formatTimestamp } from '../../lib/dateFormat'
+import { saveDownloadedFile } from '../../lib/download'
 import { useAdminAccess } from './access'
 import { AdminOnlyNotice } from './AdminOnlyNotice'
-import { useAuditLog } from './useAuditLog'
+import { useAuditLog, usePruneAuditLog } from './useAuditLog'
+import { useSecuritySettings } from './useSecuritySettings'
 import { useUsers } from './useUsers'
 
 const PAGE_LIMIT = 50
@@ -26,6 +36,34 @@ function detailKey(item: AuditLogItem): string {
 
 function detailPanelId(item: AuditLogItem): string {
   return `audit-detail-${item.source}-${item.id}`
+}
+
+/**
+ * Builds the prune-dialog warnings for the current retention window. Called
+ * from the click handler (never during render) because the prospective cutoff
+ * depends on the client clock; the server is the authority on the real cutoff.
+ */
+function buildPruneWarnings(retentionDays: number | undefined): string[] {
+  const warnings: string[] = []
+  if (retentionDays === 0) {
+    warnings.push(
+      'Audit retention is set to keep entries forever (0 days), so the server will refuse this prune. Set a retention window in Security settings first.',
+    )
+  } else if (retentionDays !== undefined) {
+    const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000)
+    warnings.push(
+      `Only audit entries older than the ${retentionDays}-day retention window (before ${formatTimestamp(cutoff.toISOString())}) are deleted.`,
+    )
+  } else {
+    warnings.push(
+      'The retention window could not be loaded; the server applies the stored security setting.',
+    )
+  }
+  warnings.push('Deletion is permanent: pruned audit entries cannot be recovered.')
+  warnings.push(
+    'Only the audit log is affected. Calendar entry history and every other record are left untouched.',
+  )
+  return warnings
 }
 
 /**
@@ -64,6 +102,54 @@ export function AuditLogSection(): JSX.Element {
   }
 
   const auditQuery = useAuditLog(params, isAdmin)
+
+  // M12-04: the retention window drives the prune warnings; the export and
+  // prune affordances are Admin-only, like the rest of this section.
+  const securityQuery = useSecuritySettings(isAdmin)
+  const pruneMutation = usePruneAuditLog()
+
+  const [exporting, setExporting] = useState<AuditExportFormat | null>(null)
+  const [exportError, setExportError] = useState<string | null>(null)
+  const [pruneOpen, setPruneOpen] = useState(false)
+  const [pruneError, setPruneError] = useState<string | null>(null)
+  const [pruneWarnings, setPruneWarnings] = useState<string[]>([])
+  const [pruneResult, setPruneResult] = useState<AuditPruneResult | null>(null)
+
+  async function handleExport(format: AuditExportFormat): Promise<void> {
+    setExportError(null)
+    setExporting(format)
+    try {
+      saveDownloadedFile(await downloadAuditLog(params, format))
+    } catch (error) {
+      setExportError(
+        isApiError(error)
+          ? error.message
+          : 'The export failed. Check that the server is reachable and try again.',
+      )
+    } finally {
+      setExporting(null)
+    }
+  }
+
+  async function handlePrune(values: DangerousActionValues): Promise<void> {
+    setPruneError(null)
+    try {
+      const result = await pruneMutation.mutateAsync({
+        reason: values.reason,
+        confirmation: values.confirmation ?? '',
+      })
+      setPruneResult(result)
+      setPruneOpen(false)
+    } catch (error) {
+      setPruneError(
+        isApiError(error)
+          ? error.message
+          : 'Pruning failed. Check that the server is reachable and try again.',
+      )
+    }
+  }
+
+  const retentionDays = securityQuery.data?.audit_retention_days
 
   if (!isAdmin) {
     return (
@@ -173,6 +259,71 @@ export function AuditLogSection(): JSX.Element {
           />
         </div>
       </div>
+
+      <div className="audit-actions" role="group" aria-label="Audit export and retention">
+        <button
+          type="button"
+          onClick={() => void handleExport('csv')}
+          disabled={exporting !== null}
+        >
+          {exporting === 'csv' ? 'Exporting…' : 'Export CSV'}
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleExport('json')}
+          disabled={exporting !== null}
+        >
+          {exporting === 'json' ? 'Exporting…' : 'Export JSON'}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setPruneError(null)
+            setPruneWarnings(buildPruneWarnings(retentionDays))
+            setPruneOpen(true)
+          }}
+        >
+          Prune audit log
+        </button>
+      </div>
+
+      {exportError !== null && (
+        <p className="form__error" role="alert">
+          {exportError}
+        </p>
+      )}
+
+      {pruneResult !== null && (
+        <p className="form__status" role="status">
+          Pruned {pruneResult.deleted_count} audit{' '}
+          {pruneResult.deleted_count === 1 ? 'entry' : 'entries'} (cutoff{' '}
+          {formatTimestamp(pruneResult.cutoff)}).
+        </p>
+      )}
+
+      {pruneOpen && (
+        <DangerousActionDialog
+          title="Prune audit log"
+          description="Permanently delete audit entries older than the retention window."
+          warnings={pruneWarnings}
+          reasonLabel="Reason"
+          acknowledgementLabel="I understand the deleted audit entries cannot be recovered."
+          confirmation={{
+            label: 'Type PRUNE to confirm',
+            expected: 'PRUNE',
+            hint: 'The confirmation is case-sensitive.',
+          }}
+          confirmLabel="Prune audit log"
+          busy={pruneMutation.isPending}
+          error={pruneError}
+          onConfirm={(values) => void handlePrune(values)}
+          onClose={() => {
+            if (!pruneMutation.isPending) {
+              setPruneOpen(false)
+            }
+          }}
+        />
+      )}
 
       {auditQuery.isPending && <LoadingScreen label="Loading audit log…" />}
 
