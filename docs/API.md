@@ -598,9 +598,63 @@ Undo must verify:
 - `POST /recipes/{id}/activate`
 - `POST /recipes/{id}/favorite`
 - `POST /recipes/{id}/unfavorite`
+- `DELETE /recipes/{id}` (Admin-only; M12-08)
 
-Admin destructive:
-- `DELETE /admin/recipes/{id}`
+Retiring a recipe is the normal lifecycle action. Hard deletion is the
+irreversible Admin-only workflow below.
+
+### `DELETE /api/v1/recipes/{id}` (M12-08)
+
+Irreversible hard delete of a recipe (docs/M12_PLAN.md §1.10, §2.2;
+docs/DATABASE.md §14). Admin-only through the existing `admin` role — no new
+permission key — and the single-user system actor is an Admin. Request body:
+
+```json
+{
+  "reason": "Duplicate recipe created by mistake",
+  "confirmation": "Lasagna"
+}
+```
+
+- `reason` is required and at most 500 characters; `confirmation` must equal the
+  **exact recipe name** (ordinal, case-sensitive, compared after trimming). Both
+  are enforced server-side by the shared `DangerousActionGuard`: a missing/blank
+  reason fails `400 REASON_REQUIRED`, an over-long one `400 REASON_TOO_LONG`, a
+  null character `400 REASON_INVALID`, and a mismatched name
+  `400 CONFIRMATION_MISMATCH`, each with `details.field_errors`.
+- An unknown id fails `404 NOT_FOUND` before the guard is evaluated.
+- One transaction performs the whole workflow:
+  - every referencing calendar entry gets durable snapshot text
+    (`snapshot_recipe_name` / `snapshot_display_text`) before its reference is
+    cleared — an existing (possibly stale) snapshot is preserved; only a
+    missing/blank value is backfilled from the recipe being deleted;
+  - entries dated **today or later** are removed, so nothing stays planned
+    against a deleted recipe;
+  - **past** entries are tombstoned: `recipe_id` becomes `null` while the
+    snapshots are kept and `include_groceries` stays `true`, so statistics,
+    meal history, and grocery attribution stay coherent (the M11 guarantee);
+  - the recipe image row and its stored file are removed, the recipe row is
+    deleted (its ingredient/instruction/protein/tag child rows cascade), and
+    exactly one `recipe.hard_deleted` audit row records the before-image
+    (`id`, `name`, `status`, favourite/diet flags, and ingredient/protein/tag
+    counts — never image bytes), the reason, the actor, the IP, and the counts.
+- **Irreversible**: there is no undo, no soft-delete flag, and nothing left to
+  restore. A failed audit write rolls the whole delete back.
+- Response `200`:
+
+```json
+{
+  "recipe_id": 5,
+  "removed_planned_entries": 2,
+  "tombstoned_entries": 1,
+  "removed_images": 1
+}
+```
+
+- Publishes the existing coarse `recipe.updated` event, plus `calendar.updated`
+  when entries were removed or tombstoned (no new event type).
+- Anonymous → `401 AUTH_REQUIRED`; a member → `403 FORBIDDEN`; an Admin or the
+  single-user system actor may delete.
 
 ---
 

@@ -350,6 +350,36 @@ public sealed class RecipeImageService(
     }
 
     /// <summary>
+    /// Stages the removal of a recipe's active image row on the caller's unit of
+    /// work and returns its stored path, or null when the recipe has no image.
+    /// The M12-08 hard delete owns the transaction and the single
+    /// <c>recipe.hard_deleted</c> audit row, so this helper neither saves nor
+    /// audits; the caller deletes the file with <see cref="DeleteStoredFile"/>
+    /// only after its transaction commits.
+    /// </summary>
+    public async Task<string?> StageRemovalForRecipeAsync(
+        long recipeId,
+        CancellationToken cancellationToken = default)
+    {
+        var image = await dbContext.RecipeImages
+            .SingleOrDefaultAsync(candidate => candidate.RecipeId == recipeId, cancellationToken);
+        if (image is null)
+        {
+            return null;
+        }
+
+        dbContext.RecipeImages.Remove(image);
+        return image.StoragePath;
+    }
+
+    /// <summary>
+    /// Best-effort removal of a stored image file after the database row that
+    /// referenced it has committed (the M12-08 hard delete path).
+    /// </summary>
+    public void DeleteStoredFile(string storagePath) =>
+        TryDeleteFile(storagePath, "hard-deleted");
+
+    /// <summary>
     /// Writes the validated bytes to a fresh server-generated name under the
     /// image root. The name is 32 random hex characters plus the extension of
     /// the detected format; no user input influences the path.

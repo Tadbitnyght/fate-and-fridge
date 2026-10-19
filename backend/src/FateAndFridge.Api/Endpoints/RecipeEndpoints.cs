@@ -224,6 +224,16 @@ public sealed record RecipeListResponse(
     int Offset);
 
 /// <summary>
+/// Response of the M12-08 hard recipe delete (docs/M12_PLAN.md §2.2,
+/// docs/API.md §10): the deleted recipe id and the affected counts.
+/// </summary>
+public sealed record RecipeHardDeleteResponse(
+    long RecipeId,
+    int RemovedPlannedEntries,
+    int TombstonedEntries,
+    int RemovedImages);
+
+/// <summary>
 /// M3 recipe document routes (docs/M3_PLAN.md §2): reads gated by
 /// <c>recipes.view</c>, writes by <c>recipes.edit</c>, with the M1-09
 /// enforcement helpers and the shared error envelope.
@@ -251,6 +261,10 @@ public static class RecipeEndpoints
         group.MapPost("", CreateRecipeAsync).RequirePermission(PermissionKeys.RecipesEdit);
         group.MapGet("/{id:long}", GetRecipeAsync).RequirePermission(PermissionKeys.RecipesView);
         group.MapPatch("/{id:long}", UpdateRecipeAsync).RequirePermission(PermissionKeys.RecipesEdit);
+
+        // M12-08: the irreversible Admin-only hard delete. Admin-only via the
+        // existing role, with no new permission key (docs/M12_PLAN.md §1.1).
+        group.MapDelete("/{id:long}", HardDeleteRecipeAsync).RequireAdmin();
 
         return app;
     }
@@ -544,6 +558,80 @@ public static class RecipeEndpoints
             RecipeMutationResult.Conflict conflict => RecipeConflict(conflict.ExistingId),
             _ => NotFound(),
         };
+    }
+
+    /// <summary>
+    /// M12-08 irreversible hard delete (docs/M12_PLAN.md §1.10, §2.2, docs/API.md
+    /// §18). Admin-only through <c>RequireAdmin()</c> with no new permission key;
+    /// the shared dangerous-action guard verifies the reason and the exact
+    /// recipe-name confirmation server-side inside the delete service (the name is
+    /// only known once the recipe is loaded), and live sync reuses the existing
+    /// coarse <c>recipe.updated</c> / <c>calendar.updated</c> events.
+    /// </summary>
+    private static async Task<IResult> HardDeleteRecipeAsync(
+        long id,
+        HttpContext context,
+        ICurrentActorProvider actorProvider,
+        RecipeHardDeleteService hardDelete,
+        ILiveSyncPublisher liveSync,
+        CancellationToken cancellationToken)
+    {
+        var (root, error) = await ReadObjectAsync(context, cancellationToken);
+        if (error is not null)
+        {
+            return error;
+        }
+
+        var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        var reason = ReadOptionalString(root, "reason", errors);
+        var confirmation = ReadOptionalString(root, "confirmation", errors);
+        if (errors.Count > 0)
+        {
+            return ApiResults.ValidationError(errors);
+        }
+
+        var (actorUserId, ipAddress, actorError) = await ResolveActorAsync(
+            context,
+            actorProvider,
+            cancellationToken);
+        if (actorError is not null)
+        {
+            return actorError;
+        }
+
+        var result = await hardDelete.DeleteAsync(
+            id,
+            reason.IsSet ? reason.Value : null,
+            confirmation.IsSet ? confirmation.Value : null,
+            ipAddress,
+            actorUserId,
+            cancellationToken);
+
+        switch (result)
+        {
+            case RecipeHardDeleteOutcome.Success success:
+                await liveSync.RecipeUpdatedAsync(actorUserId, success.RecipeId, cancellationToken);
+                if (success.RemovedPlannedEntries + success.TombstonedEntries > 0)
+                {
+                    await liveSync.CalendarUpdatedAsync(
+                        actorUserId,
+                        cancellationToken: cancellationToken);
+                }
+
+                return Results.Ok(new RecipeHardDeleteResponse(
+                    success.RecipeId,
+                    success.RemovedPlannedEntries,
+                    success.TombstonedEntries,
+                    success.RemovedImages));
+            case RecipeHardDeleteOutcome.ValidationFailed failed:
+                return ApiResults.Error(
+                    StatusCodes.Status400BadRequest,
+                    failed.Failure.Code,
+                    failed.Failure.Message,
+                    failed.Failure.ToErrorDetails());
+            default:
+                return NotFound();
+        }
     }
 
     private static RecipeWriteRequest ReadWriteRequest(

@@ -60,6 +60,10 @@ public static class AuditEventTypes
     // Recipe lifecycle: status -> retired.
     public const string RecipeRetired = "recipe.retired";
 
+    // M12-08: an Admin irreversibly hard-deleted a recipe; the row retains the
+    // recipe before-image, the reason, and the affected counts.
+    public const string RecipeHardDeleted = "recipe.hard_deleted";
+
     // Users and permissions.
     public const string UserCreated = "user.created";
 

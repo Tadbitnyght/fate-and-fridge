@@ -119,6 +119,9 @@ builder.Services.AddScoped<CalendarService>();
 // M12-06: the Admin-only historical correction of one past date.
 builder.Services.AddScoped<HistoricalCorrectionService>();
 
+// M12-08: the Admin-only irreversible hard recipe delete.
+builder.Services.AddScoped<RecipeHardDeleteService>();
+
 // M6-08: the single-date reroll orchestrator (context build + atomic history).
 builder.Services.AddScoped<CalendarRandomizer>();
 

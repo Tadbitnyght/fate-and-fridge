@@ -518,6 +518,14 @@ Before delete:
 
 No broken foreign keys.
 
+Implemented by M12-08 in one transaction (docs/API.md §10): entries dated
+**today or later** that reference the recipe are **removed**, **past** entries
+are **tombstoned** (`recipe_id` → `null`, snapshots preserved, and
+`include_groceries` stays `true`), missing snapshot text is backfilled first, and
+`calendar_entry_history` rows keep their copied meal date and before/after JSON.
+The recipe's image row and stored file and the recipe row itself are deleted; one
+`recipe.hard_deleted` audit row retains the before-image and the counts.
+
 ---
 
 ## 15. Ingredient Merge Transaction
