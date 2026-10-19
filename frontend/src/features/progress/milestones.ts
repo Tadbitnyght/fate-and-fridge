@@ -397,7 +397,7 @@ export const MILESTONES: Milestone[] = [
     evidence: [
       { label: 'Backend tests', value: '2293' },
       { label: 'Vitest', value: '489' },
-      { label: 'Playwright (hermetic)', value: '69 passed / 3 pre-existing stack skips' },
+      { label: 'Playwright (hermetic)', value: '70 passed / 3 pre-existing stack skips' },
       { label: 'M12 verification', value: 'independent review + full §4 battery' },
       { label: 'Backend gates', value: 'format/build/EF clean' },
     ],

@@ -160,7 +160,7 @@ share times out Vitest/Playwright workers) with a real local `node_modules`.
 | `dotnet ef migrations has-pending-model-changes` | no pending model changes |
 | Backend tests (full Release suite) | **2293 passed / 0 failed / 0 skipped** (the earlier run's single failure — the M9 route-matrix guard — was fixed in `c7843a3`) |
 | Vitest | 48 files / 489 tests passed |
-| Playwright (hermetic) | 69 passed / 3 gated stack skips |
+| Playwright (hermetic) | 70 passed / 3 gated stack skips |
 | `npm run lint` / `format:check` / `typecheck` | clean |
 
 ---
@@ -245,5 +245,67 @@ already up to date.", as expected — M12 added none.
 
 ## CI status after completion
 
-_Pending the push of the completion commits to `main`; recorded next, then the
-tag is cut._
+**Post-completion CI incident (found and fixed on `main`).** The first CI run on
+the completion commits (run `39234859827`, commit `ebcaf0a`) was **red**: the
+backend, format and compose jobs passed, but the frontend job failed
+`src/features/progress/futureFeatures.test.ts` —
+*"missing manifest entry for section 'Administration & audit expansion'"*. The
+guard asserts that **every** `##` section of `docs/FUTURE_FEATURES.md` has a
+matching entry (with the same status) in the offline
+`frontend/src/features/progress/futureFeatures.ts` manifest, and M12 added two
+registry sections (`Administration & audit expansion` → V2 and, from the M12-01
+session, `Per-user & device preferences` → V1.x) without their manifest entries.
+The stack-acceptance job was consequently skipped.
+
+This was masked locally because the frontend test mirror held only `frontend/`,
+so `resolve(process.cwd(), '../docs/FUTURE_FEATURES.md')` did not exist and the
+test **skipped with a warning** (the test documents that pitfall). The mirror now
+also carries `docs/`, so the guard runs locally from now on.
+
+**Fix:** `1ed2e09` adds both manifest entries (`v2` / `v1x`) with summaries and
+provenance. Verified locally in a repo-shaped mirror: `futureFeatures.test.ts`
+3/3 with no skip warning, full Vitest 48 files / 489 tests, and
+lint/format/typecheck clean.
+
+**Tag/commit note:** the annotated tag `m12-complete` was cut on `ebcaf0a` (the
+verification commit, the M9/M10 convention) *before* CI reported, so the tag
+points at the commit that carried the pre-fix registry gap. The milestone's
+feature content, the manifest's recorded completion commit (`820a20c`) and the
+live deployment (image `sha256:99a114cd…`, built from `820a20c`) are unaffected —
+the fix only adds offline registry entries that have no runtime behaviour.
+Following the `BUG-009`/`BUG-010` precedent, the incident is recorded here rather
+than hidden; the tag was left in place.
+
+**Post-completion CI incident 2 (found and fixed on `main`).** After the registry
+fix, CI (run `39238281072`, commit `1ed2e09`) passed the frontend, backend and
+compose jobs but the **stack-acceptance** job failed one Playwright spec:
+`e2e/settings.spec.ts` › *"admin saves the IP allowlist with the lockout
+confirmation"* timed out waiting for "Security settings saved.".
+
+Cause: that spec keeps its **own inline** security payload (it does not use
+`src/test/fixtures.ts`), and the inline payload predated M12-04's
+`audit_retention_days`. With the field absent, the form initialised the retention
+input as `"undefined"`, client-side validation rejected it, and the submit was
+blocked — so the success message never rendered. This only shows up when the
+spec runs against the real contract; the earlier local full suite had passed
+because the mirror's copy of that spec predated the change.
+
+**Fix:** `98b3985` adds `audit_retention_days: 365` to that inline payload so it
+matches the shipped contract. Verified locally: the spec 4/4, the full hermetic
+suite **70 passed / 3 gated stack skips**, Vitest 48 files / 489 tests.
+
+**Process note (adopted):** frontend verification now runs from a **repo-shaped**
+mirror (`frontend/` **and** `docs/`), so the registry-parity guard cannot silently
+skip, and e2e specs with inline fixtures are treated as contract duplicates that
+must be updated with any security/API field change.
+
+**Final CI status:** **GREEN.** Run **39241785391** on **`98b3985`** —
+`conclusion: success`, all four jobs green:
+
+- Frontend (lint, types, tests, build): success
+- Backend (format, build, migrations, tests): success
+- Compose configuration: success
+- Docker stack acceptance + Playwright: success
+
+This satisfies the `BUG-009`/`BUG-010` precedent (a green CI run on `main` before
+the milestone is declared done).
