@@ -1,22 +1,20 @@
 import { useState, type FormEvent } from 'react'
 
-import {
-  CALENDAR_ENTRY_LABELS,
-  CALENDAR_ENTRY_TYPES,
-  CALENDAR_ICONS,
-  ICON_ENTRY_TYPES,
-  type CalendarEntryType,
-  type CalendarOperation,
-  type CalendarWriteRequest,
-} from '../../api/calendar'
+import { CALENDAR_ENTRY_LABELS, type CalendarOperation } from '../../api/calendar'
 import { isApiError } from '../../api/client'
 import { ErrorCodes } from '../../api/errorCodes'
 import { Modal } from '../../components/Modal'
-import { formatHouseholdDate } from '../../lib/dateFormat'
-import { useRecipeList } from '../recipes/useRecipes'
-import { fullDateLabel } from './calendarDates'
 import { EventIcon } from './icons'
+import { CalendarEntryFields } from './CalendarEntryFields'
+import {
+  EMPTY_CALENDAR_ENTRY_FIELDS,
+  calendarEntryFieldsFromEntry,
+  toCalendarWriteRequest,
+  type CalendarEntryFieldsValue,
+} from './calendarEntryFields'
+import { HistoricalCorrectionDialog } from './HistoricalCorrectionDialog'
 import { RerollControl } from './RerollControl'
+import { fullDateLabel } from './calendarDates'
 import {
   useCalendarDay,
   useCalendarRepeatCheck,
@@ -25,26 +23,28 @@ import {
   useSetCalendarLock,
 } from './useCalendar'
 
-const TYPE_LABELS = CALENDAR_ENTRY_TYPES.map((type) => ({
-  value: type,
-  label: CALENDAR_ENTRY_LABELS[type],
-}))
-
 /**
  * Date detail editor (M5-11). A modal that creates/replaces, deletes, or
- * locks a date's entry. Historical dates render read-only (M5-12); the server
- * enforces that independently.
+ * locks a date's entry. Historical dates render read-only (M5-12); an Admin can
+ * launch the M12-07 historical-correction flow from here. The server enforces
+ * past-date immutability and authorization independently.
  */
 export function DateDetailDialog({
   date,
   canEdit,
+  isAdmin = false,
   onClose,
   onRerolled,
+  onCorrected,
 }: {
   date: string
   canEdit: boolean
+  /** UI visibility only (from `useAdminAccess`): the server is the authority. */
+  isAdmin?: boolean
   onClose: () => void
   onRerolled: (operation: CalendarOperation) => void
+  /** Called after a successful historical correction, before the dialog closes. */
+  onCorrected?: () => void
 }) {
   const dayQuery = useCalendarDay(date)
   const day = dayQuery.data
@@ -52,18 +52,10 @@ export function DateDetailDialog({
   const deleteMutation = useDeleteCalendarDay()
   const lockMutation = useSetCalendarLock()
 
-  const [entryType, setEntryType] = useState<CalendarEntryType>('recipe')
-  const [recipeId, setRecipeId] = useState<number | null>(null)
-  const [recipeName, setRecipeName] = useState<string | null>(null)
-  const [recipeSearch, setRecipeSearch] = useState('')
-  const [dinerCount, setDinerCount] = useState('')
-  const [restaurantName, setRestaurantName] = useState('')
-  const [locationText, setLocationText] = useState('')
-  const [customLabel, setCustomLabel] = useState('')
-  const [notes, setNotes] = useState('')
-  const [iconKey, setIconKey] = useState('')
+  const [fields, setFields] = useState<CalendarEntryFieldsValue>(EMPTY_CALENDAR_ENTRY_FIELDS)
   const [error, setError] = useState<string | null>(null)
   const [loadedKey, setLoadedKey] = useState<string | null>(null)
+  const [correcting, setCorrecting] = useState(false)
 
   const entry = day?.entry ?? null
   const isHistorical = day?.is_historical ?? false
@@ -73,41 +65,18 @@ export function DateDetailDialog({
   // documented derive-from-props pattern and avoids a state-syncing effect.
   const entryKey = day ? `${day.date}:${day.entry?.updated_at ?? 'new'}` : null
   if (day && entryKey !== null && entryKey !== loadedKey) {
-    const current = day.entry
     setLoadedKey(entryKey)
-    setEntryType(current?.entry_type ?? 'recipe')
-    setRecipeId(current?.recipe?.id ?? null)
-    setRecipeName(current?.recipe?.name ?? null)
-    setRecipeSearch('')
-    setDinerCount(current?.diner_count != null ? String(current.diner_count) : '')
-    setRestaurantName(current?.restaurant_name ?? '')
-    setLocationText(current?.location_text ?? '')
-    setCustomLabel(current?.custom_label ?? '')
-    setNotes(current?.notes ?? '')
-    setIconKey(current?.icon_key ?? '')
+    setFields(calendarEntryFieldsFromEntry(day.entry))
     setError(null)
   }
 
-  const repeatCheck = useCalendarRepeatCheck(date, recipeId)
-  const recipeResults = useRecipeList(
-    recipeSearch.trim().length >= 2 ? { search: recipeSearch, limit: 5 } : { limit: 5 },
-  )
+  const repeatCheck = useCalendarRepeatCheck(date, fields.recipeId)
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault()
     setError(null)
-    const request: CalendarWriteRequest = {
-      entry_type: entryType,
-      recipe_id: recipeId,
-      diner_count: dinerCount.trim() === '' ? null : Number(dinerCount),
-      restaurant_name: restaurantName.trim() === '' ? null : restaurantName,
-      location_text: locationText.trim() === '' ? null : locationText,
-      custom_label: customLabel.trim() === '' ? null : customLabel,
-      notes: notes.trim() === '' ? null : notes,
-      icon_key: iconKey === '' ? null : iconKey,
-    }
     try {
-      await saveMutation.mutateAsync({ date, request })
+      await saveMutation.mutateAsync({ date, request: toCalendarWriteRequest(fields) })
       onClose()
     } catch (caught) {
       setError(describeSaveError(caught))
@@ -143,9 +112,31 @@ export function DateDetailDialog({
     onClose()
   }
 
+  // The correction flow replaces this dialog (one modal at a time), so the
+  // shared Modal keeps a single focus trap.
+  if (correcting) {
+    return (
+      <HistoricalCorrectionDialog
+        date={date}
+        onClose={() => setCorrecting(false)}
+        onCorrected={() => {
+          onCorrected?.()
+          onClose()
+        }}
+      />
+    )
+  }
+
   const pending = saveMutation.isPending || deleteMutation.isPending || lockMutation.isPending
 
-  const repeatWarning = repeatCheck.data?.is_repeat ? repeatCheck.data : null
+  const repeatWarning =
+    repeatCheck.data?.is_repeat === true ? (
+      <p className="form__notice" role="status">
+        This recipe also appears on{' '}
+        {repeatCheck.data.occurrences.map((occurrence) => occurrence.date).join(', ')} in the repeat
+        window. You can still save it.
+      </p>
+    ) : null
 
   const title = `${fullDateLabel(date)}${isHistorical ? ' — read-only' : ''}`
 
@@ -176,10 +167,18 @@ export function DateDetailDialog({
             <p className="page-note">Nothing planned.</p>
           )}
           {isHistorical && (
-            <p className="page-note">
-              Past dates are read-only. An Admin can correct history from the administration
-              workflow.
-            </p>
+            <>
+              <p className="page-note">
+                Past dates are read-only. An Admin can correct history; every correction is audited.
+              </p>
+              {isAdmin && (
+                <div className="modal__actions calendar-detail__actions">
+                  <button type="button" onClick={() => setCorrecting(true)}>
+                    Correct this date
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
@@ -196,178 +195,11 @@ export function DateDetailDialog({
             </p>
           )}
 
-          <label className="calendar-detail__field" htmlFor="calendar-entry-type">
-            <span>Type</span>
-            <select
-              id="calendar-entry-type"
-              value={entryType}
-              onChange={(event) => {
-                setEntryType(event.target.value as CalendarEntryType)
-                if (!ICON_ENTRY_TYPES.includes(event.target.value as CalendarEntryType)) {
-                  setIconKey('')
-                }
-              }}
-            >
-              {TYPE_LABELS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {(entryType === 'recipe' ||
-            entryType === 'host_family_dinner' ||
-            entryType === 'holiday' ||
-            entryType === 'misc') && (
-            <div className="calendar-detail__field">
-              <label htmlFor="calendar-recipe-search">
-                {entryType === 'recipe' ? 'Recipe (required)' : 'Recipe (optional)'}
-              </label>
-              <input
-                id="calendar-recipe-search"
-                type="text"
-                autoComplete="off"
-                placeholder="Search recipes"
-                value={recipeSearch}
-                onChange={(event) => setRecipeSearch(event.target.value)}
-              />
-              {recipeSearch.trim().length >= 2 && (recipeResults.data?.items ?? []).length > 0 && (
-                <ul className="calendar-detail__results">
-                  {(recipeResults.data?.items ?? []).map((candidate) => (
-                    <li key={candidate.id}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setRecipeId(candidate.id)
-                          setRecipeName(candidate.name)
-                          setRecipeSearch('')
-                        }}
-                      >
-                        {candidate.image && (
-                          <img
-                            className="calendar-detail__thumb"
-                            src={candidate.image.url}
-                            alt=""
-                          />
-                        )}
-                        <span className="calendar-detail__result-name">{candidate.name}</span>
-                        <span className="calendar-detail__result-meta">
-                          {candidate.last_eaten
-                            ? `Last eaten ${formatHouseholdDate(candidate.last_eaten)}`
-                            : 'Not eaten yet'}
-                          {candidate.times_eaten != null && ` · ${candidate.times_eaten}×`}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {recipeId !== null && (
-                <p className="form__hint">
-                  Selected: <strong>{recipeName}</strong>{' '}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRecipeId(null)
-                      setRecipeName(null)
-                    }}
-                  >
-                    Clear
-                  </button>
-                </p>
-              )}
-              {repeatWarning && (
-                <p className="form__notice" role="status">
-                  This recipe also appears on{' '}
-                  {repeatWarning.occurrences.map((occurrence) => occurrence.date).join(', ')} in the
-                  repeat window. You can still save it.
-                </p>
-              )}
-            </div>
-          )}
-
-          {(entryType === 'host_family_dinner' ||
-            entryType === 'holiday' ||
-            entryType === 'misc') && (
-            <label className="calendar-detail__field" htmlFor="calendar-custom-label">
-              <span>{entryType === 'misc' ? 'Label (required)' : 'Name (optional)'}</span>
-              <input
-                id="calendar-custom-label"
-                type="text"
-                autoComplete="off"
-                value={customLabel}
-                onChange={(event) => setCustomLabel(event.target.value)}
-              />
-            </label>
-          )}
-
-          {entryType === 'eat_out' && (
-            <label className="calendar-detail__field" htmlFor="calendar-restaurant">
-              <span>Restaurant (optional)</span>
-              <input
-                id="calendar-restaurant"
-                type="text"
-                autoComplete="off"
-                value={restaurantName}
-                onChange={(event) => setRestaurantName(event.target.value)}
-              />
-            </label>
-          )}
-
-          {entryType === 'go_to_family_dinner' && (
-            <label className="calendar-detail__field" htmlFor="calendar-location">
-              <span>Host / location (optional)</span>
-              <input
-                id="calendar-location"
-                type="text"
-                autoComplete="off"
-                value={locationText}
-                onChange={(event) => setLocationText(event.target.value)}
-              />
-            </label>
-          )}
-
-          {ICON_ENTRY_TYPES.includes(entryType) && (
-            <label className="calendar-detail__field" htmlFor="calendar-icon">
-              <span>Icon (optional)</span>
-              <select
-                id="calendar-icon"
-                value={iconKey}
-                onChange={(event) => setIconKey(event.target.value)}
-              >
-                <option value="">No icon</option>
-                {CALENDAR_ICONS.map((icon) => (
-                  <option key={icon} value={icon}>
-                    {icon}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-
-          {entryType === 'host_family_dinner' && (
-            <label className="calendar-detail__field" htmlFor="calendar-diner-count">
-              <span>Diner count (optional)</span>
-              <input
-                id="calendar-diner-count"
-                type="text"
-                inputMode="numeric"
-                value={dinerCount}
-                onChange={(event) => setDinerCount(event.target.value)}
-              />
-            </label>
-          )}
-
-          <label className="calendar-detail__field" htmlFor="calendar-notes">
-            <span>Notes (optional)</span>
-            <textarea
-              id="calendar-notes"
-              rows={3}
-              value={notes}
-              onChange={(event) => setNotes(event.target.value)}
-            />
-          </label>
+          <CalendarEntryFields
+            value={fields}
+            repeatWarning={repeatWarning}
+            onChange={(patch) => setFields((current) => ({ ...current, ...patch }))}
+          />
 
           <div className="modal__actions calendar-detail__actions">
             {entry && (

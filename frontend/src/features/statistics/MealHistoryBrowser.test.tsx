@@ -55,13 +55,14 @@ function historyRequests(mock: MockFetch): string[] {
 
 /** Renders the app on the History tab with the meal-log endpoint stubbed. */
 function renderHistory(
-  options: { history?: MockRoute; session?: typeof adminSession } = {},
+  options: { history?: MockRoute; session?: typeof adminSession; extra?: MockRoute[] } = {},
 ): MockFetch {
   const mock = installMockFetch([
     { path: '/setup/status', body: setupCompleteStatus },
     { path: '/auth/session', body: options.session ?? adminSession },
     { path: '/proteins?', body: proteins },
     { path: '/statistics/history', body: sampleHistory(), ...options.history },
+    ...(options.extra ?? []),
   ])
   renderWithProviders(<App />, { route: '/statistics?tab=history' })
   return mock
@@ -73,7 +74,9 @@ afterEach(() => {
 
 describe('meal-history browser', () => {
   it('renders the month label, applied range, and its days newest-first', async () => {
-    renderHistory()
+    // A member with recipes.edit: the live recipe links, and no Admin
+    // correction affordance appears in the row text.
+    renderHistory({ session: { ...memberSession, permissions: ['calendar.view', 'recipes.edit'] } })
 
     const month = await screen.findByRole('region', { name: 'October 2026' })
 
@@ -202,19 +205,19 @@ describe('meal-history browser', () => {
     await waitFor(() => expect(mock.callsFor('/statistics/history')).toBe(2))
   })
 
-  it('offers no edit or delete affordance anywhere', async () => {
+  it('offers an Admin the correction affordance but no edit or delete', async () => {
     renderHistory()
 
     await screen.findByRole('region', { name: 'October 2026' })
 
-    // The panel holds exactly the filter submit and the two paging controls —
-    // no row-level action of any kind.
+    // The panel holds the filter submit, the two paging controls, and one
+    // correction button per day — no edit or delete affordance of any kind.
     const panel = screen.getByRole('tabpanel')
     expect(
       within(panel)
         .getAllByRole('button')
         .map((button) => button.textContent),
-    ).toEqual(['Apply filters', 'Newer', 'Older'])
+    ).toEqual(['Apply filters', 'Newer', 'Older', 'Correct', 'Correct', 'Correct'])
     expect(screen.queryByRole('button', { name: /edit|delete|remove/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /edit|delete|remove/i })).not.toBeInTheDocument()
 
@@ -225,6 +228,58 @@ describe('meal-history browser', () => {
         .map((link) => link.getAttribute('href'))
         .filter((href) => href?.startsWith('/recipes/')),
     ).toEqual(['/recipes/5/edit'])
+  })
+
+  it('hides the correction affordance from a member', async () => {
+    renderHistory({ session: { ...memberSession, permissions: ['calendar.view', 'recipes.view'] } })
+
+    const month = await screen.findByRole('region', { name: 'October 2026' })
+
+    expect(within(month).queryByRole('button', { name: /correct/i })).not.toBeInTheDocument()
+    // Nor anywhere else in the panel (the server is still the authority).
+    expect(screen.queryByRole('button', { name: /correct/i })).not.toBeInTheDocument()
+  })
+
+  it('opens the same correction flow from an Admin row', async () => {
+    renderHistory({
+      extra: [
+        { path: '/recipes?', body: { items: [], total: 0, limit: 5, offset: 0 } },
+        {
+          path: '/calendar/2026-10-15',
+          method: 'GET',
+          body: {
+            date: '2026-10-15',
+            is_today: false,
+            is_historical: true,
+            can_edit: false,
+            entry: {
+              id: 9,
+              entry_type: 'recipe',
+              recipe: { id: 5, name: 'Tacos', image_url: null, status: 'normal' },
+              display_text: 'Tacos',
+              is_locked: false,
+              diner_count: null,
+              effective_diner_count: 4,
+              restaurant_name: null,
+              location_text: null,
+              custom_label: null,
+              notes: null,
+              icon_key: null,
+              include_groceries: true,
+              blocks_automation: false,
+              created_at: '2026-10-15T00:00:00+00:00',
+              updated_at: '2026-10-15T00:00:00+00:00',
+            },
+            repeat_warning: null,
+          },
+        },
+      ],
+    })
+
+    const month = await screen.findByRole('region', { name: 'October 2026' })
+    fireEvent.click(within(month).getByRole('button', { name: 'Correct the entry for 10-15-26' }))
+
+    expect(await screen.findByRole('dialog', { name: /Correct 10-15-26/i })).toBeInTheDocument()
   })
 
   it('renders a live recipe name as plain text for a view-only member (#148)', async () => {

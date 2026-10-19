@@ -47,6 +47,14 @@ export const ErrorCodes = {
   CalendarEntryLocked: 'CALENDAR_ENTRY_LOCKED',
   CalendarRecipeRequired: 'CALENDAR_RECIPE_REQUIRED',
   CalendarMiscLabelRequired: 'CALENDAR_MISC_LABEL_REQUIRED',
+  // M12-06 historical-correction codes (docs/API.md §7, §17).
+  CalendarDateNotPast: 'CALENDAR_DATE_NOT_PAST',
+  CalendarDateLocked: 'CALENDAR_DATE_LOCKED',
+  // M12-05/M12-11 dangerous-action guard codes (docs/API.md §4).
+  ReasonRequired: 'REASON_REQUIRED',
+  ReasonTooLong: 'REASON_TOO_LONG',
+  ReasonInvalid: 'REASON_INVALID',
+  ConfirmationMismatch: 'CONFIRMATION_MISMATCH',
   // M6 randomizer/undo codes (docs/API.md §7).
   RandomizerNotApplicable: 'RANDOMIZER_NOT_APPLICABLE',
   RandomizerNoCandidates: 'RANDOMIZER_NO_CANDIDATES',

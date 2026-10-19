@@ -9,8 +9,10 @@ import {
 import type { MealHistoryDay, MealHistoryParams } from '../../api/statistics'
 import { ErrorScreen, LoadingScreen } from '../../components/Screens'
 import { useProteins } from '../reference-data/useReferenceData'
+import { useAdminAccess } from '../settings/access'
 import { useStatisticsAccess } from './access'
 import { formatHouseholdDate, formatHouseholdMonth } from '../../lib/dateFormat'
+import { HistoricalCorrectionDialog } from '../calendar/HistoricalCorrectionDialog'
 import { useMealHistory } from './useStatistics'
 
 /**
@@ -19,12 +21,13 @@ import { useMealHistory } from './useStatistics'
  *
  * Every filter and month step is server-side — the component only builds the
  * query and renders what comes back, so paging stays stable and no household
- * date is ever reinterpreted client-side. There is deliberately no edit or
- * delete affordance: past-date editing and admin correction are M12, and past
- * dates are immutable in normal use (docs/M11_PLAN.md §1.9).
+ * date is ever reinterpreted client-side. Past dates are immutable in normal
+ * use; the M12-07 admin correction flow is the only write reachable from here,
+ * and its affordance is hidden from members (the server is the authority).
  */
 export function MealHistoryBrowser(): JSX.Element {
   const { canEditRecipes } = useStatisticsAccess()
+  const { isAdmin } = useAdminAccess()
   // Applied filter state (server-side) plus the unapplied recipe text input,
   // mirroring the recipes browser: a select applies at once, free text on submit.
   const [entryType, setEntryType] = useState<'' | CalendarEntryType>('')
@@ -32,6 +35,8 @@ export function MealHistoryBrowser(): JSX.Element {
   const [recipeInput, setRecipeInput] = useState('')
   const [recipeFilter, setRecipeFilter] = useState('')
   const [month, setMonth] = useState<string | undefined>(undefined)
+  const [correctionDate, setCorrectionDate] = useState<string | null>(null)
+  const [correctionNotice, setCorrectionNotice] = useState<string | null>(null)
 
   const params: MealHistoryParams = {
     month,
@@ -182,11 +187,36 @@ export function MealHistoryBrowser(): JSX.Element {
           ) : (
             <ol className="history-days">
               {history.days.map((day) => (
-                <HistoryDayRow key={day.date} day={day} canEditRecipes={canEditRecipes} />
+                <HistoryDayRow
+                  key={day.date}
+                  day={day}
+                  canEditRecipes={canEditRecipes}
+                  isAdmin={isAdmin}
+                  onCorrect={setCorrectionDate}
+                />
               ))}
             </ol>
           )}
         </section>
+      )}
+
+      {correctionNotice !== null && (
+        <p className="form__notice" role="status">
+          {correctionNotice}
+        </p>
+      )}
+
+      {correctionDate !== null && (
+        <HistoricalCorrectionDialog
+          date={correctionDate}
+          onClose={() => setCorrectionDate(null)}
+          onCorrected={() => {
+            setCorrectionNotice(
+              `Corrected ${formatHouseholdDate(correctionDate)}. The audit log records the change.`,
+            )
+            setCorrectionDate(null)
+          }}
+        />
       )}
     </div>
   )
@@ -196,14 +226,26 @@ export function MealHistoryBrowser(): JSX.Element {
  * One meal-log day. The recipe name links to the recipe's edit page only while
  * the reference is live **and** the caller may edit (`recipes.edit`); a
  * view-only member — and a tombstone — sees the same name as plain text, since
- * the edit page refuses a view-only member (issue #148). The row carries no
- * edit affordance of its own.
+ * the edit page refuses a view-only member (issue #148). An Admin additionally
+ * gets the M12-07 "Correct" affordance; members never see it (the server is the
+ * authority).
  */
-function HistoryDayRow({ day, canEditRecipes }: { day: MealHistoryDay; canEditRecipes: boolean }) {
+function HistoryDayRow({
+  day,
+  canEditRecipes,
+  isAdmin,
+  onCorrect,
+}: {
+  day: MealHistoryDay
+  canEditRecipes: boolean
+  isAdmin: boolean
+  onCorrect: (date: string) => void
+}) {
+  const label = formatHouseholdDate(day.date)
   return (
     <li className="history-day">
       <time className="history-day__date" dateTime={day.date}>
-        {formatHouseholdDate(day.date)}
+        {label}
       </time>
       <span className="history-day__type">{CALENDAR_ENTRY_LABELS[day.entry_type]}</span>
       <span className="history-day__name">
@@ -216,6 +258,16 @@ function HistoryDayRow({ day, canEditRecipes }: { day: MealHistoryDay; canEditRe
       <span className="history-day__protein">
         {day.protein === null ? 'No primary protein' : day.protein}
       </span>
+      {isAdmin && (
+        <button
+          type="button"
+          className="history-day__correct"
+          aria-label={`Correct the entry for ${label}`}
+          onClick={() => onCorrect(day.date)}
+        >
+          Correct
+        </button>
+      )}
     </li>
   )
 }

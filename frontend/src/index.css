@@ -3566,6 +3566,11 @@ a.recipes__import:focus-visible {
   font-size: 0.9rem;
 }
 
+.history-day__correct {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
 /* ---------- audit log viewer (#152, M12-03) ---------- */
 
 .audit-filters {

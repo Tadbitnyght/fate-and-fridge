@@ -119,6 +119,8 @@ to the Lead before implementing.
     navigation**. **Historical correction** is launched from the existing
     meal-history/date view (admin-only affordance); **hard recipe delete** from
     the recipe detail/editor (admin-only affordance). Both use the shared dialog.
+    **Locked 2026-10-18 (M12-07):** the correction UI sends
+    `lock_acknowledged: true` only for a locked date (otherwise `false`) and always types the date as the confirmation.
 13. **Live sync** reuses the existing coarse events — a correction broadcasts
     `calendar.updated` and a hard delete broadcasts `recipe.updated` (+
     `calendar.updated` when planned entries were removed). **No new event type.**

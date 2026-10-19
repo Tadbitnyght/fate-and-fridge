@@ -203,6 +203,18 @@ export interface CalendarWriteRequest {
   icon_key?: string | null
 }
 
+/**
+ * The M12 historical-correction body (docs/API.md §17): the ordinary
+ * full-replace write fields plus the dangerous-action guard fields. `reason` is
+ * required (≤ 500 characters) and `confirmation` must equal the corrected date
+ * as `yyyy-MM-dd`. `lock_acknowledged` is only meaningful for a locked date.
+ */
+export interface CalendarCorrectionRequest extends CalendarWriteRequest {
+  reason: string
+  confirmation: string
+  lock_acknowledged?: boolean
+}
+
 export function getCalendarRange(start: string, end: string): Promise<CalendarRange> {
   return apiRequest<CalendarRange>(`/calendar?start=${start}&end=${end}`)
 }
@@ -217,6 +229,18 @@ export function checkCalendarRepeat(date: string, recipeId: number): Promise<Cal
 
 export function putCalendarDay(date: string, request: CalendarWriteRequest): Promise<CalendarDay> {
   return apiRequest<CalendarDay>(`/calendar/${date}`, { method: 'PUT', body: request })
+}
+
+/**
+ * Admin-only correction of one past date (M12, docs/API.md §17). The server
+ * enforces past-only, the lock acknowledgement, and the reason/typed-date
+ * confirmation; the response is the corrected M5 day document.
+ */
+export function correctCalendarDay(
+  date: string,
+  request: CalendarCorrectionRequest,
+): Promise<CalendarDay> {
+  return apiRequest<CalendarDay>(`/calendar/${date}/correction`, { method: 'POST', body: request })
 }
 
 export function deleteCalendarDay(date: string): Promise<void> {

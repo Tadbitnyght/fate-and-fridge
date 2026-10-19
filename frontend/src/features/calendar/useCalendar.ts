@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   applyBatchReroll,
   checkCalendarRepeat,
+  correctCalendarDay,
   deleteCalendarDay,
   getCalendarDay,
   getCalendarRange,
@@ -14,8 +15,11 @@ import {
   undoCalendarOperation,
   unlockCalendarDay,
   type BatchRerollMode,
+  type CalendarCorrectionRequest,
   type CalendarWriteRequest,
 } from '../../api/calendar'
+import { auditQueryKey } from '../settings/useAuditLog'
+import { statisticsQueryKey } from '../statistics/useStatistics'
 
 /** Query key prefix for every calendar read (invalidation target). */
 export const calendarQueryKey = ['calendar'] as const
@@ -73,6 +77,27 @@ export function useSetCalendarLock() {
     mutationFn: ({ date, locked }: { date: string; locked: boolean }) =>
       locked ? lockCalendarDay(date) : unlockCalendarDay(date),
     onSuccess: invalidate,
+  })
+}
+
+/**
+ * Admin-only correction of one past date (M12-07, docs/API.md §17). On success
+ * the calendar, statistics (meal history/overview), and audit queries are all
+ * invalidated locally, so the corrected row updates immediately even before the
+ * coarse `calendar.updated` live-sync event arrives.
+ */
+export function useCorrectCalendarEntry() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ date, request }: { date: string; request: CalendarCorrectionRequest }) =>
+      correctCalendarDay(date, request),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: calendarQueryKey }),
+        queryClient.invalidateQueries({ queryKey: statisticsQueryKey }),
+        queryClient.invalidateQueries({ queryKey: auditQueryKey }),
+      ])
+    },
   })
 }
 

@@ -8,6 +8,7 @@ import type {
   CalendarOperation,
 } from '../../api/calendar'
 import { useHouseholdSettings } from '../settings/useHouseholdSettings'
+import { formatHouseholdDate } from '../../lib/dateFormat'
 import {
   buildMonthGrid,
   isoDate,
@@ -39,7 +40,7 @@ type UndoTarget =
  * styling, and a print button. All writes are enforced server-side.
  */
 export function CalendarPage(): JSX.Element {
-  const { canView, canEdit } = useCalendarAccess()
+  const { canView, canEdit, isAdmin } = useCalendarAccess()
   const navigate = useNavigate()
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
@@ -49,6 +50,7 @@ export function CalendarPage(): JSX.Element {
   const [undoTarget, setUndoTarget] = useState<UndoTarget | null>(null)
   const [batchMode, setBatchMode] = useState<BatchRerollMode | null>(null)
   const [batchNotice, setBatchNotice] = useState<string | null>(null)
+  const [correctionNotice, setCorrectionNotice] = useState<string | null>(null)
   const [rerollError, setRerollError] = useState<string | null>(null)
   const [undoError, setUndoError] = useState<string | null>(null)
 
@@ -210,6 +212,11 @@ export function CalendarPage(): JSX.Element {
           {batchNotice}
         </p>
       )}
+      {correctionNotice !== null && (
+        <p className="form__notice" role="status">
+          {correctionNotice}
+        </p>
+      )}
       {undoError !== null && (
         <p className="form__error" role="alert">
           {undoError}
@@ -254,8 +261,14 @@ export function CalendarPage(): JSX.Element {
         <DateDetailDialog
           date={selectedDate}
           canEdit={canEdit}
+          isAdmin={isAdmin}
           onClose={() => setSelectedDate(null)}
           onRerolled={handleRerolled}
+          onCorrected={() =>
+            setCorrectionNotice(
+              `Corrected ${formatHouseholdDate(selectedDate)}. The audit log records the change.`,
+            )
+          }
         />
       )}
 
