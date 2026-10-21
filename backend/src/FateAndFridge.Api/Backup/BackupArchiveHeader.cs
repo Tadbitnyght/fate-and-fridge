@@ -69,7 +69,7 @@ public sealed class BackupArchiveHeader
 
         var salt = RandomNumberGenerator.GetBytes(SaltSize);
         var noncePrefix = RandomNumberGenerator.GetBytes(NoncePrefixSize);
-        var keyCheck = BackupArchiveFormat.ComputeKeyCheck(recoveryKey.Span);
+        var keyCheck = BackupArchiveFormat.ComputeKeyCheck(recoveryKey.Span, salt);
 
         return new BackupArchiveHeader(
             BackupArchiveFormat.CurrentFormatVersion,
@@ -118,9 +118,10 @@ public sealed class BackupArchiveHeader
     /// <summary>
     /// Parses and structurally validates a header. Unknown magic, format
     /// version, KDF id, a non-zero reserved guard, or an out-of-range chunk size
-    /// is <c>FORMAT_UNSUPPORTED</c>. Header bytes are authenticated by the
-    /// record AAD, so an altered salt or chunk size fails later with
-    /// <c>INTEGRITY_FAILED</c>.
+    /// is <c>FORMAT_UNSUPPORTED</c>. The salt takes part in the key check, so an
+    /// altered salt (or key-check byte) reports <c>KEY_MISMATCH</c>; any other
+    /// altered header field fails later with <c>INTEGRITY_FAILED</c> because the
+    /// record AAD authenticates the header.
     /// </summary>
     public static BackupArchiveHeader Parse(ReadOnlySpan<byte> bytes)
     {

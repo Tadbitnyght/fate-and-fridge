@@ -96,11 +96,54 @@ public sealed class M13BackupArchiveTests
         exception.Code.Should().Be(BackupArchiveErrorCodes.KeyMismatch);
     }
 
+    [Fact]
+    public async Task Two_archives_with_the_same_key_carry_different_key_checks_and_both_validate()
+    {
+        var entries = new (string Name, byte[] Content)[]
+        {
+            ("database.dump", RandomNumberGenerator.GetBytes(1024)),
+        };
+
+        var (first, _) = await CreateArchiveAsync(entries);
+        var (second, _) = await CreateArchiveAsync(entries);
+
+        var firstKeyCheck = BackupArchiveHeader.Parse(first).KeyCheck.ToArray();
+        var secondKeyCheck = BackupArchiveHeader.Parse(second).KeyCheck.ToArray();
+
+        firstKeyCheck.Should().NotEqual(
+            secondKeyCheck,
+            "the key check is derived with the per-archive header salt, so it is not a cross-archive fingerprint");
+
+        (await ReadArchiveAsync(first, TestKey)).Entries.Should().HaveCount(2);
+        (await ReadArchiveAsync(second, TestKey)).Entries.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task A_flipped_key_check_byte_reports_a_key_mismatch()
+    {
+        var (archive, _) = await CreateArchiveAsync(
+            [("database.dump", RandomNumberGenerator.GetBytes(1024))]);
+
+        // The key check is the last header field, and it is a key verifier: a
+        // flipped byte fails as KEY_MISMATCH before any decryption.
+        archive[BackupArchiveHeader.Size - 1] ^= 0x01;
+
+        await using var input = new MemoryStream(archive, writable: false);
+        var exception = await Assert.ThrowsAsync<BackupArchiveException>(
+            () => BackupArchiveReader.OpenAsync(
+                input,
+                TestKey,
+                expectedSha256: null,
+                TestContext.Current.CancellationToken));
+
+        exception.Code.Should().Be(BackupArchiveErrorCodes.KeyMismatch);
+    }
+
     [Theory]
-    [InlineData(8)]   // salt
-    [InlineData(28)]  // nonce prefix
-    [InlineData(27)]  // chunk size low byte: 65536 -> 65537, still in range
-    public async Task Single_byte_header_tamper_fails_authentication(int offset)
+    [InlineData(8, BackupArchiveErrorCodes.KeyMismatch)]   // salt: part of the key check
+    [InlineData(28, BackupArchiveErrorCodes.IntegrityFailed)]  // nonce prefix: only the record AAD covers it
+    [InlineData(27, BackupArchiveErrorCodes.IntegrityFailed)]  // chunk size low byte: 65536 -> 65537, still in range
+    public async Task Single_byte_header_tamper_fails_authentication(int offset, string expectedCode)
     {
         var (archive, _) = await CreateArchiveAsync(
             [("database.dump", RandomNumberGenerator.GetBytes(TestChunkSize * 2))]);
@@ -120,7 +163,7 @@ public sealed class M13BackupArchiveTests
             }
         });
 
-        exception.Code.Should().Be(BackupArchiveErrorCodes.IntegrityFailed);
+        exception.Code.Should().Be(expectedCode);
     }
 
     [Fact]

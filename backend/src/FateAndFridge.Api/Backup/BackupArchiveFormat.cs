@@ -24,6 +24,14 @@ namespace FateAndFridge.Api.Backup;
 ///     32    16  key_check (HMAC-SHA256 tag, see <see cref="ComputeKeyCheck"/>)
 /// </code>
 /// <para>
+/// The key-check tag is derived with the header salt and a distinct HKDF info
+/// label: it verifies the recovery key before decryption, differs between two
+/// archives made with the same key, and a flipped key-check byte reports
+/// <c>KEY_MISMATCH</c> (it is a key verifier, not an integrity check). Every
+/// other header field is authenticated by the record AAD, so tampering with it
+/// reports <c>INTEGRITY_FAILED</c>.
+/// </para>
+/// <para>
 /// After the header come the encrypted records. Each record is
 /// <c>[ciphertext_length:4][ciphertext][tag:16]</c> where
 /// <c>ciphertext_length</c> is a big-endian <c>uint32</c> of at most
@@ -90,21 +98,28 @@ public static class BackupArchiveFormat
 
     /// <summary>
     /// Computes the 16-byte header key-check tag. It is an HMAC-SHA256 over the
-    /// magic under a key derived from the recovery key with a fixed zero salt
-    /// and a distinct HKDF info label, so it proves that the supplied recovery
-    /// key is the archive key without depending on any header field. Header
-    /// corruption therefore surfaces as <c>INTEGRITY_FAILED</c> on record
-    /// authentication rather than as a misleading key mismatch.
+    /// magic under a key derived from the recovery key with the **archive's
+    /// header salt** and a distinct HKDF info label, so it proves that the
+    /// supplied recovery key is the archive key. Because the salt is random per
+    /// archive, two archives encrypted with the same recovery key carry
+    /// different check values and the tag is no cross-archive fingerprint.
     /// </summary>
-    internal static byte[] ComputeKeyCheck(ReadOnlySpan<byte> recoveryKey)
+    /// <remarks>
+    /// The tag is a key verifier, not an integrity check: a flipped key-check
+    /// byte fails as <c>KEY_MISMATCH</c> before any decryption. Integrity of the
+    /// rest of the header is covered by the record AAD, so tampering there still
+    /// surfaces as <c>INTEGRITY_FAILED</c>.
+    /// </remarks>
+    internal static byte[] ComputeKeyCheck(
+        ReadOnlySpan<byte> recoveryKey,
+        ReadOnlySpan<byte> salt)
     {
-        Span<byte> zeroSalt = stackalloc byte[16];
         var checkKey = new byte[32];
         HKDF.DeriveKey(
             HashAlgorithmName.SHA256,
             recoveryKey,
             checkKey,
-            zeroSalt,
+            salt,
             KeyCheckInfo);
 
         try

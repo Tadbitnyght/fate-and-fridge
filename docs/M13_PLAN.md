@@ -33,6 +33,12 @@ to the Lead before implementing.
    - the plaintext is a **tar stream** containing `database.dump`, `images/…`,
      `config/dp-keys/…`, and `manifest.json` (checksums, app version, schema
      version, created_at, counts, format version);
+   - a 16-byte **key-check** in the header is derived from the recovery key
+     **with that archive's salt** (so it is per-archive and never a stable
+     fingerprint) and compared before decryption. It is a *key verifier*, not an
+     integrity check: a flipped key-check byte or a changed salt reports
+     `BACKUP_KEY_MISMATCH`, while every other header/body/tag change reports
+     `BACKUP_INTEGRITY_FAILED`;
    - **the recovery key is never inside the archive** — a backup is useless
      without it, by design.
 5. **Backup contents:** database dump, `recipe images`, the Data Protection keys
@@ -207,8 +213,11 @@ Milestone mapping: 1→M13-08; 2→M13-07; 3→M13-02/M13-03; 4→M13-04; 5→M1
 ## 4. M13 verification battery
 
 - **Archive integrity:** round-trip equality (DB dump, images, dp-keys, manifest);
-  a wrong recovery key → `BACKUP_KEY_MISMATCH`; a single flipped byte anywhere
-  (header, chunk data, tag, trailer) → `BACKUP_INTEGRITY_FAILED`; a truncated or
+  a wrong recovery key → `BACKUP_KEY_MISMATCH`; a flipped key-check byte or a
+  changed salt → `BACKUP_KEY_MISMATCH` (it is checked before decryption); **every
+  other** flipped byte (header fields, chunk data, tag, trailer) →
+  `BACKUP_INTEGRITY_FAILED`; two archives from the same key carry **different**
+  key-checks (per-archive salt); a truncated or
   reordered-chunk archive fails; a tar entry with `../` or an absolute path is
   rejected; an unsupported format version → `BACKUP_FORMAT_UNSUPPORTED`; the
   recovery key is **never** present in the archive; no plaintext DB/images leak

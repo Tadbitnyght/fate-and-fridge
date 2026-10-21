@@ -284,6 +284,10 @@ public sealed class BackupService(
                 backup.Status = BackupStatus.Completed;
                 backup.Error = null;
 
+                // The audit row is staged on the same DbContext and commits with
+                // this Completed status in the single SaveChanges below, so a
+                // backup is never audited without its completed row (or vice
+                // versa).
                 await auditService.WriteAsync(
                         new AuditEventEntry(
                             AuditEventTypes.BackupCreated,
@@ -451,11 +455,21 @@ public sealed class BackupService(
 
     /// <summary>
     /// Retention for pre-restore safety archives
-    /// (docs/M13_PLAN.md §1.8): keeps the newest <paramref name="keep"/> safety
-    /// rows and their files, marks older ones <see cref="BackupStatus.Deleted"/>,
-    /// and never touches a <see cref="BackupKind.Manual"/> archive. A pending
-    /// safety archive (a restore that is still running) is never pruned.
+    /// (docs/M13_PLAN.md §1.8): keep the newest <paramref name="keep"/> safety
+    /// archives by file timestamp and mark the matching older rows
+    /// <see cref="BackupStatus.Deleted"/>; never touch a
+    /// <see cref="BackupKind.Manual"/> archive, and never prune a pending safety
+    /// archive (a restore that is still running).
     /// </summary>
+    /// <remarks>
+    /// Retention reconciles the **directory** as well as the rows. A restore's
+    /// safety archive is created in the database the restore is about to replace,
+    /// so after the swap its row no longer exists and the file would be invisible
+    /// to a row-only prune forever. Ordering by file timestamp keeps that archive
+    /// — it is the newest file on disk — and retires the rows still present for
+    /// the older files. A file that cannot be deleted leaves its row
+    /// <see cref="BackupStatus.Completed"/> instead of pretending it is gone.
+    /// </remarks>
     public async Task<int> PruneSafetyBackupsAsync(
         int keep = SafetyBackupRetention,
         CancellationToken cancellationToken = default)
@@ -471,23 +485,128 @@ public sealed class BackupService(
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        var expired = candidates.Skip(keep).ToList();
-        foreach (var backup in expired)
+        var safetyDirectory = SafetyArchivesDirectory(configuration);
+        var files = SafetyArchiveFilesNewestFirst(safetyDirectory);
+
+        // Keeping the newest files (not merely the newest rows) is what makes the
+        // archive created by the restore that just ran survive: it has no row in
+        // the restored database.
+        var keptFiles = new HashSet<string>(files.Take(keep), StringComparer.Ordinal);
+        var knownFilenames = candidates
+            .Select(backup => backup.Filename)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var orphanFilesPruned = 0;
+        var prunedFiles = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var filename in files.Skip(keep))
         {
-            TryDelete(ResolveArchivePath(configuration, backup));
-            backup.Status = BackupStatus.Deleted;
+            if (!TryDeleteArchive(Path.Combine(safetyDirectory, filename)))
+            {
+                continue;
+            }
+
+            prunedFiles.Add(filename);
+
+            if (!knownFilenames.Contains(filename))
+            {
+                orphanFilesPruned++;
+            }
         }
 
-        if (expired.Count > 0)
+        // A row is retired when its file was pruned from disk, or when it is
+        // beyond the newest `keep` rows and its file is not one of the newest
+        // files. Files that could not be deleted keep their row completed.
+        var expiredFilenames = new HashSet<string>(prunedFiles, StringComparer.Ordinal);
+        expiredFilenames.UnionWith(candidates.Skip(keep).Select(backup => backup.Filename));
+
+        var rowsPruned = 0;
+        foreach (var backup in candidates)
+        {
+            if (!expiredFilenames.Contains(backup.Filename)
+                || keptFiles.Contains(backup.Filename))
+            {
+                continue;
+            }
+
+            var path = ResolveArchivePath(configuration, backup);
+            if (File.Exists(path) && !TryDeleteArchive(path))
+            {
+                logger.LogWarning(
+                    "The expired safety backup {BackupFilename} could not be deleted; its row stays completed.",
+                    backup.Filename);
+                continue;
+            }
+
+            backup.Status = BackupStatus.Deleted;
+            rowsPruned++;
+        }
+
+        if (rowsPruned > 0)
         {
             await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        var pruned = rowsPruned + orphanFilesPruned;
+        if (pruned > 0)
+        {
             logger.LogInformation(
                 "Pruned {PrunedCount} safety backup(s), keeping the newest {KeepCount}.",
-                expired.Count,
+                pruned,
                 keep);
         }
 
-        return expired.Count;
+        return pruned;
+    }
+
+    /// <summary>
+    /// The safety archive file names on disk, newest first. The timestamp is the
+    /// fallback ordering key when two files share a write time.
+    /// </summary>
+    private List<string> SafetyArchiveFilesNewestFirst(string safetyDirectory)
+    {
+        if (!Directory.Exists(safetyDirectory))
+        {
+            return [];
+        }
+
+        try
+        {
+            return Directory
+                .EnumerateFiles(safetyDirectory)
+                .Where(path => path.EndsWith(BackupNaming.Extension, StringComparison.Ordinal))
+                .Select(path => new FileInfo(path))
+                .Where(file => file.Exists)
+                .OrderByDescending(file => file.LastWriteTimeUtc)
+                .ThenByDescending(file => file.Name, StringComparer.Ordinal)
+                .Select(file => file.Name)
+                .ToList();
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(
+                exception,
+                "The safety backup directory could not be enumerated; retention will use the rows only.");
+            return [];
+        }
+    }
+
+    /// <summary>Deletes one archive file; false when it is still there afterwards.</summary>
+    private bool TryDeleteArchive(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+
+            return !File.Exists(path);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(exception, "The backup file {BackupFile} could not be deleted.", path);
+            return false;
+        }
     }
 
     private static BackupCreateOutcome KeyMissing() =>

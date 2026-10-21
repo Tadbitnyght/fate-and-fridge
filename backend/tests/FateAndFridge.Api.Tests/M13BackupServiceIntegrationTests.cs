@@ -410,7 +410,9 @@ public sealed class M13BackupServiceIntegrationTests(M13BackupFixture fixture) :
         for (var index = 0; index < 7; index++)
         {
             var filename = $"safety-{index}.ffbackup";
-            await File.WriteAllTextAsync(Path.Combine(safetyDirectory, filename), $"safety {index}", Ct);
+            var path = Path.Combine(safetyDirectory, filename);
+            await File.WriteAllTextAsync(path, $"safety {index}", Ct);
+            File.SetLastWriteTimeUtc(path, Now.AddDays(-index).UtcDateTime);
             safetyRows.Add(await SeedBackupAsync(filename, BackupKind.Safety, BackupStatus.Completed, Now.AddDays(-index)));
         }
 
@@ -444,6 +446,68 @@ public sealed class M13BackupServiceIntegrationTests(M13BackupFixture fixture) :
             rows.Single(row => row.Id == manual.Id).Status.Should()
                 .Be(BackupStatus.Completed, "manual backups are never auto-pruned");
             File.Exists(Path.Combine(archivesDirectory, manual.Filename)).Should().BeTrue();
+        }
+    }
+
+    [Fact]
+    public async Task Safety_retention_reconciles_the_directory_so_a_restores_own_archive_survives()
+    {
+        var dataDir = SeedDataDirectory(withRecoveryKey: true);
+        var safetyDirectory = Directory.CreateDirectory(Path.Combine(dataDir, "backups", "safety")).FullName;
+        var archivesDirectory = Directory.CreateDirectory(Path.Combine(dataDir, "backups")).FullName;
+
+        // File 0 is the safety archive the restore just created: it is on disk,
+        // but its backup_metadata row was written into the database that the
+        // restore replaced, so only the directory knows about it.
+        var filenames = new List<string>();
+        var safetyRows = new List<BackupMetadata>();
+        for (var index = 0; index < 7; index++)
+        {
+            var filename = $"fatefridge-0.1.0-restore-{index}.ffbackup";
+            var path = Path.Combine(safetyDirectory, filename);
+            await File.WriteAllTextAsync(path, $"safety {index}", Ct);
+            File.SetLastWriteTimeUtc(path, Now.AddDays(-index).UtcDateTime);
+            filenames.Add(filename);
+
+            if (index > 0)
+            {
+                safetyRows.Add(await SeedBackupAsync(
+                    filename, BackupKind.Safety, BackupStatus.Completed, Now.AddDays(-index)));
+            }
+        }
+
+        var manualFilename = "fatefridge-0.1.0-manual.ffbackup";
+        var manualPath = Path.Combine(archivesDirectory, manualFilename);
+        await File.WriteAllTextAsync(manualPath, "manual", Ct);
+        File.SetLastWriteTimeUtc(manualPath, Now.AddDays(-400).UtcDateTime);
+        var manualRow = await SeedBackupAsync(
+            manualFilename, BackupKind.Manual, BackupStatus.Completed, Now.AddDays(-400));
+
+        using var factory = CreateFactory(dataDir, RecordingPgDumpRunner.Writing(DumpBytes));
+        var pruned = await WithBackupServiceAsync(
+            factory.Services,
+            service => service.PruneSafetyBackupsAsync(5, Ct));
+
+        pruned.Should().Be(2);
+
+        var keptFilenames = filenames.Take(5).ToList();
+        Directory.GetFiles(safetyDirectory, "*.ffbackup")
+            .Select(Path.GetFileName)
+            .Order(StringComparer.Ordinal)
+            .Should().Equal(keptFilenames);
+
+        File.Exists(manualPath).Should().BeTrue("manual backups are never auto-pruned");
+
+        await using var context = fixture.CreateContext();
+        var rows = await context.BackupMetadata.AsNoTracking().ToListAsync(Ct);
+
+        rows.Single(row => row.Id == manualRow.Id).Status.Should().Be(BackupStatus.Completed);
+        foreach (var row in safetyRows)
+        {
+            rows.Single(candidate => candidate.Id == row.Id).Status.Should().Be(
+                keptFilenames.Contains(row.Filename)
+                    ? BackupStatus.Completed
+                    : BackupStatus.Deleted);
         }
     }
 

@@ -127,7 +127,9 @@ public sealed class BackupArchiveReader : IAsyncDisposable
 
         var header = await BackupArchiveHeader.ReadAsync(input, cancellationToken).ConfigureAwait(false);
 
-        var expectedKeyCheck = BackupArchiveFormat.ComputeKeyCheck(recoveryKey.Span);
+        var expectedKeyCheck = BackupArchiveFormat.ComputeKeyCheck(
+            recoveryKey.Span,
+            header.Salt.Span);
         if (!CryptographicOperations.FixedTimeEquals(header.KeyCheck.Span, expectedKeyCheck))
         {
             throw BackupArchiveException.KeyMismatch();
