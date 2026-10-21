@@ -167,4 +167,23 @@ public static class ErrorCodes
 
     /// <summary>The backup row exists but its archive file is missing from disk.</summary>
     public const string BackupFileMissing = "BACKUP_FILE_MISSING";
+
+    // M13-04 restore codes (docs/M13_PLAN.md §1.9, §2.2, §4; docs/API.md §18).
+    /// <summary>The file is not a Fate &amp; Fridge backup, or uses an unsupported archive format.</summary>
+    public const string BackupFormatUnsupported = "BACKUP_FORMAT_UNSUPPORTED";
+
+    /// <summary>The archive failed authentication, its checksum, or its manifest verification.</summary>
+    public const string BackupIntegrityFailed = "BACKUP_INTEGRITY_FAILED";
+
+    /// <summary>The recovery key does not match the archive.</summary>
+    public const string BackupKeyMismatch = "BACKUP_KEY_MISMATCH";
+
+    /// <summary>The archive's schema version is newer than this application's latest migration.</summary>
+    public const string BackupSchemaTooNew = "BACKUP_SCHEMA_TOO_NEW";
+
+    /// <summary>A backup or restore already holds the operation gate, or the app is in maintenance.</summary>
+    public const string RestoreInProgress = "RESTORE_IN_PROGRESS";
+
+    /// <summary>The restore failed; the original data is intact and the app stays usable.</summary>
+    public const string RestoreFailed = "RESTORE_FAILED";
 }

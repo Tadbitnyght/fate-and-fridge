@@ -235,6 +235,16 @@ builder.Services.AddSingleton<IPgDumpRunner, PgDumpRunner>();
 builder.Services.AddSingleton<BackupOperationGate>();
 builder.Services.AddScoped<BackupService>();
 
+// M13-04: the restore orchestration (docs/M13_PLAN.md §1.9). The runner and the
+// restart/marker/maintenance state are singletons because maintenance mode must
+// be visible to every request and there is exactly one restore lane; the
+// restore itself opens its own scopes so it can use a fresh DbContext after the
+// database has been replaced.
+builder.Services.AddSingleton<IPgRestoreRunner, PgRestoreRunner>();
+builder.Services.AddSingleton<RestoreState>();
+builder.Services.AddSingleton<IRestoreRestartSignal, HostRestartSignal>();
+builder.Services.AddSingleton<RestoreService>();
+
 // M1-09 permission model: one uncached grant reader plus the evaluator service
 // shared by GET /auth/session and the route enforcement filter.
 builder.Services.AddScoped<IPermissionGrantReader, DbPermissionGrantReader>();
@@ -307,8 +317,15 @@ if (migrateOnly)
     return;
 }
 
+// M13-04: a restore that finished before the last stop wrote a marker; log the
+// recorded outcome, verify the restored database is reachable, and clear it
+// (docs/M13_PLAN.md §1.9 step 8). Idempotent and never fatal at startup.
+await RestoreMarker.CompleteStartupAsync(app.Configuration, app.Services, app.Logger);
+
 // Order matters: the exception handler wraps everything so unexpected failures
-// still use the shared error envelope; the client address (trusted-proxy
+// still use the shared error envelope; restore maintenance mode answers
+// 503 RESTORE_IN_PROGRESS before any other middleware can touch the database;
+// the client address (trusted-proxy
 // forwarded headers) resolves next so the allowlist, Secure-cookie decisions,
 // and antiforgery all see the real client; the allowlist then rejects blocked
 // clients before any authentication or setup state is consulted; setup gating
@@ -316,6 +333,7 @@ if (migrateOnly)
 // gate runs before CSRF so a flagged session always gets
 // PASSWORD_CHANGE_REQUIRED on gated routes.
 app.UseMiddleware<ExceptionHandlingMiddleware>();
+app.UseMiddleware<RestoreMaintenanceMiddleware>();
 app.UseMiddleware<ClientAddressMiddleware>();
 app.UseMiddleware<IpAllowlistMiddleware>();
 app.UseAuthentication();

@@ -3,6 +3,7 @@ using FateAndFridge.Api.Auth;
 using FateAndFridge.Api.Domain;
 using FateAndFridge.Api.Errors;
 using FateAndFridge.Api.Services;
+using Microsoft.AspNetCore.Http.Features;
 
 namespace FateAndFridge.Api.Endpoints;
 
@@ -56,16 +57,31 @@ public sealed record BackupResponse(
 }
 
 /// <summary>
+/// The <c>202 Accepted</c> body of a restore (docs/API.md §18). <c>backup_id</c>
+/// is present when a stored archive was chosen and null for an upload; the
+/// archive's file name is always reported, together with the safety backup that
+/// was created before anything was touched.
+/// </summary>
+public sealed record RestoreResponse(
+    string RestoreId,
+    long? BackupId,
+    string Filename,
+    string SafetyBackupFilename);
+
+/// <summary>
 /// Admin-only backup routes (docs/M13_PLAN.md §2.1–§2.2, docs/API.md §18):
-/// list, create, download, and delete. Every route is <c>RequireAdmin()</c> on
-/// the existing <c>admin</c> role (and the single-user system actor); no eighth
-/// permission key is introduced. Restore, key export, and the UI are later
-/// issues.
+/// list, create, download, delete, and restore. Every route is
+/// <c>RequireAdmin()</c> on the existing <c>admin</c> role (and the single-user
+/// system actor); no eighth permission key is introduced. Recovery-key export,
+/// the clean-install restore route, and the UI are later issues.
 /// </summary>
 public static class BackupEndpoints
 {
     /// <summary>The exact typed confirmation for deleting one archive.</summary>
     public const string DeleteConfirmation = "DELETE";
+
+    /// <summary>The exact typed confirmation for restoring one archive.</summary>
+    public const string RestoreConfirmation = "RESTORE";
 
     private const string BackupsPath = "/api/v1/admin/backups";
 
@@ -77,6 +93,7 @@ public static class BackupEndpoints
         group.MapPost("", CreateAsync).RequireAdmin();
         group.MapGet("/{id:long}/download", DownloadAsync).RequireAdmin();
         group.MapDelete("/{id:long}", DeleteAsync).RequireAdmin();
+        group.MapPost("/restore", RestoreAsync).RequireAdmin();
 
         return app;
     }
@@ -241,6 +258,145 @@ public static class BackupEndpoints
                 ApiResults.Error(failure.StatusCode, failure.Code, failure.Message),
             _ => Results.StatusCode(StatusCodes.Status500InternalServerError),
         };
+    }
+
+    /// <summary>
+    /// Starts one restore (docs/M13_PLAN.md §1.9, docs/API.md §18). Accepts
+    /// either JSON <c>{ backup_id, reason, confirmation }</c> or a
+    /// <c>multipart/form-data</c> upload (<c>file</c>, <c>reason</c>,
+    /// <c>confirmation</c>), requires the typed <c>RESTORE</c> confirmation, and
+    /// validates the archive plus creates the safety backup **before** the
+    /// <c>202</c>. The rest of the restore (maintenance mode, <c>pg_restore</c>,
+    /// session revocation, audit, file swap, marker, restart) runs in the
+    /// background.
+    /// </summary>
+    private static async Task<IResult> RestoreAsync(
+        HttpContext context,
+        ICurrentActorProvider actorProvider,
+        RestoreService restores,
+        IConfiguration configuration,
+        CancellationToken cancellationToken)
+    {
+        // Only this route accepts a 2 GB archive; every other route keeps the
+        // default (and the 5 MiB multipart cap used by recipe images).
+        var sizeFeature = context.Features.Get<IHttpMaxRequestBodySizeFeature>();
+        if (sizeFeature is { IsReadOnly: false })
+        {
+            sizeFeature.MaxRequestBodySize = RestoreRequestReader.MaximumBodyBytes;
+        }
+
+        var restoreId = restores.NewRestoreId();
+        var uploadPath = RestoreService.UploadPath(configuration, restoreId);
+
+        var read = await RestoreRequestReader
+            .ReadAsync(context, uploadPath, cancellationToken)
+            .ConfigureAwait(false);
+        if (!read.IsSuccess)
+        {
+            RemoveRestoreDirectory(configuration, restoreId);
+            return read.Error!;
+        }
+
+        var body = read.Body!;
+        var validation = DangerousActionGuard.Validate(
+            body.Reason,
+            body.Confirmation,
+            RestoreConfirmation);
+        if (validation is DangerousActionValidation.Failure validationFailure)
+        {
+            RemoveRestoreDirectory(configuration, restoreId);
+            return ApiResults.Error(
+                StatusCodes.Status400BadRequest,
+                validationFailure.Code,
+                validationFailure.Message,
+                validationFailure.ToErrorDetails());
+        }
+
+        RestoreSource source;
+        if (body.Upload is not null && body.BackupId is not null)
+        {
+            RemoveRestoreDirectory(configuration, restoreId);
+            return ApiResults.ValidationError(new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                ["body"] = ["Provide either backup_id or a file upload, not both."],
+            });
+        }
+
+        if (body.Upload is not null)
+        {
+            source = body.Upload;
+        }
+        else if (body.BackupId is not null)
+        {
+            source = new RestoreSource.StoredBackup(body.BackupId.Value);
+        }
+        else
+        {
+            RemoveRestoreDirectory(configuration, restoreId);
+            return ApiResults.ValidationError(new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                ["body"] = ["Provide either backup_id or a file upload."],
+            });
+        }
+
+        var (actorUserId, actorError) = await CalendarEndpoints
+            .ResolveActorAsync(actorProvider, cancellationToken)
+            .ConfigureAwait(false);
+        if (actorError is not null)
+        {
+            RemoveRestoreDirectory(configuration, restoreId);
+            return actorError;
+        }
+
+        var outcome = await restores.BeginAsync(
+                source,
+                ((DangerousActionValidation.Success)validation).Reason,
+                actorUserId,
+                CalendarEndpoints.RemoteIpAddress(context),
+                restoreId,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        switch (outcome)
+        {
+            case RestoreStartOutcome.Accepted accepted:
+                restores.StartInBackground(accepted.Operation);
+                return Results.Json(
+                    new RestoreResponse(
+                        accepted.Operation.RestoreId,
+                        accepted.Operation.BackupId,
+                        accepted.Operation.BackupFilename,
+                        accepted.Operation.SafetyBackupFilename),
+                    statusCode: StatusCodes.Status202Accepted);
+
+            case RestoreStartOutcome.Failure failure:
+                RemoveRestoreDirectory(configuration, restoreId);
+                return ApiResults.Error(failure.StatusCode, failure.Code, failure.Message);
+
+            default:
+                RemoveRestoreDirectory(configuration, restoreId);
+                return ApiResults.Error(
+                    StatusCodes.Status500InternalServerError,
+                    ErrorCodes.RestoreFailed,
+                    "The restore could not be started.");
+        }
+    }
+
+    private static void RemoveRestoreDirectory(IConfiguration configuration, string restoreId)
+    {
+        try
+        {
+            var directory = RestoreService.RestoreDirectory(configuration, restoreId);
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // A leftover working directory is harmless: it is not a live path
+            // and the next restore uses a fresh id.
+        }
     }
 
     private static IResult InvalidBody() =>

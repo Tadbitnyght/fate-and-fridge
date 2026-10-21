@@ -112,6 +112,12 @@ Use stable error codes.
 | `IMAGE_DIMENSIONS_EXCEEDED` | 400 | Recipe image exceeds 2048 pixels on a side |
 | `INVALID_UNIT_DIMENSION_CHANGE` | 400 | Unit dimensions are immutable; retire and create a new unit |
 | `GROCERY_STAPLE_EXISTS` | 409 | An active staple with that normalized name exists; `details.existing_id` present |
+| `BACKUP_FORMAT_UNSUPPORTED` | 400 | The file is not a Fate & Fridge `.ffbackup` archive, uses an unsupported format version, or carries an unsafe entry path |
+| `BACKUP_INTEGRITY_FAILED` | 400 | The archive failed authentication, its ciphertext SHA-256 does not match, or its entries do not match the manifest |
+| `BACKUP_KEY_MISMATCH` | 400 | The configured recovery key does not decrypt this archive |
+| `BACKUP_SCHEMA_TOO_NEW` | 400 | The archive was created by a newer application (its `schema_version` is newer than this build's latest migration) |
+| `RESTORE_IN_PROGRESS` | 409 / 503 | A restore holds maintenance mode (503 on every route except `/api/v1/health*`), or another restore/backup already holds the operation gate (409 for the refused request) |
+| `RESTORE_FAILED` | 500 | The restore failed; the original data is intact and the application stays usable |
 
 Clients must branch on `code`, never on `message`.
 
@@ -1781,11 +1787,12 @@ Bulk/date-range correction is deferred to V2 (docs/FUTURE_FEATURES.md).
 
 ## 18. Backup
 
-Implemented contract (M13-03; docs/M13_PLAN.md §1.4–§1.8, §2.2). Every route is
-under `/api/v1/admin` and is **Admin-only** on the existing `admin` role (and the
-single-user system actor): anonymous → `401 AUTH_REQUIRED`, a member →
-`403 FORBIDDEN`. **No new permission key is introduced.** Bodies are JSON with
-snake_case fields; a wrong `Content-Type` is `415 UNSUPPORTED_MEDIA_TYPE`.
+Implemented contract (M13-03, restore in M13-04; docs/M13_PLAN.md §1.4–§1.9,
+§2.2). Every route is under `/api/v1/admin` and is **Admin-only** on the existing
+`admin` role (and the single-user system actor): anonymous → `401 AUTH_REQUIRED`,
+a member → `403 FORBIDDEN`. **No new permission key is introduced.** Bodies are
+JSON with snake_case fields unless a route documents a multipart upload; a wrong
+`Content-Type` is `415 UNSUPPORTED_MEDIA_TYPE`.
 
 ### Row shape
 
@@ -1884,6 +1891,96 @@ Request body:
   is never deleted underneath it.
 - `500 BACKUP_FAILED` — the file could not be removed; the row is left unchanged.
 
+### `POST /api/v1/admin/backups/restore`
+
+Starts one restore (docs/M13_PLAN.md §1.9, §4). Admin-only; the request requires
+the typed `RESTORE` confirmation and a reason under the shared dangerous-action
+rules (`REASON_REQUIRED`, `REASON_TOO_LONG`, `REASON_INVALID`,
+`CONFIRMATION_MISMATCH` with `details.field_errors`).
+
+Two body shapes are accepted:
+
+```http
+POST /api/v1/admin/backups/restore
+Content-Type: multipart/form-data; boundary=…
+
+file=<the .ffbackup archive>      # ≤ 2 GB, streamed to disk
+reason=Restore the pre-upgrade archive
+confirmation=RESTORE
+```
+
+```json
+{ "backup_id": 12, "reason": "Restore the pre-upgrade archive", "confirmation": "RESTORE" }
+```
+
+- Exactly one source is allowed: `backup_id` (an existing `backup_metadata` row)
+  or the `file` upload. Providing both, or neither, is
+  `400 VALIDATION_FAILED`. Only this route raises the request-body limit (2 GB
+  for the archive plus multipart slack); every other route keeps its tighter
+  default.
+- **Everything that must precede a mutation happens synchronously**:
+  1. the same operation gate backup creation uses (a concurrent backup or
+     restore → `409 RESTORE_IN_PROGRESS`);
+  2. the archive is opened with the recovery key — a missing/unusable key →
+     `409 BACKUP_KEY_MISSING`, a wrong key → `400 BACKUP_KEY_MISMATCH`, a
+     tampered/truncated archive or a checksum mismatch →
+     `400 BACKUP_INTEGRITY_FAILED`, an unsupported format or unsafe entry path →
+     `400 BACKUP_FORMAT_UNSUPPORTED`;
+  3. the manifest's `schema_version` must be one of this build's migrations and
+     must not be newer than its latest (newer → `400 BACKUP_SCHEMA_TOO_NEW`;
+     unknown → `400 BACKUP_FORMAT_UNSUPPORTED`);
+  4. a **mandatory `kind = "safety"` backup** is created in
+     `<DataDir>/backups/safety/` and must finish `completed`; if it does not,
+     the restore is aborted before anything is touched.
+
+  A refused restore therefore leaves the database, `images/`, `config/dp-keys/`,
+  and the maintenance flag untouched, and writes no safety backup.
+- Success: **`202 Accepted`** (the request is not the restore):
+
+  ```json
+  {
+    "restore_id": "20261021T150000Z-1f2e3d4c5b6a7988",
+    "backup_id": 12,
+    "filename": "fatefridge-0.1.0-20261021T120000Z.ffbackup",
+    "safety_backup_filename": "fatefridge-0.1.0-20261021T150000Z.ffbackup"
+  }
+  ```
+
+  `backup_id` is `null` for an upload; `filename` is the stored file name or the
+  uploaded file's base name (reporting only — never used as a path).
+- The restore then continues **in the background**: the archive is extracted to
+  `<DataDir>/backups/.restore/<restore_id>/` (checksums re-verified, entry paths
+  rejected for absolute paths/`..`/links), maintenance mode is entered, other
+  database sessions are terminated, and `pg_restore --clean --if-exists
+  --no-owner --no-privileges --single-transaction` replaces the database.
+  Afterwards all `user_sessions` are deleted (every client must sign in again), a
+  `backup.restored` audit row is written **into the restored database** (raw SQL,
+  so a slightly older restored schema still works), `images/` and
+  `config/dp-keys/` are swapped from staging, a
+  `<DataDir>/backups/restore.pending` marker is written, and the application
+  requests a graceful stop so `restart: unless-stopped` restarts the container.
+  On the next start migrations run, the marker is logged, database connectivity
+  is verified, and the marker is cleared.
+- **Maintenance window:** while the restore runs, every route except
+  `/api/v1/health` (and its subroutes) answers **`503 RESTORE_IN_PROGRESS`** with
+  the shared error envelope. Health stays available so the container health check
+  does not fail the restore. `RESTORE_IN_PROGRESS` is also returned with `409`
+  when a *request* is refused because another backup/restore already holds the
+  operation gate.
+- **Failure semantics:** `pg_restore` runs in one transaction, so a database
+  failure rolls back completely; a file-swap failure rolls the directory renames
+  back. Maintenance mode is cleared, the restore is marked failed, no marker is
+  written, the original data stays intact, and the app remains usable. The
+  background failure is reported as `500 RESTORE_FAILED` in the application log
+  (the `202` has already been sent); the safety backup is left for a retry.
+- Documented limitations, by design:
+  - the archive is decrypted **twice** — once to validate before any mutation,
+    once to extract — rather than holding an open reader across the `202`;
+  - the file swap happens **after** the database restore commits (the prescribed
+    order). A swap failure therefore rolls back files only: the database is
+    already restored, and the safety backup is the way back. A retry of the
+    restore from the same archive completes the swap.
+
 ### Retention
 
 `PruneSafetyBackups` keeps the **newest five** `kind = "safety"` rows and their
@@ -1891,11 +1988,15 @@ files, marks older safety rows `deleted`, and **never** touches a `manual`
 archive. A `pending` safety row is never pruned. Manual deletion is the only way
 a manual backup disappears (docs/M13_PLAN.md §1.8).
 
+A successful restore runs this retention once against the **restored**
+`backup_metadata` table. The safety archive created moments earlier is not part
+of that table snapshot, so it is never pruned by the restore that produced it.
+
 ### Not yet implemented (later M13 issues)
 
-Restore (`POST /api/v1/admin/backups/restore`, `POST /api/v1/setup/restore`),
-recovery-key export, and the UI arrive with M13-04, M13-05, M13-06, and M13-07.
-Their contract lives in docs/M13_PLAN.md §2.2 until then.
+The clean-install restore (`POST /api/v1/setup/restore`, M13-05), recovery-key
+export (M13-07), and the Backups UI (M13-06). Their contracts live in
+docs/M13_PLAN.md §2.2 until then.
 
 ---
 

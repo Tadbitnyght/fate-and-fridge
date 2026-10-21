@@ -70,6 +70,12 @@ to the Lead before implementing.
       restarts the container; on startup the app applies migrations, verifies
       health, clears the marker, and logs the outcome.
    A failed restore leaves the original data and the safety backup intact.
+   Locked details (M13-04): safety-backup retention runs once after a successful
+   restore against the restored `backup_metadata` table, and never prunes the
+   safety archive the restore just created (that row is not yet in the restored
+   table); and the `images/`/`config/dp-keys/` swap runs **after** the database
+   restore commits, so a swap failure rolls back files only and the safety
+   backup remains the way back.
 10. **Clean-install restore.** The setup wizard can restore **before setup
     completes** using an uploaded archive **plus a pasted recovery key**; the
     restore runs, then the app restarts into the restored (already set-up) state.

@@ -143,15 +143,39 @@ public sealed class BackupService(
     /// (<c>BACKUP_KEY_MISSING</c>), and a create already running
     /// (<c>BACKUP_IN_PROGRESS</c>).
     /// </summary>
-    public async Task<BackupCreateOutcome> CreateAsync(
+    public Task<BackupCreateOutcome> CreateAsync(
         string reason,
         long? actorUserId,
         string? ipAddress,
+        CancellationToken cancellationToken) =>
+        CreateCoreAsync(BackupKind.Manual, reason, actorUserId, ipAddress, acquireGate: true, cancellationToken);
+
+    /// <summary>
+    /// Creates the mandatory pre-restore safety backup in
+    /// <c>{DataDir}/backups/safety</c> (docs/M13_PLAN.md §1.6, §1.9 step 2).
+    /// The restore already holds <see cref="BackupOperationGate"/>, so this
+    /// entry point never takes it: a re-entrant acquire would deadlock the
+    /// restore against itself. Apart from the kind and the destination
+    /// directory it behaves exactly like <see cref="CreateAsync"/>.
+    /// </summary>
+    public Task<BackupCreateOutcome> CreateSafetyBackupAsync(
+        string reason,
+        long? actorUserId,
+        string? ipAddress,
+        CancellationToken cancellationToken) =>
+        CreateCoreAsync(BackupKind.Safety, reason, actorUserId, ipAddress, acquireGate: false, cancellationToken);
+
+    private async Task<BackupCreateOutcome> CreateCoreAsync(
+        BackupKind kind,
+        string reason,
+        long? actorUserId,
+        string? ipAddress,
+        bool acquireGate,
         CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(reason);
 
-        if (!operationGate.TryEnter())
+        if (acquireGate && !operationGate.TryEnter())
         {
             return new BackupCreateOutcome.Failure(
                 StatusCodes.Status409Conflict,
@@ -204,11 +228,12 @@ public sealed class BackupService(
             var archivesDirectory = ArchivesDirectory(configuration);
             var tempDirectory = Path.Combine(archivesDirectory, BackupNaming.TempDirectoryName);
             var safetyDirectory = SafetyArchivesDirectory(configuration);
+            var targetDirectory = kind == BackupKind.Safety ? safetyDirectory : archivesDirectory;
             Directory.CreateDirectory(archivesDirectory);
             Directory.CreateDirectory(tempDirectory);
             Directory.CreateDirectory(safetyDirectory);
 
-            var filename = await ReserveFilenameAsync(archivesDirectory, appVersion, createdAt, cancellationToken)
+            var filename = await ReserveFilenameAsync(targetDirectory, appVersion, createdAt, cancellationToken)
                 .ConfigureAwait(false);
             var backup = new BackupMetadata
             {
@@ -219,7 +244,7 @@ public sealed class BackupService(
                 CreatedByUserId = actorUserId,
                 Checksum = string.Empty,
                 SizeBytes = 0,
-                Kind = BackupKind.Manual,
+                Kind = kind,
                 Status = BackupStatus.Pending,
             };
 
@@ -229,8 +254,8 @@ public sealed class BackupService(
             var dumpPath = Path.Combine(
                 tempDirectory,
                 $"{filename}.{Guid.NewGuid():N}.dump");
-            var archiveTempPath = Path.Combine(archivesDirectory, $"{filename}.tmp");
-            var archivePath = Path.Combine(archivesDirectory, filename);
+            var archiveTempPath = Path.Combine(targetDirectory, $"{filename}.tmp");
+            var archivePath = Path.Combine(targetDirectory, filename);
 
             try
             {
@@ -270,7 +295,7 @@ public sealed class BackupService(
                             Metadata: new Dictionary<string, object?>(StringComparer.Ordinal)
                             {
                                 ["filename"] = backup.Filename,
-                                ["kind"] = "manual",
+                                ["kind"] = kind == BackupKind.Safety ? "safety" : "manual",
                                 ["size_bytes"] = backup.SizeBytes,
                                 ["checksum"] = backup.Checksum,
                             }),
@@ -307,7 +332,10 @@ public sealed class BackupService(
         }
         finally
         {
-            operationGate.Exit();
+            if (acquireGate)
+            {
+                operationGate.Exit();
+            }
         }
     }
 
