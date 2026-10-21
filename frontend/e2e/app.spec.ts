@@ -51,22 +51,62 @@ interface MockApiOptions {
   complete?: CompleteResponse
   /** Household settings used for the startup-page redirect (default: calendar). */
   household?: unknown
+  /**
+   * Response for `POST /setup/restore`. When set, the mocked app simulates the
+   * restart: the first status poll fails, the second is the maintenance 503,
+   * and later polls report a completed single-user setup.
+   */
+  restore?: CompleteResponse
 }
 
 async function mockApi(page: Page, options: MockApiOptions): Promise<void> {
   let completed = options.setupCompleted
   let authMode: string | null = options.setupCompleted ? 'multiuser' : null
   let sessionPayload: unknown = options.session
+  let restoring = false
+  let restoreStatusPolls = 0
 
   await page.route('**/api/v1/**', async (route) => {
     const request = route.request()
     const path = new URL(request.url()).pathname
 
     if (path.endsWith('/setup/status')) {
+      if (restoring) {
+        restoreStatusPolls += 1
+        if (restoreStatusPolls === 1) {
+          // The container has gone away to restart.
+          await route.abort('failed')
+          return
+        }
+        if (restoreStatusPolls === 2) {
+          await route.fulfill({
+            status: 503,
+            json: {
+              error: {
+                code: 'RESTORE_IN_PROGRESS',
+                message: 'A restore is in progress.',
+                details: {},
+              },
+            },
+          })
+          return
+        }
+        completed = true
+        authMode = 'single_user'
+      }
       await route.fulfill({
         json: completed
           ? { setup_completed: true, auth_mode: authMode, recovery_key_present: true }
           : setupIncomplete,
+      })
+      return
+    }
+
+    if (path.endsWith('/setup/restore') && request.method() === 'POST' && options.restore) {
+      restoring = true
+      await route.fulfill({
+        status: options.restore.status ?? 202,
+        json: options.restore.body,
       })
       return
     }
@@ -327,4 +367,44 @@ test('completes multiuser setup with an admin account', async ({ page }) => {
 
   await expect(page.getByRole('heading', { level: 2, name: 'Calendar' })).toBeVisible()
   await expect(page.getByText('smith')).toBeVisible()
+})
+
+test('gates restore-from-backup and enters the app once the server returns', async ({ page }) => {
+  await mockApi(page, {
+    setupCompleted: false,
+    restore: {
+      status: 202,
+      body: {
+        restore_id: '20261021T150000Z-1f2e3d4c5b6a7988',
+        filename: 'household.ffbackup',
+        safety_backup_filename: 'fatefridge-0.1.0-20261021T150000Z.ffbackup',
+      },
+    },
+  })
+
+  await page.goto('/setup/restore')
+  await expect(page.getByRole('heading', { level: 1, name: 'Restore from backup' })).toBeVisible()
+
+  const submit = page.getByRole('button', { name: 'Restore backup' })
+  await expect(submit).toBeDisabled()
+
+  await page.getByLabel('Backup archive').setInputFiles({
+    name: 'household.ffbackup',
+    mimeType: 'application/octet-stream',
+    buffer: Buffer.from('mock archive bytes'),
+  })
+  await expect(submit).toBeDisabled()
+
+  await page.getByLabel('Recovery key').fill('pasted-recovery-key')
+  await expect(submit).toBeDisabled()
+
+  await page.getByLabel('Type RESTORE to confirm').fill('RESTORE')
+  await expect(submit).toBeEnabled()
+  await submit.click()
+
+  // The restore accepted the request; success must not be claimed until the
+  // restarted app answers with a completed setup.
+  await expect(page.getByRole('status')).toContainText(/restart/i)
+  await expect(page).toHaveURL(/\/calendar$/, { timeout: 20000 })
+  await expect(page.getByRole('heading', { level: 2, name: 'Calendar' })).toBeVisible()
 })

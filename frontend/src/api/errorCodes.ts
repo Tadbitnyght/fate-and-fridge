@@ -66,6 +66,13 @@ export const ErrorCodes = {
   // M8 grocery codes (docs/API.md §13).
   GroceryRangeTooLarge: 'GROCERY_RANGE_TOO_LARGE',
   GroceryStapleExists: 'GROCERY_STAPLE_EXISTS',
+  // M13 backup/restore codes (docs/API.md §4, §18, §21).
+  BackupKeyMissing: 'BACKUP_KEY_MISSING',
+  BackupKeyMismatch: 'BACKUP_KEY_MISMATCH',
+  BackupIntegrityFailed: 'BACKUP_INTEGRITY_FAILED',
+  BackupFormatUnsupported: 'BACKUP_FORMAT_UNSUPPORTED',
+  BackupSchemaTooNew: 'BACKUP_SCHEMA_TOO_NEW',
+  RestoreInProgress: 'RESTORE_IN_PROGRESS',
 } as const
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes]

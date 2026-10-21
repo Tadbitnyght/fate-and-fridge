@@ -431,4 +431,30 @@ describe('setup wizard', () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('RECOVERY-KEY-123'))
     expect(await screen.findByText('Copied to clipboard.')).toBeInTheDocument()
   })
+
+  it('offers the restore-from-backup route without disturbing the setup flow', async () => {
+    installSetupMocks()
+
+    renderWithProviders(<App />, { route: '/setup' })
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Welcome to Fate & Fridge' }),
+    ).toBeInTheDocument()
+    const restoreLink = screen.getByRole('link', { name: 'Restore from backup' })
+    expect(restoreLink).toHaveAttribute('href', '/setup/restore')
+
+    fireEvent.click(restoreLink)
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Restore from backup' }),
+    ).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('link', { name: 'Back to setup' }))
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Welcome to Fate & Fridge' }),
+    ).toBeInTheDocument()
+    // The normal wizard still starts at step 1 with its usual controls.
+    expect(screen.getByRole('button', { name: 'Next' })).toBeInTheDocument()
+  })
 })

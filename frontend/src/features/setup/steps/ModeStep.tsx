@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom'
+
 import type { StepProps } from './types'
 
 /**
@@ -74,6 +76,11 @@ export function ModeStep({ values, errors, onChange }: StepProps) {
         {values.authMode === 'multiuser'
           ? 'Sign-in will be required; the first Admin account is created in a later step.'
           : 'No sign-in will be required; the network boundary is the only protection.'}
+      </p>
+
+      <p className="page-note">
+        Moving from another device or reinstalling?{' '}
+        <Link to="/setup/restore">Restore from backup</Link> instead of starting fresh.
       </p>
     </div>
   )

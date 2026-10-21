@@ -1994,9 +1994,9 @@ of that table snapshot, so it is never pruned by the restore that produced it.
 
 ### Not yet implemented (later M13 issues)
 
-The clean-install restore (`POST /api/v1/setup/restore`, M13-05), recovery-key
-export (M13-07), and the Backups UI (M13-06). Their contracts live in
-docs/M13_PLAN.md §2.2 until then.
+Recovery-key export (M13-07) and the Backups UI (M13-06). Their contracts live
+in docs/M13_PLAN.md §2.2 until then. The pre-setup restore route
+(`POST /api/v1/setup/restore`) is documented with the rest of setup in §21.
 
 ---
 
@@ -2135,6 +2135,78 @@ The API should expose domain actions cleanly enough that future service accounts
   }
   ```
   The recovery key is returned exactly once here. It is stored at `/data/config/recovery.key` (mode 0600), never logged, and only exportable later via the M13 admin export route. An existing key file is reused, never overwritten. In multiuser mode the response also establishes the first Admin session (same payload, cookie, and `X-CSRF-TOKEN` as login); single-user responses omit `session`. Repeated calls return `409 SETUP_ALREADY_COMPLETED`, and concurrent calls are serialized so exactly one succeeds.
+
+#### Restore from backup before setup (M13-05)
+
+`POST /api/v1/setup/restore` — public **only while setup is incomplete**. It is
+the clean-install recovery path (docs/M13_PLAN.md §1.10): the archive plus a
+pasted recovery key are the credential, so no session, Admin, or device key file
+is required. Once setup is complete the route answers the ordinary setup code
+`409 SETUP_ALREADY_COMPLETED` before reading the body; the Admin route
+(`POST /api/v1/admin/backups/restore`, §18) owns restores from then on. This is
+the only restore route reachable before setup, and the `SETUP_REQUIRED` gate
+continues to apply to every other `/api/v1` route.
+
+```http
+POST /api/v1/setup/restore
+Content-Type: multipart/form-data; boundary=…
+
+file=<the .ffbackup archive>       # ≤ 2 GB, streamed to disk
+recovery_key=<base64url 32-byte key>
+confirmation=RESTORE
+```
+
+- The body is **multipart only**; a JSON request is `415 UNSUPPORTED_MEDIA_TYPE`.
+  There is no `reason` field: the server records the fixed audit reason for a
+  clean-install restore.
+- `file` is capped at **2 GB**. Only this route and the Admin restore raise the
+  request-body limit (to 2 GB plus 16 MiB of multipart slack); every other route
+  keeps its tighter multipart default (5 MiB for image uploads), and the text
+  parts are bounded at 8 KiB each. A missing/empty `file` or a `recovery_key`
+  that is not valid base64url for the 32-byte key is `400 VALIDATION_FAILED`
+  with `details.field_errors` on `file` or `recovery_key`. The fixed reason is
+  supplied by the server, so `REASON_*` cannot occur here; a `confirmation`
+  other than `RESTORE` is `400 CONFIRMATION_MISMATCH` with
+  `details.field_errors`.
+- Validation is identical to the Admin restore and happens **before any
+  mutation**: the archive format (`400 BACKUP_FORMAT_UNSUPPORTED`), GCM
+  authentication and the manifest/checksum (`400 BACKUP_INTEGRITY_FAILED`), the
+  archive decrypting with the pasted key (`400 BACKUP_KEY_MISMATCH`), and the
+  archive's schema version (`400 BACKUP_SCHEMA_TOO_NEW`). A refused restore
+  writes nothing: no key, no safety backup, and no database/filesystem change.
+  `409 BACKUP_KEY_MISSING` belongs to the Admin route (where the device key file
+  is authoritative) and is not produced here; `409 RESTORE_IN_PROGRESS` is
+  returned when another backup or restore already holds the operation gate.
+- **Key adoption:** after validation passes and before the mandatory safety
+  backup, the pasted key is stored as this device's
+  `/data/config/recovery.key` when no key file exists yet. An existing key file
+  is **never** overwritten — the restore still runs and the safety backup is
+  encrypted with the key the device already holds. The key value is never
+  logged or returned by this route.
+- Success is the shared `202 Accepted` restore shape **without** `backup_id`
+  (there is no backup catalogue before setup):
+
+  ```json
+  {
+    "restore_id": "20261021T150000Z-1f2e3d4c5b6a7988",
+    "filename": "household.ffbackup",
+    "safety_backup_filename": "fatefridge-0.1.0-20261021T150000Z.ffbackup"
+  }
+  ```
+
+  `filename` is the uploaded file's base name (reporting only, never a path).
+- The restore then continues **in the background exactly as §18 describes**:
+  maintenance mode (`503 RESTORE_IN_PROGRESS` on every route except
+  `/api/v1/health*`), staging extraction, `pg_restore`, the `images/` and
+  `config/dp-keys/` swap, session revocation, a `backup.restored` audit row in
+  the restored database, the `restore.pending` marker, and a graceful stop so
+  `restart: unless-stopped` restarts the container. On the next start migrations
+  run, the marker is logged and cleared, and the household is already set up.
+- **Client behaviour:** the `202` is not success. The caller must poll
+  `GET /setup/status`, tolerating connection errors and
+  `503 RESTORE_IN_PROGRESS` while the container restarts, and may enter the
+  normal startup flow only once a status response reports
+  `setup_completed: true`. There is no later success payload.
 
 ### Household and security settings
 

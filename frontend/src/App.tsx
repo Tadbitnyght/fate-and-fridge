@@ -29,6 +29,7 @@ import { RecipesBrowser } from './features/recipes/RecipesBrowser'
 import { SettingsPage } from './pages/SettingsPage'
 import { MilestonesPage } from './features/progress/MilestonesPage'
 import { StartupRedirect } from './features/startup/StartupRedirect'
+import { RestoreFromBackupPage } from './features/setup/RestoreFromBackupPage'
 import { SetupPage } from './pages/SetupPage'
 import { StatisticsPage } from './features/statistics/StatisticsPage'
 
@@ -39,6 +40,7 @@ export function App() {
         <Routes>
           <Route element={<StandaloneLayout />}>
             <Route path="/setup" element={<SetupPage />} />
+            <Route path="/setup/restore" element={<RestoreFromBackupPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/change-password" element={<ChangePasswordPage />} />
           </Route>

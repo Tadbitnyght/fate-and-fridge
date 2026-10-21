@@ -11,7 +11,7 @@ export const setupStatusQueryKey = ['setup', 'status'] as const
 export function useSetupStatus() {
   return useQuery<SetupStatus>({
     queryKey: setupStatusQueryKey,
-    queryFn: fetchSetupStatus,
+    queryFn: ({ signal }) => fetchSetupStatus(signal),
     retry: false,
     staleTime: 0,
   })
