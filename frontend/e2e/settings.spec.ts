@@ -199,3 +199,152 @@ test('admin saves the IP allowlist with the lockout confirmation', async ({ page
 
   await expect(page.getByText('Security settings saved.')).toBeVisible()
 })
+
+const backupFilename = 'fatefridge-0.1.0-20261021T120000Z.ffbackup'
+
+interface BackupRow {
+  id: number
+  filename: string
+  kind: string
+  status: string
+  app_version: string
+  schema_version: string
+  created_at: string
+  size_bytes: number
+  checksum: string
+  error: string | null
+}
+
+/** Hermetic Admin backups API: a mutable archive list and a 202 restore. */
+async function mockBackupsApi(page: Page): Promise<void> {
+  const state = {
+    rows: [
+      {
+        id: 12,
+        filename: backupFilename,
+        kind: 'manual',
+        status: 'completed',
+        app_version: '0.1.0',
+        schema_version: '20261021023131_M13Backups',
+        created_at: '2026-10-21T12:00:00+00:00',
+        size_bytes: 1048576,
+        checksum: '9f2c8a1b4d6e0f3a5c7b9d1e2f4a6b8c0d2e4f6a8b0c2d4e6f8a0b2c4d6e8f0a',
+        error: null,
+      },
+    ] as BackupRow[],
+  }
+
+  await page.route('**/api/v1/**', async (route) => {
+    const request = route.request()
+    const path = new URL(request.url()).pathname
+    const method = request.method()
+
+    if (path.endsWith('/setup/status')) {
+      await route.fulfill({ json: setupComplete })
+      return
+    }
+    if (path.endsWith('/auth/session')) {
+      await route.fulfill({ json: adminSession })
+      return
+    }
+    if (path.endsWith('/health')) {
+      // The restore is still running: the page must keep waiting.
+      await route.fulfill({
+        status: 503,
+        json: {
+          error: { code: 'RESTORE_IN_PROGRESS', message: 'The restore is running.', details: {} },
+        },
+      })
+      return
+    }
+    if (path.endsWith('/admin/backups/restore') && method === 'POST') {
+      await route.fulfill({
+        status: 202,
+        json: {
+          restore_id: '20261021T150000Z-1f2e3d4c5b6a7988',
+          backup_id: 12,
+          filename: backupFilename,
+          safety_backup_filename: 'fatefridge-0.1.0-20261021T150500Z.ffbackup',
+        },
+      })
+      return
+    }
+    if (path.endsWith('/download')) {
+      await route.fulfill({
+        status: 200,
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'Content-Disposition': `attachment; filename="${backupFilename}"`,
+        },
+        body: 'encrypted-archive',
+      })
+      return
+    }
+    if (path.endsWith('/admin/backups') && method === 'GET') {
+      await route.fulfill({ json: state.rows })
+      return
+    }
+    if (path.endsWith('/admin/backups') && method === 'POST') {
+      const created: BackupRow = {
+        ...state.rows[0],
+        id: state.rows.length + 12,
+        filename: 'fatefridge-0.1.0-20261021T130000Z.ffbackup',
+        created_at: '2026-10-21T13:00:00+00:00',
+      }
+      state.rows.unshift(created)
+      await route.fulfill({ status: 201, json: created })
+      return
+    }
+
+    await route.fulfill({
+      status: 404,
+      json: { error: { code: 'NOT_FOUND', message: `No mock for ${method} ${path}`, details: {} } },
+    })
+  })
+}
+
+test('admin lists, creates, and downloads a backup', async ({ page }) => {
+  await mockBackupsApi(page)
+  await page.goto('/settings/backups')
+
+  const nav = page.getByRole('navigation', { name: 'Settings sections' })
+  await expect(nav.getByRole('link', { name: 'Backups' })).toBeVisible()
+
+  const row = page.getByRole('row', { name: new RegExp(backupFilename) })
+  await expect(row.getByText('Manual')).toBeVisible()
+  await expect(row.getByText('Completed')).toBeVisible()
+  await expect(row.getByText('1 MB')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Create backup' }).click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByLabel('Reason').fill('Before the upgrade')
+  await dialog.getByRole('checkbox').check()
+  await dialog.getByRole('button', { name: 'Create backup' }).click()
+
+  await expect(page.getByText('Backup created:')).toBeVisible()
+  await expect(
+    page.getByRole('row', { name: /fatefridge-0.1.0-20261021T130000Z.ffbackup/ }),
+  ).toBeVisible()
+
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: `Download ${backupFilename}` }).click()
+  const download = await downloadPromise
+  expect(download.suggestedFilename()).toBe(backupFilename)
+})
+
+test('admin restore shows the restarting state after the 202', async ({ page }) => {
+  await mockBackupsApi(page)
+  await page.goto('/settings/backups')
+
+  await page.getByRole('button', { name: `Restore ${backupFilename}` }).click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByLabel('Reason').fill('Rolling back the upgrade')
+  await dialog.getByRole('checkbox').check()
+  await dialog.getByLabel('Type RESTORE to confirm').fill('RESTORE')
+  await dialog.getByRole('button', { name: 'Restore backup' }).click()
+
+  const status = page.getByRole('status')
+  await expect(status).toContainText(/restart/i)
+  await expect(status).toContainText('20261021T150000Z-1f2e3d4c5b6a7988')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+})

@@ -13,6 +13,7 @@ import { TagsTab } from './features/reference-data/TagsTab'
 import { UnitsTab } from './features/reference-data/UnitsTab'
 import { AccountSection } from './features/settings/AccountSection'
 import { AuditLogSection } from './features/settings/AuditLogSection'
+import { BackupsSection } from './features/settings/BackupsSection'
 import { HouseholdSection } from './features/settings/HouseholdSection'
 import { SecuritySection } from './features/settings/SecuritySection'
 import { UsersSection } from './features/settings/UsersSection'
@@ -71,6 +72,7 @@ export function App() {
                 <Route path="users" element={<UsersSection />} />
                 <Route path="security" element={<SecuritySection />} />
                 <Route path="audit" element={<AuditLogSection />} />
+                <Route path="backups" element={<BackupsSection />} />
                 <Route path="account" element={<AccountSection />} />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />

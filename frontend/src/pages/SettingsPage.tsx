@@ -15,6 +15,7 @@ const SETTINGS_NAV: SettingsNavItem[] = [
   { to: '/settings/users', label: 'Users', adminOnly: true },
   { to: '/settings/security', label: 'Security', adminOnly: true },
   { to: '/settings/audit', label: 'Audit log', adminOnly: true },
+  { to: '/settings/backups', label: 'Backups', adminOnly: true },
   { to: '/settings/account', label: 'Account' },
 ]
 

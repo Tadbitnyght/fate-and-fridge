@@ -73,6 +73,12 @@ export const ErrorCodes = {
   BackupFormatUnsupported: 'BACKUP_FORMAT_UNSUPPORTED',
   BackupSchemaTooNew: 'BACKUP_SCHEMA_TOO_NEW',
   RestoreInProgress: 'RESTORE_IN_PROGRESS',
+  BackupClientTooOld: 'BACKUP_CLIENT_TOO_OLD',
+  BackupInProgress: 'BACKUP_IN_PROGRESS',
+  BackupFailed: 'BACKUP_FAILED',
+  BackupNotFound: 'BACKUP_NOT_FOUND',
+  BackupFileMissing: 'BACKUP_FILE_MISSING',
+  RestoreFailed: 'RESTORE_FAILED',
 } as const
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes]

@@ -1994,9 +1994,21 @@ of that table snapshot, so it is never pruned by the restore that produced it.
 
 ### Not yet implemented (later M13 issues)
 
-Recovery-key export (M13-07) and the Backups UI (M13-06). Their contracts live
-in docs/M13_PLAN.md §2.2 until then. The pre-setup restore route
-(`POST /api/v1/setup/restore`) is documented with the rest of setup in §21.
+Recovery-key export (M13-07). Its contract lives in docs/M13_PLAN.md §2.2 until
+then. The pre-setup restore route (`POST /api/v1/setup/restore`) is documented
+with the rest of setup in §21.
+
+### Backups UI (M13-06)
+
+The Admin Settings → Backups section (`/settings/backups`, admin-only in the UI;
+the server stays the authority) lists these rows newest first, creates a backup
+through the shared dangerous-action dialog, downloads the encrypted archive,
+deletes with a reason plus the typed `DELETE`, and restores either a stored row
+(`{ backup_id }`) or a ≤ 2 GB upload (multipart) with a reason plus the typed
+`RESTORE`. On `202` it switches to a `role="status"` restarting state and polls
+`GET /api/v1/health` through connection errors and the maintenance window,
+re-entering the app only once health answers. Every refusal code above is shown
+readably; the UI never claims a restore succeeded before the app answers.
 
 ---
 

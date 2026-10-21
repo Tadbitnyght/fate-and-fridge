@@ -3812,3 +3812,149 @@ a.recipes__import:focus-visible {
   color: var(--bad-text);
   border-color: transparent;
 }
+
+/* ---------- backups (M13-06) ---------- */
+
+.backups-created {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.9rem;
+}
+
+.backups-created button {
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 0.45rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.backups-table__filename,
+.backups-table__error {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+
+.backups-table__schema {
+  max-width: 14rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.backups-table__size {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.backup-checksum {
+  font-size: 0.8rem;
+}
+
+.backup-checksum summary {
+  cursor: pointer;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.backup-checksum code {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.backup-status--completed {
+  background: var(--ok-bg);
+  color: var(--ok-text);
+  border-color: transparent;
+}
+
+.backup-status--pending {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.backup-status--restored {
+  background: var(--bg);
+  color: var(--muted);
+}
+
+.backup-status--failed,
+.backup-status--deleted {
+  background: var(--bad-bg);
+  color: var(--bad-text);
+  border-color: transparent;
+}
+
+/*
+ * The restore takes the whole page: the server is restarting, so nothing else
+ * on the page is actionable. It sits under the modal backdrop (z-index 20) so
+ * an open dialog would still be on top.
+ */
+.restore-progress {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: clamp(1.5rem, 8vh, 6rem) 1.25rem;
+  background: var(--bg);
+  overflow-y: auto;
+  text-align: center;
+}
+
+.restore-progress__title {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.restore-progress__message {
+  max-width: 32rem;
+  margin: 0;
+  font-weight: 600;
+}
+
+.restore-progress__facts {
+  display: grid;
+  gap: 0.4rem;
+  width: min(32rem, 100%);
+  margin: 0;
+  text-align: left;
+}
+
+.restore-progress__facts div {
+  display: grid;
+  grid-template-columns: minmax(7rem, 10rem) 1fr;
+  gap: 0.5rem;
+}
+
+.restore-progress__facts dt {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.restore-progress__facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.restore-progress .page-note {
+  max-width: 32rem;
+  margin: 0;
+}
+
+@media (max-width: 30rem) {
+  .restore-progress__facts div {
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
+  }
+}
