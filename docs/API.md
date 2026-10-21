@@ -2033,8 +2033,8 @@ of that table snapshot, so it is never pruned by the restore that produced it.
 ### Not yet implemented (later M13 issues)
 
 The pre-setup restore route (`POST /api/v1/setup/restore`) is documented with
-the rest of setup in §21. Version display (M13-08) and the update check (M13-09)
-are still to come.
+the rest of setup in §21. The version display is in §24 and the update check in
+§25.
 
 ### Backups UI (M13-06)
 
@@ -2443,12 +2443,126 @@ key. Anonymous requests receive `401 AUTH_REQUIRED`.
   footer renders nothing while the value is loading or unavailable, and the
   About section shows a retryable error.
 
-### Update status (deferred to M13-09)
+### Update status → §25
 
-The About section reserves a clearly marked **Update status** area that this
-contract does not fill yet. M13-09 adds the cached GitHub Releases check
-(`GET /admin/updates`, `POST /admin/updates/check`, `PATCH /admin/updates`) and
-renders `current_version`, `latest_version`, `update_available`,
-`last_checked_at`, `last_error`, and `enabled` there (and in the dashboard
-banner). No outbound release request exists until then.
+The About section renders the cached update status described in §25 instead of a
+placeholder. No outbound release request happens on this route.
+
+---
+
+## 25. M13 Contract: Update Check
+
+### Routes
+
+| Route | Authorization | Purpose |
+| --- | --- | --- |
+| `GET /api/v1/updates` | any authenticated actor | the **cached** status; never triggers an outbound request |
+| `POST /api/v1/admin/updates/check` | Admin (existing role) | forces one check, ignoring the 24 h cache |
+| `PATCH /api/v1/admin/updates` | Admin (existing role) | `{ "enabled": boolean }` → persists `update_check_enabled` |
+
+Anonymous requests receive `401 AUTH_REQUIRED`; a member calling either Admin
+route receives `403 FORBIDDEN`. No new permission key exists, and the status
+read is deliberately **not** Admin-gated because the About section and the
+dashboard notice are visible to every user.
+
+### `GET /api/v1/updates` (and both Admin responses)
+
+```json
+{
+  "current_version": "0.1.0",
+  "latest_version": "0.2.0",
+  "update_available": true,
+  "last_checked_at": "2026-10-21T12:00:00+00:00",
+  "last_error": null,
+  "enabled": true,
+  "release_url": "https://github.com/Tadbitnyght/fate-and-fridge/releases/tag/v0.2.0"
+}
+```
+
+- `current_version` is the running build's SemVer version (`AppInfo.Version`).
+- `latest_version` is the newest **published** release's SemVer, or `null` when
+  no release has been read (or the last read found none). The leading `v` of a
+  tag is stripped (`v0.2.0` → `0.2.0`).
+- `update_available` is computed server-side as
+  `enabled && latest_version > current_version`; the client never derives it.
+- `last_checked_at` is an ISO-8601 instant, or `null` before the first check.
+  It is stamped by every attempted check — including a failed one.
+- `last_error` is a short, non-identifying note from the last failed check (for
+  example `The release feed returned HTTP 503.`), or `null` after a successful
+  one. A failed check is **not** an HTTP error: the route still answers `200`
+  and keeps the last known release, so a transient outage never erases a known
+  update.
+- `enabled` mirrors the `update_check_enabled` setup preference.
+- `release_url` is the public release page the feed supplied, an absolute
+  `https` URL, or `null` when there is no known release. It is never the API
+  URL and never a download link. Clients only turn an `https` value into a link
+  (`rel="noreferrer"`, new tab).
+
+### Release selection and SemVer
+
+- The feed is GitHub's `releases/latest` for this repository.
+- **Drafts and prereleases are ignored**, as are tags that are not SemVer.
+  Ignoring them is "nothing newer to offer", not a failure: `latest_version`
+  becomes `null` and `last_error` stays `null`.
+- Comparison is numeric SemVer, so `0.9.0 < 0.10.0` and `0.1.0 == v0.1.0`.
+  Pre-release suffixes never win a comparison because such releases are not
+  selected at all.
+
+### Cache and failure behaviour
+
+- A successful result is cached in `application_settings` for **24 hours**; the
+  startup check runs non-blocking and fire-and-forget, so app start never waits
+  for the network.
+- `POST /admin/updates/check` bypasses the cache. It answers `200` with the
+  fresh status whether the feed succeeded or failed.
+- Offline hosts, DNS failures, timeouts, non-2xx responses, oversized bodies,
+  and unparseable JSON are all tolerated and recorded in `last_error`. The
+  application never treats them as an error page or a failed start.
+- With `enabled = false` **no outbound HTTP request is made at all** — the
+  startup check and a forced check both return the stored status unchanged, and
+  `update_available` is `false`.
+
+### `PATCH /api/v1/admin/updates`
+
+Accepts exactly `{ "enabled": boolean }`; a missing or non-boolean value is
+`400 VALIDATION_FAILED` with an `enabled` field error. The preference and its
+audit row (`settings.update_check_changed`, entity `settings`) commit together,
+and the response is the fresh status document above. The setting lives in the
+database, never only in the container filesystem.
+
+### Privacy
+
+The update check is the **only** outbound request the application makes. It is:
+
+- a bodiless `GET` to `https://api.github.com/repos/Tadbitnyght/fate-and-fridge/releases/latest`;
+- unauthenticated — no token, no query parameters, no cookies are forwarded;
+- identified only by a neutral `User-Agent: FateAndFridge/<current version>` and
+  `Accept: application/vnd.github+json`;
+- bounded by a request timeout, redirect limits, and a 256 KiB response cap.
+
+No household data, recipe content, usernames, identifiers, or telemetry are
+sent, and there is no second outbound call (no release-download, no analytics).
+
+### Nothing self-updates
+
+The check only *describes* an available release. The application never
+downloads, installs, restarts into, or otherwise applies an update: updating a
+deployment is a manual rebuild and redeploy, and the UI says so. There is no
+automatic self-update in V1.
+
+### UI surfaces
+
+- `Settings → About` shows `current_version`, `latest_version`, the textual
+  state (`Update available` / `Up to date` / `Update checks are off`),
+  `last_checked_at` through `formatTimestamp`, and `last_error` as a quiet note
+  rather than an error page. **Check now** is visible to every actor; the server
+  enforces Admin, and a member's `403` is rendered readably. The **Enable update
+  checks** toggle is Admin-only in the UI, with the server as the authority.
+- The shell renders a dismissible notice above `<main>` while
+  `update_available` is true. Dismissal is remembered **per device** in
+  `localStorage` (`faf.update-notice.dismissed-version`), keyed to
+  `latest_version`, so a newer release shows the notice again. The notice links
+  `release_url` (new tab, `rel="noreferrer"`) and carries its meaning in text,
+  never in colour alone.
+
 

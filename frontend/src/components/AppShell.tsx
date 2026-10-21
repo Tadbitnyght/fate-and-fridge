@@ -7,6 +7,7 @@ import { useAdminAccess } from '../features/settings/access'
 import { useAbout } from '../features/settings/useAbout'
 import { useFocusOnRouteChange } from '../hooks/useFocusOnRouteChange'
 import { MAIN_CONTENT_ID, SkipLink } from './SkipLink'
+import { UpdateBanner } from './UpdateBanner'
 
 interface NavItem {
   to: string
@@ -104,6 +105,13 @@ export function AppShell() {
           </ul>
         </nav>
       </header>
+
+      {/*
+        Update notice (M13-09): only when a newer release is known and this
+        device has not dismissed that exact version. It never shifts the shell
+        badly because it is a normal block in the shell's flex column.
+      */}
+      <UpdateBanner />
 
       <main id={MAIN_CONTENT_ID} className="app-main" tabIndex={-1} ref={mainRef}>
         <Outlet />

@@ -74,6 +74,49 @@ body {
   flex: 1;
 }
 
+/* ---------- update notice (M13-09) ---------- */
+
+/*
+ * A single block in the shell's flex column above <main>. It wraps on narrow
+ * screens and keeps the meaning in the text, never in colour alone.
+ */
+.update-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-left: 0.35rem solid var(--text);
+  border-radius: 0.6rem;
+  background: var(--surface);
+}
+
+.update-banner__body {
+  flex: 1 1 18rem;
+  min-width: 12rem;
+}
+
+.update-banner__title {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+}
+
+.update-banner p {
+  margin: 0.25rem 0 0;
+}
+
+.update-banner__dismiss {
+  flex: 0 0 auto;
+}
+
+@media print {
+  .update-banner {
+    display: none !important;
+  }
+}
+
 .status-panel {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -707,10 +750,10 @@ body {
   margin-top: 1rem;
 }
 
-/* Version display / About placeholder area (M13-08). */
+/* Update status / About panel (M13-09). */
 .about-updates {
   padding: 0.75rem 1rem;
-  border: 1px dashed var(--border);
+  border: 1px solid var(--border);
   border-radius: 0.6rem;
   background: var(--surface);
 }

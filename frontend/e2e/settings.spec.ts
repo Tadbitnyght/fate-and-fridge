@@ -39,9 +39,28 @@ interface UserRow {
 
 const viewOnly = ['calendar.view', 'groceries.view', 'recipes.view']
 
+/** The cached update status: up to date on 0.1.0 by default. */
+function updateStatus(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    current_version: '0.1.0',
+    latest_version: '0.1.0',
+    update_available: false,
+    last_checked_at: '2026-10-21T12:00:00Z',
+    last_error: null,
+    enabled: true,
+    release_url: 'https://github.com/Tadbitnyght/fate-and-fridge/releases/tag/v0.1.0',
+    ...overrides,
+  }
+}
+
 /** Hermetic settings API: a mutable user list, security row, and session. */
-async function mockSettingsApi(page: Page, session: unknown): Promise<void> {
+async function mockSettingsApi(
+  page: Page,
+  session: unknown,
+  updates: Record<string, unknown> = updateStatus(),
+): Promise<void> {
   const state = {
+    updates: { ...updates },
     users: [
       {
         id: 1,
@@ -78,6 +97,33 @@ async function mockSettingsApi(page: Page, session: unknown): Promise<void> {
       await route.fulfill({
         json: { app_version: '0.1.0', schema_version: '20261021023131_M13Backups' },
       })
+      return
+    }
+    if (path.endsWith('/admin/updates/check') && method === 'POST') {
+      if ((session as { user?: { role?: string } }).user?.role !== 'admin') {
+        await route.fulfill({
+          status: 403,
+          json: {
+            error: {
+              code: 'FORBIDDEN',
+              message: 'This action requires the Admin role.',
+              details: {},
+            },
+          },
+        })
+        return
+      }
+      await route.fulfill({ json: state.updates })
+      return
+    }
+    if (path.endsWith('/admin/updates') && method === 'PATCH') {
+      const body = JSON.parse(request.postData() ?? '{}') as { enabled?: boolean }
+      state.updates = { ...state.updates, enabled: body.enabled ?? true }
+      await route.fulfill({ json: state.updates })
+      return
+    }
+    if (path.endsWith('/updates') && method === 'GET') {
+      await route.fulfill({ json: state.updates })
       return
     }
     if (path.endsWith('/settings/household')) {
@@ -204,10 +250,50 @@ test('members see the About versions and the footer version label', async ({ pag
   await expect(page.getByTestId('about-app-version')).toHaveText('0.1.0')
   await expect(page.getByTestId('about-schema-version')).toHaveText('20261021023131_M13Backups')
   await expect(page.getByRole('heading', { name: 'Update status' })).toBeVisible()
+  await expect(page.getByTestId('about-update-state')).toHaveText('Up to date')
+  await expect(page.getByTestId('about-latest-version')).toHaveText('0.1.0')
+
+  // A member gets Check now (the server returns the 403) but never the toggle.
+  await expect(page.getByRole('button', { name: 'Check now' })).toBeVisible()
+  await expect(page.getByLabel('Enable update checks')).toHaveCount(0)
 
   const versionLink = page.getByRole('link', { name: 'Version 0.1.0' })
   await expect(versionLink).toBeVisible()
   await expect(versionLink).toHaveAttribute('href', '/settings/about')
+})
+
+test('members see, follow, and dismiss the update notice', async ({ page }) => {
+  await mockSettingsApi(
+    page,
+    memberSession,
+    updateStatus({
+      latest_version: '0.2.0',
+      update_available: true,
+      release_url: 'https://github.com/Tadbitnyght/fate-and-fridge/releases/tag/v0.2.0',
+    }),
+  )
+
+  await page.goto('/dashboard')
+
+  const banner = page.getByTestId('update-banner')
+  await expect(banner).toBeVisible()
+  await expect(banner.getByRole('heading', { name: /newer release is available/i })).toBeVisible()
+  await expect(banner.getByText(/manual rebuild and redeploy/i)).toBeVisible()
+
+  const link = banner.getByRole('link', { name: /release notes/i })
+  await expect(link).toHaveAttribute(
+    'href',
+    'https://github.com/Tadbitnyght/fate-and-fridge/releases/tag/v0.2.0',
+  )
+  await expect(link).toHaveAttribute('target', '_blank')
+  await expect(link).toHaveAttribute('rel', 'noreferrer')
+
+  await banner.getByRole('button', { name: /dismiss update notice/i }).click()
+  await expect(banner).toHaveCount(0)
+
+  // The dismissal is remembered on this device.
+  await page.reload()
+  await expect(page.getByTestId('update-banner')).toHaveCount(0)
 })
 
 test('admins see the About versions through the settings navigation', async ({ page }) => {
