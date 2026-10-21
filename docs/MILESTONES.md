@@ -299,6 +299,14 @@ Issues:
 11. release version display.
 12. periodic update check.
 
+Approved decisions (2026-10-20): see `docs/M13_PLAN.md` for the authoritative
+archive format, contents, metadata table, retention, restore/restart flow,
+clean-install restore, key export, versioning/release convention, and update
+check. Admin-only on the existing seven keys; one migration (`backup_metadata`).
+External prerequisite: the owner makes the repository public after reviewing the
+pre-publication secret scan, so `vX.Y.Z` releases exist for the update check.
+Tracking issue #162; issues M13-01…M13-10 are #163–#172.
+
 ---
 
 ## Milestone 14 — Hardening

@@ -322,7 +322,7 @@ describe('milestone manifest', () => {
     expect(progressSummary()).toEqual({
       total: 15,
       completed: 13,
-      inProgress: 0,
+      inProgress: 1,
       percent: Math.round((13 / 15) * 100),
     })
     expect(
