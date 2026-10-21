@@ -148,4 +148,23 @@ public static class ErrorCodes
 
     /// <summary>The typed confirmation did not match the required value.</summary>
     public const string ConfirmationMismatch = "CONFIRMATION_MISMATCH";
+
+    // M13 backup codes (docs/M13_PLAN.md §2.2, §4; docs/API.md §18).
+    /// <summary>The installed pg_dump client is older than the PostgreSQL server.</summary>
+    public const string BackupClientTooOld = "BACKUP_CLIENT_TOO_OLD";
+
+    /// <summary>The recovery key file is missing or unusable, so no archive can be written.</summary>
+    public const string BackupKeyMissing = "BACKUP_KEY_MISSING";
+
+    /// <summary>The requested backup row does not exist (or was already deleted).</summary>
+    public const string BackupNotFound = "BACKUP_NOT_FOUND";
+
+    /// <summary>Another backup operation is already running, or a pending row is in use.</summary>
+    public const string BackupInProgress = "BACKUP_IN_PROGRESS";
+
+    /// <summary>The backup operation failed; the row records the error.</summary>
+    public const string BackupFailed = "BACKUP_FAILED";
+
+    /// <summary>The backup row exists but its archive file is missing from disk.</summary>
+    public const string BackupFileMissing = "BACKUP_FILE_MISSING";
 }

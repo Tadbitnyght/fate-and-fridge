@@ -30,6 +30,35 @@ public sealed class RecoveryKeyStore(IConfiguration configuration, ILogger<Recov
     /// <summary>Absolute path of the recovery key file.</summary>
     public string FilePath => FilePathFor(configuration);
 
+    /// <summary>True when a recovery key file exists (no read, no creation).</summary>
+    public bool Exists => File.Exists(FilePath);
+
+    /// <summary>
+    /// Reads the validated existing recovery key <em>without creating one</em>
+    /// (docs/M13_PLAN.md §1.3, §1.4): a backup must never mint a key that the
+    /// user has not been shown. Returns null only when the file is absent; an
+    /// unreadable or malformed file throws <see cref="InvalidDataException"/>
+    /// exactly like <see cref="GetOrCreateAsync"/>.
+    /// </summary>
+    public async Task<string?> TryReadAsync(CancellationToken cancellationToken = default)
+    {
+        if (!File.Exists(FilePath))
+        {
+            return null;
+        }
+
+        return await ReadExistingAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Reads the validated existing recovery key, or throws
+    /// <see cref="InvalidDataException"/> when it is absent or unusable. This is
+    /// the read-only counterpart of <see cref="GetOrCreateAsync"/>.
+    /// </summary>
+    public async Task<string> ReadAsync(CancellationToken cancellationToken = default) =>
+        await TryReadAsync(cancellationToken).ConfigureAwait(false)
+        ?? throw InvalidKeyFile("the file does not exist", innerException: null);
+
     /// <summary>
     /// Returns the validated existing recovery key, or creates one. Creation is
     /// exclusive (a concurrently created file wins, is validated, and reused)

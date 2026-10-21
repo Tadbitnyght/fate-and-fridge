@@ -227,6 +227,14 @@ builder.Services.AddSingleton<IPgDumpVersionReader, PgDumpVersionReader>();
 builder.Services.AddScoped<IPgServerVersionReader, NpgsqlServerVersionReader>();
 builder.Services.AddScoped<PgToolingInfo>();
 
+// M13-03: backup creation, the serialized pg_dump runner, and the
+// backup_metadata lifecycle (docs/M13_PLAN.md §1.3–§1.8, §2.1). The runner is
+// a seam so orchestration is testable without the client tools; the process
+// gate serializes concurrent creates in this instance.
+builder.Services.AddSingleton<IPgDumpRunner, PgDumpRunner>();
+builder.Services.AddSingleton<BackupOperationGate>();
+builder.Services.AddScoped<BackupService>();
+
 // M1-09 permission model: one uncached grant reader plus the evaluator service
 // shared by GET /auth/session and the route enforcement filter.
 builder.Services.AddScoped<IPermissionGrantReader, DbPermissionGrantReader>();
@@ -333,6 +341,7 @@ app.MapCalendarEndpoints();
 app.MapGroceryEndpoints();
 app.MapStatisticsEndpoints();
 app.MapAdminEndpoints();
+app.MapBackupEndpoints();
 app.MapOperationEndpoints();
 app.MapImportEndpoints();
 

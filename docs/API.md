@@ -1780,13 +1780,122 @@ Bulk/date-range correction is deferred to V2 (docs/FUTURE_FEATURES.md).
 ---
 
 ## 18. Backup
-- `POST /admin/backup`
-- `GET /admin/backups`
-- `POST /admin/restore/validate`
-- `POST /admin/restore/apply`
-- `POST /admin/recovery-key/export`
 
-Exact download mechanism may use streamed responses.
+Implemented contract (M13-03; docs/M13_PLAN.md §1.4–§1.8, §2.2). Every route is
+under `/api/v1/admin` and is **Admin-only** on the existing `admin` role (and the
+single-user system actor): anonymous → `401 AUTH_REQUIRED`, a member →
+`403 FORBIDDEN`. **No new permission key is introduced.** Bodies are JSON with
+snake_case fields; a wrong `Content-Type` is `415 UNSUPPORTED_MEDIA_TYPE`.
+
+### Row shape
+
+All routes that return a backup use this object (newest first in the list):
+
+```json
+{
+  "id": 12,
+  "filename": "fatefridge-0.1.0-20261021T120000Z.ffbackup",
+  "kind": "manual",
+  "status": "completed",
+  "app_version": "0.1.0",
+  "schema_version": "20261021023131_M13Backups",
+  "created_at": "2026-10-21T12:00:00+00:00",
+  "size_bytes": 1048576,
+  "checksum": "9f2c…64 lowercase hex characters…",
+  "error": null
+}
+```
+
+- `kind` is `manual` or `safety`; `status` is `pending`, `completed`, `failed`,
+  `restored`, or `deleted`. `error` is the recorded failure detail for a
+  `failed` row and `null` otherwise.
+- `checksum` is the lowercase SHA-256 of the **encrypted** archive file and is
+  empty until the create completes; `size_bytes` is that file's length.
+- `schema_version` is the applied EF Core migration id at creation; a database
+  with no applied migration is recorded as `unapplied`.
+- The archive file itself lives on the mounted volume, never in the container
+  filesystem: manual archives in `<DataDir>/backups/`, pre-restore safety
+  archives in `<DataDir>/backups/safety/`. `recovery.key`, logs, and other
+  backups are never inside an archive.
+
+### `GET /api/v1/admin/backups`
+
+Returns every `backup_metadata` row (including `failed` and `deleted` ones),
+newest first, as a bare JSON array of row objects. No paging.
+
+### `POST /api/v1/admin/backups`
+
+Request body:
+
+```json
+{ "reason": "Before the upgrade" }
+```
+
+- `reason` is required and bounded by the shared dangerous-action rules
+  (`REASON_REQUIRED`, `REASON_TOO_LONG`, `REASON_INVALID` with
+  `details.field_errors`). It is written to the `backup.created` audit row
+  (`entity_type = "backup"`, `entity_id` = row id).
+- **Creation is synchronous.** The server inserts a `pending` row, runs
+  `pg_dump --format=custom --no-owner --no-privileges`, writes the encrypted
+  archive, records its checksum/size, and only then answers. A large household
+  therefore means a **long request**; clients must allow a generous timeout and
+  must not assume a background job exists.
+- Success: **`201 Created`** with the row already in its final state
+  (`status = "completed"`).
+- Refusals before any dump or archive (no row is left behind):
+  - `409 BACKUP_CLIENT_TOO_OLD` — the installed `pg_dump` major is older than the
+    PostgreSQL server major, or either version could not be determined.
+  - `409 BACKUP_KEY_MISSING` — `<DataDir>/config/recovery.key` is absent or
+    unusable. A backup never creates a recovery key.
+  - `409 BACKUP_IN_PROGRESS` — another create is already running in this
+    instance; creates are serialized (one dump at a time).
+- Failure during the dump/archive step: **`500 BACKUP_FAILED`**. The row remains,
+  marked `status = "failed"` with `error`, no archive is presented, partial temp
+  files are removed, and **no `backup.created` audit row is written**.
+
+### `GET /api/v1/admin/backups/{id}/download`
+
+Streams the encrypted archive as `application/octet-stream` with an
+`attachment` disposition carrying the row's `filename`; range requests are
+supported.
+
+- `404 BACKUP_NOT_FOUND` — the row does not exist or is already `deleted`.
+- `404 BACKUP_FILE_MISSING` — the row exists but its file is gone from the
+  backups directory.
+
+### `DELETE /api/v1/admin/backups/{id}`
+
+Request body:
+
+```json
+{ "reason": "No longer needed", "confirmation": "DELETE" }
+```
+
+- `reason` is required (≤ 500 characters) and `confirmation` must equal
+  `DELETE` exactly (ordinal, case-sensitive, compared after trimming); the
+  shared `DangerousActionGuard` enforces this server-side, independently of any
+  UI dialog (`REASON_REQUIRED`, `REASON_TOO_LONG`, `REASON_INVALID`,
+  `CONFIRMATION_MISMATCH` with `details.field_errors`).
+- Removes the file and marks the row `status = "deleted"` in one transaction with
+  the `backup.deleted` audit row (`entity_type = "backup"`); responds `200` with
+  the updated row.
+- `404 BACKUP_NOT_FOUND` — unknown row or already deleted.
+- `409 BACKUP_IN_PROGRESS` — the row is still `pending`; a running create's file
+  is never deleted underneath it.
+- `500 BACKUP_FAILED` — the file could not be removed; the row is left unchanged.
+
+### Retention
+
+`PruneSafetyBackups` keeps the **newest five** `kind = "safety"` rows and their
+files, marks older safety rows `deleted`, and **never** touches a `manual`
+archive. A `pending` safety row is never pruned. Manual deletion is the only way
+a manual backup disappears (docs/M13_PLAN.md §1.8).
+
+### Not yet implemented (later M13 issues)
+
+Restore (`POST /api/v1/admin/backups/restore`, `POST /api/v1/setup/restore`),
+recovery-key export, and the UI arrive with M13-04, M13-05, M13-06, and M13-07.
+Their contract lives in docs/M13_PLAN.md §2.2 until then.
 
 ---
 

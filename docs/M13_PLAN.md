@@ -145,8 +145,10 @@ to the Lead before implementing.
 - `GET /api/v1/admin/backups` (Admin) → rows from `backup_metadata` with
   `filename, kind, status, app_version, schema_version, created_at, size_bytes,
   checksum`.
-- `POST /api/v1/admin/backups` (Admin) → body `{ reason }` (audited) → `202` with
-  the pending row; the archive is written to `/data/backups` with its checksum.
+- `POST /api/v1/admin/backups` (Admin) → body `{ reason }` (audited) → **`201`
+  Created** with the **completed** row (the create is synchronous; a failure
+  returns `500 BACKUP_FAILED`, marks the row `failed` and leaves no partial
+  archive); the archive is written to `/data/backups` with its checksum.
 - `GET /api/v1/admin/backups/{id}/download` (Admin) → the encrypted file
   (`application/octet-stream`, attachment disposition).
 - `DELETE /api/v1/admin/backups/{id}` (Admin) → body `{ reason, confirmation }`

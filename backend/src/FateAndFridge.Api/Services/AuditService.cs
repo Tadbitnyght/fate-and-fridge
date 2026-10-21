@@ -111,6 +111,9 @@ public static class AuditEventTypes
 
     public const string BackupRestored = "backup.restored";
 
+    // M13-03: an Admin deleted one archive (file removed, row marked deleted).
+    public const string BackupDeleted = "backup.deleted";
+
     // M12-04: the explicit, age-based audit retention prune.
     public const string AuditPruned = "audit.pruned";
 }
