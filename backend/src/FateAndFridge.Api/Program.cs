@@ -220,6 +220,13 @@ builder.Services.AddScoped<MealHistoryService>();
 // the reroll/batch calendar_entry_history rows); bounded, read-only.
 builder.Services.AddScoped<AuditLogQueryService>();
 
+// M13-01: the backup-tooling probe. M13-03 consults the recorded client/server
+// major check and refuses a backup when the shipped pg_dump is older than the
+// server (docs/M13_PLAN.md §1.3). Probing never fails application startup.
+builder.Services.AddSingleton<IPgDumpVersionReader, PgDumpVersionReader>();
+builder.Services.AddScoped<IPgServerVersionReader, NpgsqlServerVersionReader>();
+builder.Services.AddScoped<PgToolingInfo>();
+
 // M1-09 permission model: one uncached grant reader plus the evaluator service
 // shared by GET /auth/session and the route enforcement filter.
 builder.Services.AddScoped<IPermissionGrantReader, DbPermissionGrantReader>();

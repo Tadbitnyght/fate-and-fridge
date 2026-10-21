@@ -161,6 +161,83 @@ namespace FateAndFridge.Api.Migrations
                     b.ToTable("auth_events", (string)null);
                 });
 
+            modelBuilder.Entity("FateAndFridge.Api.Domain.BackupMetadata", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("AppVersion")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("app_version");
+
+                    b.Property<string>("Checksum")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("checksum");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<long?>("CreatedByUserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<string>("Error")
+                        .HasColumnType("text")
+                        .HasColumnName("error");
+
+                    b.Property<string>("Filename")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("filename");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("schema_version");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("size_bytes");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("pending")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_backup_metadata");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("ix_backup_metadata_created_at");
+
+                    b.HasIndex("CreatedByUserId")
+                        .HasDatabaseName("ix_backup_metadata_created_by_user_id");
+
+                    b.HasIndex("Filename")
+                        .IsUnique()
+                        .HasDatabaseName("ix_backup_metadata_filename");
+
+                    b.ToTable("backup_metadata", (string)null);
+                });
+
             modelBuilder.Entity("FateAndFridge.Api.Domain.CalendarEntry", b =>
                 {
                     b.Property<long>("Id")
@@ -1555,6 +1632,15 @@ namespace FateAndFridge.Api.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_auth_events_users_user_id");
+                });
+
+            modelBuilder.Entity("FateAndFridge.Api.Domain.BackupMetadata", b =>
+                {
+                    b.HasOne("FateAndFridge.Api.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_backup_metadata_users_created_by_user_id");
                 });
 
             modelBuilder.Entity("FateAndFridge.Api.Domain.CalendarEntry", b =>

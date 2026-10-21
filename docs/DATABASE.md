@@ -482,16 +482,20 @@ Security note: the backup recovery key is **not** stored in the database. It is 
 
 ### backup_metadata
 - `id`
-- `filename`
+- `filename` — unique; the archive name inside `/data/backups`
 - `app_version`
-- `schema_version`
+- `schema_version` — applied migration id at creation
 - `created_at`
-- `created_by_user_id`
-- `checksum`
+- `created_by_user_id` nullable — FK to `users`, `OnDelete(Restrict)`
+- `checksum` — 64-character SHA-256 hex digest of the encrypted archive
 - `size_bytes`
-- `status`
+- `kind` — `manual` | `safety`
+- `status` — `pending` | `completed` | `failed` | `restored` | `deleted`
+  (default `pending`)
+- `error` nullable — failure detail for a failed archive
 
-Actual backup files live in mounted storage.
+Created by the `M13Backups` migration (M13-01). Actual backup files live in
+mounted storage.
 
 ---
 

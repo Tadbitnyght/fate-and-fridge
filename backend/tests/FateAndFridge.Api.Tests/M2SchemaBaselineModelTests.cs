@@ -53,6 +53,7 @@ public sealed class M2SchemaBaselineModelTests
                 typeof(ManualGroceryItem),
                 typeof(GroceryCheckState),
                 typeof(UserGroceryPreference),
+                typeof(BackupMetadata),
             ]);
     }
 

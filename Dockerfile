@@ -34,9 +34,29 @@ RUN dotnet publish src/FateAndFridge.Api/FateAndFridge.Api.csproj \
 
 # ---------------------------------------------------------------- runtime ---
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
+
+# curl backs the healthcheck. The PostgreSQL 17 client tools (pg_dump,
+# pg_restore, psql) back M13 backups: an older client cannot dump a newer
+# server, so the PGDG suite is derived from the base image's Debian codename and
+# the build fails loudly if no suite exists rather than silently installing an
+# older client from the distribution repository.
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends ca-certificates curl; \
+    rm -rf /var/lib/apt/lists/*; \
+    install -d /usr/share/postgresql-common/pgdg; \
+    curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+        https://www.postgresql.org/media/keys/ACCC4CF8.asc; \
+    . /etc/os-release; \
+    codename="${VERSION_CODENAME:?cannot determine the Debian codename from /etc/os-release}"; \
+    curl -fsSL -o /dev/null "https://apt.postgresql.org/pub/repos/apt/dists/${codename}-pgdg/Release"; \
+    echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${codename}-pgdg main" > /etc/apt/sources.list.d/pgdg.list; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends postgresql-client-17; \
+    rm -rf /var/lib/apt/lists/*; \
+    pg_dump --version | grep -Eq '^pg_dump \(PostgreSQL\) 17\.'; \
+    pg_restore --version | grep -Eq '^pg_restore \(PostgreSQL\) 17\.'; \
+    psql --version | grep -Eq '^psql \(PostgreSQL\) 17\.'
 
 WORKDIR /app
 COPY --from=backend-build /app/publish ./

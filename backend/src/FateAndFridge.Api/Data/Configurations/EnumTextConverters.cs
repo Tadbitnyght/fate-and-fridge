@@ -42,6 +42,16 @@ internal static class EnumTextConverters
             type => CalendarEntryTypeToText(type),
             text => CalendarEntryTypeFromText(text));
 
+    public static ValueConverter<BackupKind, string> BackupKindConverter { get; } =
+        new ValueConverter<BackupKind, string>(
+            kind => BackupKindToText(kind),
+            text => BackupKindFromText(text));
+
+    public static ValueConverter<BackupStatus, string> BackupStatusConverter { get; } =
+        new ValueConverter<BackupStatus, string>(
+            status => BackupStatusToText(status),
+            text => BackupStatusFromText(text));
+
     internal static string UserRoleToText(UserRole role) => role switch
     {
         UserRole.Admin => "admin",
@@ -245,4 +255,72 @@ internal static class EnumTextConverters
         TryCalendarEntryTypeFromText(text, out var type)
             ? type
             : throw new ArgumentOutOfRangeException(nameof(text), text, "Unknown calendar entry type text.");
+
+    internal static string BackupKindToText(BackupKind kind) => kind switch
+    {
+        BackupKind.Manual => "manual",
+        BackupKind.Safety => "safety",
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown backup kind."),
+    };
+
+    internal static bool TryBackupKindFromText(string? text, out BackupKind kind)
+    {
+        switch (text)
+        {
+            case "manual":
+                kind = BackupKind.Manual;
+                return true;
+            case "safety":
+                kind = BackupKind.Safety;
+                return true;
+            default:
+                kind = default;
+                return false;
+        }
+    }
+
+    private static BackupKind BackupKindFromText(string text) =>
+        TryBackupKindFromText(text, out var kind)
+            ? kind
+            : throw new ArgumentOutOfRangeException(nameof(text), text, "Unknown backup kind text.");
+
+    internal static string BackupStatusToText(BackupStatus status) => status switch
+    {
+        BackupStatus.Pending => "pending",
+        BackupStatus.Completed => "completed",
+        BackupStatus.Failed => "failed",
+        BackupStatus.Restored => "restored",
+        BackupStatus.Deleted => "deleted",
+        _ => throw new ArgumentOutOfRangeException(nameof(status), status, "Unknown backup status."),
+    };
+
+    internal static bool TryBackupStatusFromText(string? text, out BackupStatus status)
+    {
+        switch (text)
+        {
+            case "pending":
+                status = BackupStatus.Pending;
+                return true;
+            case "completed":
+                status = BackupStatus.Completed;
+                return true;
+            case "failed":
+                status = BackupStatus.Failed;
+                return true;
+            case "restored":
+                status = BackupStatus.Restored;
+                return true;
+            case "deleted":
+                status = BackupStatus.Deleted;
+                return true;
+            default:
+                status = default;
+                return false;
+        }
+    }
+
+    private static BackupStatus BackupStatusFromText(string text) =>
+        TryBackupStatusFromText(text, out var status)
+            ? status
+            : throw new ArgumentOutOfRangeException(nameof(text), text, "Unknown backup status text.");
 }

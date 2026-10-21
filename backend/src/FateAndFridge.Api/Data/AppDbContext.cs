@@ -69,6 +69,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     public DbSet<UserGroceryPreference> UserGroceryPreferences => Set<UserGroceryPreference>();
 
+    public DbSet<BackupMetadata> BackupMetadata => Set<BackupMetadata>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -112,5 +114,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         modelBuilder.ApplyConfiguration(new ManualGroceryItemConfiguration());
         modelBuilder.ApplyConfiguration(new GroceryCheckStateConfiguration());
         modelBuilder.ApplyConfiguration(new UserGroceryPreferenceConfiguration());
+
+        // M13-01 backup archive metadata (docs/M13_PLAN.md §1.7).
+        modelBuilder.ApplyConfiguration(new BackupMetadataConfiguration());
     }
 }
