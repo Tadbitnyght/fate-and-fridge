@@ -157,6 +157,20 @@ npx playwright install chromium            # first time only
 E2E_BASE_URL=http://192.168.0.2:50080 npm run test:e2e
 ```
 
+### Image contents (M13)
+
+The runtime stage is `mcr.microsoft.com/dotnet/aspnet:10.0`, which currently
+resolves to **Ubuntu 24.04 (noble)** — *not* Debian. The image installs
+`postgresql-client-17` from the PGDG suite resolved from `/etc/os-release`
+(`noble-pgdg` today) and asserts at build time that `pg_dump`, `pg_restore`, and
+`psql` report **17.x**. A base-image change to a codename PGDG does not publish
+therefore fails the build instead of silently shipping an older client — and an
+older `pg_dump` cannot dump the PostgreSQL 17 server, which would make every
+backup broken.
+
+Verified at M13-01: client **17.11**, healthcheck `curl` intact, image ~**78 MB**
+larger uncompressed than the M12 image (about 63 MB of that is the client tools).
+
 ## 5. Data layout and persistence
 
 ```
