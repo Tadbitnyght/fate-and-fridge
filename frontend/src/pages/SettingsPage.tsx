@@ -17,6 +17,8 @@ const SETTINGS_NAV: SettingsNavItem[] = [
   { to: '/settings/audit', label: 'Audit log', adminOnly: true },
   { to: '/settings/backups', label: 'Backups', adminOnly: true },
   { to: '/settings/account', label: 'Account' },
+  // Version display is for every authenticated actor (M13-08).
+  { to: '/settings/about', label: 'About' },
 ]
 
 function navClass({ isActive }: { isActive: boolean }): string {

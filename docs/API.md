@@ -20,6 +20,7 @@ External API keys/service accounts are deferred.
 ```text
 /api/v1/setup
 /api/v1/auth
+/api/v1/about
 /api/v1/users
 /api/v1/settings
 /api/v1/calendar
@@ -2412,3 +2413,42 @@ General rules:
 - `PUT /recipes/{id}/image` (multipart `file`, optional `alt_text`; `recipes.edit`). Replaces the active image.
 - `PATCH /recipes/{id}/image` — `{ alt_text }` (≤300 characters; null/empty clears it); `recipes.edit`.
 - `DELETE /recipes/{id}/image` (`recipes.edit`). See docs/SECURITY.md for the content policy.
+
+---
+
+## 24. M13 Contract: Version Display
+
+### `GET /about`
+
+Any authenticated actor may read it: a member, an Admin, and the single-user
+system actor all receive `200`. There is no Admin gate and no new permission
+key. Anonymous requests receive `401 AUTH_REQUIRED`.
+
+```json
+{
+  "app_version": "0.1.0",
+  "schema_version": "20261021023131_M13Backups"
+}
+```
+
+- `app_version` is the running build's SemVer version (`AppInfo.Version`). Build
+  hashes and source-revision metadata are never exposed.
+- `schema_version` is the **last applied** EF Core migration id — what the
+  database actually is, not what the build expects.
+- If the database cannot be read, the route still answers **`200`** with
+  `"schema_version": null` and logs a warning. A version display must never make
+  the app look broken; the application version stays useful without the schema
+  version.
+- A `GET /about` failure is limited to connectivity/authentication. The shell
+  footer renders nothing while the value is loading or unavailable, and the
+  About section shows a retryable error.
+
+### Update status (deferred to M13-09)
+
+The About section reserves a clearly marked **Update status** area that this
+contract does not fill yet. M13-09 adds the cached GitHub Releases check
+(`GET /admin/updates`, `POST /admin/updates/check`, `PATCH /admin/updates`) and
+renders `current_version`, `latest_version`, `update_available`,
+`last_checked_at`, `last_error`, and `enabled` there (and in the dashboard
+banner). No outbound release request exists until then.
+

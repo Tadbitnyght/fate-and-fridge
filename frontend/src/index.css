@@ -707,6 +707,18 @@ body {
   margin-top: 1rem;
 }
 
+/* Version display / About placeholder area (M13-08). */
+.about-updates {
+  padding: 0.75rem 1rem;
+  border: 1px dashed var(--border);
+  border-radius: 0.6rem;
+  background: var(--surface);
+}
+
+.about-updates h4 {
+  margin: 0;
+}
+
 .settings-section__header {
   display: flex;
   flex-wrap: wrap;
@@ -1528,6 +1540,15 @@ main:focus-visible {
   flex-wrap: wrap;
   justify-content: center;
   gap: 0.25rem 1rem;
+}
+
+.app-footer__version a {
+  color: var(--muted);
+}
+
+.app-footer__version a:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
 }
 
 /* ---------- recipes (M3-10 / M3-11) ---------- */

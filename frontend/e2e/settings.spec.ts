@@ -74,6 +74,12 @@ async function mockSettingsApi(page: Page, session: unknown): Promise<void> {
       await route.fulfill({ json: session })
       return
     }
+    if (path.endsWith('/about')) {
+      await route.fulfill({
+        json: { app_version: '0.1.0', schema_version: '20261021023131_M13Backups' },
+      })
+      return
+    }
     if (path.endsWith('/settings/household')) {
       await route.fulfill({
         json: {
@@ -185,6 +191,39 @@ test('members see Account-only settings and no Admin sections', async ({ page })
   await page.getByRole('link', { name: 'Account' }).click()
   await expect(page.getByRole('heading', { name: 'Account' })).toBeVisible()
   await expect(page.locator('main').getByText('sam')).toBeVisible()
+})
+
+test('members see the About versions and the footer version label', async ({ page }) => {
+  await mockSettingsApi(page, memberSession)
+
+  await page.goto('/settings/about')
+
+  const nav = page.getByRole('navigation', { name: 'Settings sections' })
+  await expect(nav.getByRole('link', { name: 'About' })).toBeVisible()
+
+  await expect(page.getByTestId('about-app-version')).toHaveText('0.1.0')
+  await expect(page.getByTestId('about-schema-version')).toHaveText('20261021023131_M13Backups')
+  await expect(page.getByRole('heading', { name: 'Update status' })).toBeVisible()
+
+  const versionLink = page.getByRole('link', { name: 'Version 0.1.0' })
+  await expect(versionLink).toBeVisible()
+  await expect(versionLink).toHaveAttribute('href', '/settings/about')
+})
+
+test('admins see the About versions through the settings navigation', async ({ page }) => {
+  await mockSettingsApi(page, adminSession)
+
+  await page.goto('/settings/account')
+  await expect(page.getByRole('link', { name: 'Version 0.1.0' })).toBeVisible()
+
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('link', { name: 'About' })
+    .click()
+
+  await expect(page.getByRole('heading', { name: 'About' })).toBeVisible()
+  await expect(page.getByTestId('about-app-version')).toHaveText('0.1.0')
+  await expect(page.getByTestId('about-schema-version')).toHaveText('20261021023131_M13Backups')
 })
 
 test('admin saves the IP allowlist with the lockout confirmation', async ({ page }) => {

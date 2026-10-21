@@ -11,6 +11,7 @@ import { ProteinsTab } from './features/reference-data/ProteinsTab'
 import { ReferenceDataPage } from './features/reference-data/ReferenceDataPage'
 import { TagsTab } from './features/reference-data/TagsTab'
 import { UnitsTab } from './features/reference-data/UnitsTab'
+import { AboutSection } from './features/settings/AboutSection'
 import { AccountSection } from './features/settings/AccountSection'
 import { AuditLogSection } from './features/settings/AuditLogSection'
 import { BackupsSection } from './features/settings/BackupsSection'
@@ -73,6 +74,7 @@ export function App() {
                 <Route path="security" element={<SecuritySection />} />
                 <Route path="audit" element={<AuditLogSection />} />
                 <Route path="backups" element={<BackupsSection />} />
+                <Route path="about" element={<AboutSection />} />
                 <Route path="account" element={<AccountSection />} />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />

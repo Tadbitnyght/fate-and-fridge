@@ -4,6 +4,7 @@ import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../features/auth/AuthContext'
 import { LiveSyncStatus } from '../features/live-sync/LiveSyncStatus'
 import { useAdminAccess } from '../features/settings/access'
+import { useAbout } from '../features/settings/useAbout'
 import { useFocusOnRouteChange } from '../hooks/useFocusOnRouteChange'
 import { MAIN_CONTENT_ID, SkipLink } from './SkipLink'
 
@@ -35,6 +36,7 @@ function navLinkClass({ isActive }: { isActive: boolean }): string {
 export function AppShell() {
   const { status, user, permissions, logout } = useAuth()
   const { isAdmin } = useAdminAccess()
+  const aboutQuery = useAbout()
   const [signingOut, setSigningOut] = useState(false)
   const [logoutError, setLogoutError] = useState<string | null>(null)
   const mainRef = useRef<HTMLElement>(null)
@@ -112,6 +114,16 @@ export function AppShell() {
         <p>
           <Link to="/progress">Milestone progress</Link>
         </p>
+        {/*
+          Version display (M13-08). While loading, or when the version cannot be
+          read, the label renders nothing rather than an error: the footer must
+          never make the app look broken.
+        */}
+        {aboutQuery.data && (
+          <p className="app-footer__version">
+            <Link to="/settings/about">Version {aboutQuery.data.app_version}</Link>
+          </p>
+        )}
       </footer>
     </div>
   )

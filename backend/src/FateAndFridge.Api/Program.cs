@@ -344,6 +344,9 @@ app.UseAuthorization();
 
 app.MapOpenApi();
 app.MapHealthEndpoints();
+// M13-08: the authenticated version display behind Settings → About and the
+// shell footer label (docs/M13_PLAN.md §1.12, docs/API.md §24).
+app.MapAboutEndpoints();
 app.MapSetupEndpoints();
 app.MapAuthEndpoints();
 app.MapUserEndpoints();
