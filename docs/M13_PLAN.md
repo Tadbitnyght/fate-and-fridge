@@ -173,10 +173,12 @@ to the Lead before implementing.
 - `POST /api/v1/setup/restore` (pre-setup only) → multipart archive + recovery
   key → same validation path, then restart; `409 SETUP_ALREADY_COMPLETED` after
   setup (the existing setup code, not a second spelling).
-- `GET /api/v1/admin/updates` (Admin) → `{ current_version, latest_version,
-  update_available, last_checked_at, last_error, enabled }`;
-  `POST /api/v1/admin/updates/check` → forces a check;
-  `PATCH /api/v1/admin/updates` → `{ enabled }`.
+- `GET /api/v1/updates` (**any authenticated user**; read-only) →
+  `{ current_version, latest_version, update_available, last_checked_at,
+  last_error, enabled }` — the About section and the dashboard banner are visible
+  to every user, so the status read is not Admin-gated;
+  `POST /api/v1/admin/updates/check` (**Admin**) → forces a check;
+  `PATCH /api/v1/admin/updates` (**Admin**) → `{ enabled }`.
 - `DELETE /api/v1/admin/backups/...`/restore use the shared error envelope and
   snake_case JSON; all routes are `RequireAdmin()`.
 

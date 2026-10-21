@@ -86,6 +86,9 @@ public static class AuditEventTypes
 
     public const string SettingsAuthModeSwitched = "settings.auth_mode_switched";
 
+    // M13-09: an Admin enabled or disabled the outbound release check.
+    public const string SettingsUpdateCheckChanged = "settings.update_check_changed";
+
     // Groceries: manual items and the staple catalog.
     public const string GroceriesManualItemAdded = "groceries.manual_item_added";
 

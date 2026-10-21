@@ -245,6 +245,13 @@ builder.Services.AddSingleton<RestoreState>();
 builder.Services.AddSingleton<IRestoreRestartSignal, HostRestartSignal>();
 builder.Services.AddSingleton<RestoreService>();
 
+// M13-09: the single outbound release-metadata GET (docs/M13_PLAN.md §1.13;
+// docs/ARCHITECTURE.md §20, docs/SECURITY.md §18). The request carries only a
+// neutral User-Agent and the GitHub media type — no token, no body, no
+// household data, no identifiers.
+builder.Services.AddHttpClient<GitHubReleaseClient>(GitHubReleaseClient.Configure);
+builder.Services.AddScoped<UpdateCheckService>();
+
 // M1-09 permission model: one uncached grant reader plus the evaluator service
 // shared by GET /auth/session and the route enforcement filter.
 builder.Services.AddScoped<IPermissionGrantReader, DbPermissionGrantReader>();
@@ -322,6 +329,14 @@ if (migrateOnly)
 // (docs/M13_PLAN.md §1.9 step 8). Idempotent and never fatal at startup.
 await RestoreMarker.CompleteStartupAsync(app.Configuration, app.Services, app.Logger);
 
+// M13-09: the update check runs once in the background (24-hour cache, and no
+// call at all when update_check_enabled is false). It is deliberately not
+// awaited: a slow or unreachable GitHub must never delay or fail startup.
+if (app.Configuration.GetValue("Updates:StartupCheckEnabled", true))
+{
+    _ = UpdateCheckService.StartStartupCheckAsync(app.Services, app.Logger);
+}
+
 // Order matters: the exception handler wraps everything so unexpected failures
 // still use the shared error envelope; restore maintenance mode answers
 // 503 RESTORE_IN_PROGRESS before any other middleware can touch the database;
@@ -347,6 +362,9 @@ app.MapHealthEndpoints();
 // M13-08: the authenticated version display behind Settings → About and the
 // shell footer label (docs/M13_PLAN.md §1.12, docs/API.md §24).
 app.MapAboutEndpoints();
+// M13-09: update status (any authenticated actor) plus the Admin-only forced
+// check and enabled preference (docs/M13_PLAN.md §2.2, docs/API.md §25).
+app.MapUpdateEndpoints();
 app.MapSetupEndpoints();
 app.MapAuthEndpoints();
 app.MapUserEndpoints();

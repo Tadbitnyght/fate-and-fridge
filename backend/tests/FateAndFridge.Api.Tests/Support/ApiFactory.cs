@@ -17,7 +17,8 @@ public sealed class ApiFactory(
     bool migrateOnStartup = false,
     string? dataDir = null,
     Action<IServiceCollection>? configureServices = null,
-    RecordingLiveSyncPublisher? liveSyncPublisher = null) : WebApplicationFactory<Program>
+    RecordingLiveSyncPublisher? liveSyncPublisher = null,
+    bool startupUpdateCheck = false) : WebApplicationFactory<Program>
 {
     public const string DummyConnectionString =
         "Host=localhost;Port=5432;Database=fatefridge_tests;Username=fatefridge;Password=fatefridge";
@@ -42,6 +43,11 @@ public sealed class ApiFactory(
         });
         builder.UseSetting("ConnectionStrings:Default", connectionString);
         builder.UseSetting("Database:MigrateOnStartup", migrateOnStartup ? "true" : "false");
+
+        // M13-09: the startup update check is off by default in tests so no
+        // test host reaches the public network; the update-check suite opts in
+        // with its own stub transport (docs/M13_PLAN.md §1.13).
+        builder.UseSetting("Updates:StartupCheckEnabled", startupUpdateCheck ? "true" : "false");
         if (dataDir is not null)
         {
             builder.UseSetting("DataDir", dataDir);
