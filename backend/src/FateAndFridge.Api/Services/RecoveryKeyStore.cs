@@ -115,6 +115,75 @@ public sealed class RecoveryKeyStore(IConfiguration configuration, ILogger<Recov
         return key;
     }
 
+    /// <summary>
+    /// Establishes a caller-supplied key as this device's recovery key when no
+    /// key file exists yet (docs/M13_PLAN.md §1.10). The clean-install restore
+    /// uses it: the operator pastes the household key of the device the archive
+    /// came from, so that key must be the key this device keeps — otherwise the
+    /// mandatory pre-restore safety backup could not be encrypted at all, and
+    /// the restored instance would have no key for later backups (a completed
+    /// setup never mints a second one). An existing file is never overwritten
+    /// and never compared with the supplied key; the supplied value is validated
+    /// but never logged.
+    /// </summary>
+    /// <returns>True when the file was created by this call.</returns>
+    /// <exception cref="ArgumentException">The value is not a base64url-encoded 32-byte key.</exception>
+    public async Task<bool> WriteIfAbsentAsync(string key, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+
+        var keyText = key.Trim();
+        if (!IsValidKey(keyText))
+        {
+            throw new ArgumentException(
+                $"The supplied key must be a base64url-encoded {KeyLengthBytes}-byte key.",
+                nameof(key));
+        }
+
+        if (File.Exists(FilePath))
+        {
+            return false;
+        }
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
+
+            var options = new FileStreamOptions
+            {
+                Mode = FileMode.CreateNew,
+                Access = FileAccess.Write,
+                Share = FileShare.None,
+            };
+            if (!OperatingSystem.IsWindows())
+            {
+                options.UnixCreateMode = OwnerOnlyMode;
+            }
+
+            try
+            {
+                await using var stream = new FileStream(FilePath, options);
+                await using var writer = new StreamWriter(stream);
+                await writer.WriteAsync(keyText.AsMemory(), cancellationToken);
+            }
+            catch (IOException) when (File.Exists(FilePath))
+            {
+                // Another writer created the key first: never overwrite it.
+                return false;
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw InvalidKeyFile(
+                "the key file could not be created (check that the config directory exists and is writable)",
+                exception);
+        }
+
+        logger.LogInformation(
+            "The recovery key supplied with the clean-install restore was adopted as this device's key.");
+        return true;
+    }
+
     private async Task<string> ReadExistingAsync(CancellationToken cancellationToken)
     {
         string content;

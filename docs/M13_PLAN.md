@@ -81,6 +81,11 @@ to the Lead before implementing.
     restore runs, then the app restarts into the restored (already set-up) state.
     Only the restore endpoints bypass the `SETUP_REQUIRED` gate for this flow,
     and they require the archive to decrypt with the supplied key.
+    Locked details (M13-05): the pasted key is adopted as this device's
+    `/data/config/recovery.key` **after** the archive/schema validation and
+    **before** the mandatory safety backup (so a refused restore never writes a
+    key), and an existing key file is never overwritten; the route answers the
+    existing setup code `409 SETUP_ALREADY_COMPLETED` once setup is complete.
 11. **Recovery-key export.** Admin-only download of the key file, gated by the
     shared **dangerous-action dialog** (reason + typed `EXPORT`), audited
     (`recovery_key.exported`), and **never rendered inline**. A single display at
@@ -166,8 +171,8 @@ to the Lead before implementing.
   `BACKUP_NOT_FOUND`, `BACKUP_FORMAT_UNSUPPORTED`, `BACKUP_INTEGRITY_FAILED`,
   `BACKUP_KEY_MISMATCH`, `BACKUP_SCHEMA_TOO_NEW`, `RESTORE_IN_PROGRESS`.
 - `POST /api/v1/setup/restore` (pre-setup only) → multipart archive + recovery
-  key → same validation path, then restart; `409 SETUP_ALREADY_COMPLETE` after
-  setup.
+  key → same validation path, then restart; `409 SETUP_ALREADY_COMPLETED` after
+  setup (the existing setup code, not a second spelling).
 - `GET /api/v1/admin/updates` (Admin) → `{ current_version, latest_version,
   update_available, last_checked_at, last_error, enabled }`;
   `POST /api/v1/admin/updates/check` → forces a check;
@@ -222,7 +227,7 @@ Milestone mapping: 1→M13-08; 2→M13-07; 3→M13-02/M13-03; 4→M13-04; 5→M1
   archive is refused; the maintenance window rejects ordinary API traffic.
 - **Clean-install restore:** pre-setup restore with the correct key succeeds and
   the app restarts into a set-up state; a wrong key is refused; after setup the
-  pre-setup route returns `SETUP_ALREADY_COMPLETE`/is unreachable.
+  pre-setup route returns `SETUP_ALREADY_COMPLETED`/is unreachable.
 - **Permissions:** every route Admin-only (anonymous 401, member 403, Admin and
   single-user 200); the pre-setup restore route is reachable only before setup;
   **no eighth permission key**; the UI hides what the caller cannot do.

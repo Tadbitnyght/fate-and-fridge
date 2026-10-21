@@ -298,6 +298,21 @@ public static class BackupEndpoints
         }
 
         var body = read.Body!;
+        if (!string.IsNullOrWhiteSpace(body.RecoveryKey))
+        {
+            // The Admin route always uses this device's key file; the pasted key
+            // belongs to the pre-setup clean-install route only.
+            RemoveRestoreDirectory(configuration, restoreId);
+            return ApiResults.ValidationError(new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                ["recovery_key"] =
+                [
+                    "A supplied recovery key is only accepted by the pre-setup restore route; " +
+                    "this route uses the device's recovery key file.",
+                ],
+            });
+        }
+
         var validation = DangerousActionGuard.Validate(
             body.Reason,
             body.Confirmation,
@@ -382,7 +397,11 @@ public static class BackupEndpoints
         }
     }
 
-    private static void RemoveRestoreDirectory(IConfiguration configuration, string restoreId)
+    /// <summary>
+    /// Removes one restore's working directory. Shared with the pre-setup
+    /// restore route, which uses the same staging area.
+    /// </summary>
+    internal static void RemoveRestoreDirectory(IConfiguration configuration, string restoreId)
     {
         try
         {

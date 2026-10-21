@@ -1,11 +1,15 @@
+using System.Buffers.Text;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using FateAndFridge.Api.Auth;
 using FateAndFridge.Api.Auth.Permissions;
+using FateAndFridge.Api.Backup;
 using FateAndFridge.Api.Data.Configurations;
 using FateAndFridge.Api.Errors;
 using FateAndFridge.Api.Services;
 using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.Extensions.Options;
 
@@ -20,9 +24,28 @@ public sealed record SetupCompleteResponse(
     string RecoveryKey,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] AuthSessionResponse? Session);
 
+/// <summary>
+/// The <c>202 Accepted</c> body of a clean-install restore (docs/API.md §21):
+/// the restore id, the archive's file name, and the safety archive created
+/// before anything was touched. There is no <c>backup_id</c> before setup — no
+/// backup catalogue exists yet.
+/// </summary>
+public sealed record SetupRestoreResponse(
+    string RestoreId,
+    string Filename,
+    string SafetyBackupFilename);
+
 /// <summary>Setup routes (docs/API.md §21). Public while setup is incomplete.</summary>
 public static class SetupEndpoints
 {
+    /// <summary>
+    /// The exact typed confirmation for a clean-install restore
+    /// (docs/API.md §21): with no session and no Admin, the archive plus its
+    /// recovery key are the credential and this typed word is the
+    /// acknowledgement.
+    /// </summary>
+    public const string RestoreConfirmation = "RESTORE";
+
     private const string AlreadyCompletedMessage = "Setup has already been completed.";
 
     public static IEndpointRouteBuilder MapSetupEndpoints(this IEndpointRouteBuilder app)
@@ -35,6 +58,11 @@ public static class SetupEndpoints
         // Public, single-shot, atomic (docs/API.md §21): 201 on success, 409 on
         // repeat, 400 with field errors on invalid input.
         group.MapPost("/complete", CompleteSetupAsync);
+
+        // Public **only before setup** (docs/M13_PLAN.md §1.10): the pre-setup
+        // gate already exempts /api/v1/setup/*, so this route is unreachable as
+        // a pre-setup escape hatch once setup is complete — it answers 409.
+        group.MapPost("/restore", RestoreFromBackupAsync);
 
         return app;
     }
@@ -117,6 +145,158 @@ public static class SetupEndpoints
             };
         }
     }
+
+    /// <summary>
+    /// Restores an uploaded archive **before** setup completes
+    /// (docs/M13_PLAN.md §1.10, docs/API.md §21). No session and no Admin exist
+    /// yet, so the archive plus the pasted recovery key are the credential and
+    /// the typed <c>RESTORE</c> is the acknowledgement. The shared M13-04
+    /// sequence does the work: format/integrity/checksum/schema validation, then
+    /// the mandatory safety backup, then <c>202</c> and a background restore that
+    /// stops the process so the container restarts into the restored state.
+    /// </summary>
+    private static async Task<IResult> RestoreFromBackupAsync(
+        HttpContext context,
+        SetupStateService setupState,
+        RestoreService restores,
+        IConfiguration configuration,
+        CancellationToken cancellationToken)
+    {
+        // Like the Admin restore route, only this route raises the body limit to
+        // the 2 GB archive cap (plus multipart slack).
+        var sizeFeature = context.Features.Get<IHttpMaxRequestBodySizeFeature>();
+        if (sizeFeature is { IsReadOnly: false })
+        {
+            sizeFeature.MaxRequestBodySize = RestoreRequestReader.MaximumBodyBytes;
+        }
+
+        // Repeats answer 409 before the body is parsed: once setup is complete
+        // this route no longer restores anything, and the Admin route owns it.
+        if (await setupState.IsSetupCompletedAsync(cancellationToken))
+        {
+            return AlreadyCompleted();
+        }
+
+        if (!context.Request.HasFormContentType)
+        {
+            return ApiResults.Error(
+                StatusCodes.Status415UnsupportedMediaType,
+                ErrorCodes.UnsupportedMediaType,
+                "A restore archive must be uploaded as multipart/form-data.");
+        }
+
+        var restoreId = restores.NewRestoreId();
+        var uploadPath = RestoreService.UploadPath(configuration, restoreId);
+
+        var read = await RestoreRequestReader
+            .ReadAsync(context, uploadPath, cancellationToken)
+            .ConfigureAwait(false);
+        if (!read.IsSuccess)
+        {
+            BackupEndpoints.RemoveRestoreDirectory(configuration, restoreId);
+            return read.Error!;
+        }
+
+        var body = read.Body!;
+        if (body.Upload is null || body.BackupId is not null)
+        {
+            BackupEndpoints.RemoveRestoreDirectory(configuration, restoreId);
+            return ApiResults.ValidationError(new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                ["file"] = ["A backup archive file is required."],
+            });
+        }
+
+        // The key's shape is checked before the archive is opened, so a mistyped
+        // paste is a field error instead of an integrity failure.
+        var keyText = body.RecoveryKey?.Trim();
+        if (string.IsNullOrEmpty(keyText))
+        {
+            BackupEndpoints.RemoveRestoreDirectory(configuration, restoreId);
+            return InvalidRecoveryKey(
+                "Paste the recovery key that was shown when this backup was created.");
+        }
+
+        byte[] recoveryKey;
+        try
+        {
+            recoveryKey = Base64Url.DecodeFromChars(keyText);
+        }
+        catch (FormatException)
+        {
+            BackupEndpoints.RemoveRestoreDirectory(configuration, restoreId);
+            return InvalidRecoveryKey("The recovery key is not valid base64url text.");
+        }
+
+        if (recoveryKey.Length != BackupArchiveFormat.RecoveryKeySize)
+        {
+            CryptographicOperations.ZeroMemory(recoveryKey);
+            BackupEndpoints.RemoveRestoreDirectory(configuration, restoreId);
+            return InvalidRecoveryKey(
+                $"The recovery key must decode to exactly {BackupArchiveFormat.RecoveryKeySize} bytes.");
+        }
+
+        var confirmation = DangerousActionGuard.Validate(
+            RestoreService.SetupRestoreReason,
+            body.Confirmation,
+            RestoreConfirmation);
+        if (confirmation is DangerousActionValidation.Failure confirmationFailure)
+        {
+            CryptographicOperations.ZeroMemory(recoveryKey);
+            BackupEndpoints.RemoveRestoreDirectory(configuration, restoreId);
+            return ApiResults.Error(
+                StatusCodes.Status400BadRequest,
+                confirmationFailure.Code,
+                confirmationFailure.Message,
+                confirmationFailure.ToErrorDetails());
+        }
+
+        // The response carries no secret, but it must not be cached either.
+        ResponseCache.NoStore(context);
+
+        var outcome = await restores
+            .BeginAsync(
+                body.Upload,
+                new RestoreRequester.Setup(
+                    recoveryKey,
+                    CalendarEndpoints.RemoteIpAddress(context)),
+                restoreId,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        switch (outcome)
+        {
+            case RestoreStartOutcome.Accepted accepted:
+                // The background phase owns the key from here and zeroes it when
+                // it finishes.
+                restores.StartInBackground(accepted.Operation);
+                return Results.Json(
+                    new SetupRestoreResponse(
+                        accepted.Operation.RestoreId,
+                        accepted.Operation.BackupFilename,
+                        accepted.Operation.SafetyBackupFilename),
+                    statusCode: StatusCodes.Status202Accepted);
+
+            case RestoreStartOutcome.Failure failure:
+                CryptographicOperations.ZeroMemory(recoveryKey);
+                BackupEndpoints.RemoveRestoreDirectory(configuration, restoreId);
+                return ApiResults.Error(failure.StatusCode, failure.Code, failure.Message);
+
+            default:
+                CryptographicOperations.ZeroMemory(recoveryKey);
+                BackupEndpoints.RemoveRestoreDirectory(configuration, restoreId);
+                return ApiResults.Error(
+                    StatusCodes.Status500InternalServerError,
+                    ErrorCodes.RestoreFailed,
+                    "The restore could not be started.");
+        }
+    }
+
+    private static IResult InvalidRecoveryKey(string message) =>
+        ApiResults.ValidationError(new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            ["recovery_key"] = [message],
+        });
 
     private static IResult AlreadyCompleted() =>
         ApiResults.Error(

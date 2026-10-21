@@ -13,13 +13,16 @@ namespace FateAndFridge.Api.Endpoints;
 /// <summary>
 /// The parsed restore request (docs/API.md §18): the shared dangerous-action
 /// fields plus exactly one archive source — a stored <c>backup_id</c> or an
-/// uploaded <c>file</c>.
+/// uploaded <c>file</c>. <see cref="RecoveryKey"/> is only produced by the
+/// pre-setup route's multipart shape (docs/API.md §21); the Admin route never
+/// accepts it, because there the device key file is authoritative.
 /// </summary>
 public sealed record RestoreRequestBody(
     string? Reason,
     string? Confirmation,
     long? BackupId,
-    RestoreSource.Upload? Upload);
+    RestoreSource.Upload? Upload,
+    string? RecoveryKey = null);
 
 /// <summary>Outcome of <see cref="RestoreRequestReader.ReadAsync"/>.</summary>
 public readonly struct RestoreRequestReadResult
@@ -160,6 +163,7 @@ public static class RestoreRequestReader
 
         string? reason = null;
         string? confirmation = null;
+        string? recoveryKey = null;
         RestoreSource.Upload? upload = null;
 
         MultipartSection? section;
@@ -204,7 +208,7 @@ public static class RestoreRequestReader
                 continue;
             }
 
-            if (fieldName is "reason" or "confirmation")
+            if (fieldName is "reason" or "confirmation" or "recovery_key")
             {
                 var text = await ReadTextAsync(section.Body, cancellationToken).ConfigureAwait(false);
                 if (text is null)
@@ -213,19 +217,23 @@ public static class RestoreRequestReader
                         $"The '{fieldName}' field must be at most {MaximumTextBytes} bytes."));
                 }
 
-                if (fieldName == "reason")
+                switch (fieldName)
                 {
-                    reason = text;
-                }
-                else
-                {
-                    confirmation = text;
+                    case "reason":
+                        reason = text;
+                        break;
+                    case "confirmation":
+                        confirmation = text;
+                        break;
+                    default:
+                        recoveryKey = text;
+                        break;
                 }
             }
         }
 
         return RestoreRequestReadResult.Success(
-            new RestoreRequestBody(reason, confirmation, BackupId: null, upload));
+            new RestoreRequestBody(reason, confirmation, BackupId: null, upload, recoveryKey));
     }
 
     private static async Task<(string? Sha256, IResult? Error)> CopyUploadAsync(

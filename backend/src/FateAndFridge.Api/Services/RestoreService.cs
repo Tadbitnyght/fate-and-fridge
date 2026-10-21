@@ -30,6 +30,31 @@ public abstract record RestoreSource
     public sealed record Upload(string ArchivePath, string Filename, string Sha256) : RestoreSource;
 }
 
+/// <summary>
+/// Who is asking for a restore, and therefore where the archive's recovery key
+/// comes from (docs/API.md §18, §21).
+/// </summary>
+public abstract record RestoreRequester
+{
+    private RestoreRequester()
+    {
+    }
+
+    /// <summary>
+    /// An Admin session (docs/API.md §18): the key is read from this device's
+    /// key file and the caller's reason is audited against the actor.
+    /// </summary>
+    public sealed record Administrator(string Reason, long? ActorUserId, string? IpAddress) : RestoreRequester;
+
+    /// <summary>
+    /// The clean-install setup wizard (docs/M13_PLAN.md §1.10): no session and
+    /// no actor exist yet, so the pasted key is the credential. The restore
+    /// service takes ownership of the array and zeroes it when the restore
+    /// finishes.
+    /// </summary>
+    public sealed record Setup(byte[] RecoveryKey, string? IpAddress) : RestoreRequester;
+}
+
 /// <summary>Result of the synchronous restore validation (docs/API.md §18).</summary>
 public abstract record RestoreStartOutcome
 {
@@ -169,6 +194,14 @@ public sealed class RestoreService(
     /// <summary>File name an uploaded archive is streamed to.</summary>
     public const string UploadFileName = "upload.ffbackup";
 
+    /// <summary>
+    /// The audited reason of a clean-install restore (docs/M13_PLAN.md §1.10):
+    /// there is no Admin to type one before setup, and the audit row must still
+    /// explain how a system-actor restore happened.
+    /// </summary>
+    public const string SetupRestoreReason =
+        "Clean-install restore of an uploaded backup archive during setup.";
+
     /// <summary>Absolute <c>{DataDir}/backups/.restore</c>.</summary>
     public static string RestoreRootDirectory(IConfiguration configuration) =>
         Path.Combine(BackupService.ArchivesDirectory(configuration), RestoreDirectoryName);
@@ -207,11 +240,52 @@ public sealed class RestoreService(
         long? actorUserId,
         string? ipAddress,
         string restoreId,
+        CancellationToken cancellationToken) =>
+        await BeginAsync(
+                source,
+                new RestoreRequester.Administrator(reason, actorUserId, ipAddress),
+                restoreId,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+    /// <summary>
+    /// The shared restore sequence for both entry points: the Admin restore and
+    /// the pre-setup clean-install restore differ only in where the recovery key
+    /// comes from and in who is recorded in the audit row
+    /// (docs/M13_PLAN.md §1.9, §1.10).
+    /// </summary>
+    public async Task<RestoreStartOutcome> BeginAsync(
+        RestoreSource source,
+        RestoreRequester requester,
+        string restoreId,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(source);
-        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+        ArgumentNullException.ThrowIfNull(requester);
         ArgumentException.ThrowIfNullOrWhiteSpace(restoreId);
+
+        var reason = requester switch
+        {
+            RestoreRequester.Administrator administrator => administrator.Reason,
+            RestoreRequester.Setup => SetupRestoreReason,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(requester),
+                requester,
+                "Unknown restore requester."),
+        };
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+
+        // A pre-setup restore has no Admin and no system actor to attribute the
+        // safety backup or the audit row to (docs/M13_PLAN.md §1.10).
+        long? actorUserId = requester is RestoreRequester.Administrator { ActorUserId: { } actor }
+            ? actor
+            : null;
+        var ipAddress = requester switch
+        {
+            RestoreRequester.Administrator administrator => administrator.IpAddress,
+            RestoreRequester.Setup setup => setup.IpAddress,
+            _ => null,
+        };
 
         if (!operationGate.TryEnter())
         {
@@ -233,6 +307,16 @@ public sealed class RestoreService(
             string archivePath;
             string filename;
             string? expectedSha256;
+
+            if (requester is RestoreRequester.Setup && source is not RestoreSource.Upload)
+            {
+                // Before setup there is no backup catalogue to choose from: the
+                // archive must come with the request (docs/M13_PLAN.md §1.10).
+                return Failure(
+                    StatusCodes.Status400BadRequest,
+                    ErrorCodes.ValidationFailed,
+                    "A clean-install restore accepts an uploaded archive only.");
+            }
 
             switch (source)
             {
@@ -297,14 +381,28 @@ public sealed class RestoreService(
                         "Unknown restore source.");
             }
 
-            var recoveryKeyResult = await ReadRecoveryKeyAsync(scope.ServiceProvider, cancellationToken)
-                .ConfigureAwait(false);
-            if (recoveryKeyResult.Failure is not null)
+            byte[] recoveryKey;
+            if (requester is RestoreRequester.Setup supplied)
             {
-                return recoveryKeyResult.Failure;
+                // The pasted key is the credential: it was validated by the
+                // caller, and this method owns (and zeroes) the array. There is
+                // no device key file to read before setup.
+                recoveryKey = supplied.RecoveryKey;
+            }
+            else
+            {
+                var recoveryKeyResult = await ReadRecoveryKeyAsync(
+                        scope.ServiceProvider,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+                if (recoveryKeyResult.Failure is not null)
+                {
+                    return recoveryKeyResult.Failure;
+                }
+
+                recoveryKey = recoveryKeyResult.Key!;
             }
 
-            var recoveryKey = recoveryKeyResult.Key!;
             var validated = await ValidateArchiveAsync(
                     archivePath,
                     recoveryKey,
@@ -324,6 +422,25 @@ public sealed class RestoreService(
             {
                 CryptographicOperations.ZeroMemory(recoveryKey);
                 return schemaFailure;
+            }
+
+            // The clean-install path adopts the pasted key before the safety
+            // backup: a device that has not completed setup has no key file, and
+            // the household key is the one the restored instance must keep
+            // (docs/M13_PLAN.md §1.10). Validation above has already passed, so
+            // nothing is written when the archive or its key is refused.
+            if (requester is RestoreRequester.Setup)
+            {
+                var adoption = await AdoptSuppliedKeyAsync(
+                        scope.ServiceProvider,
+                        recoveryKey,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+                if (adoption is not null)
+                {
+                    CryptographicOperations.ZeroMemory(recoveryKey);
+                    return adoption;
+                }
             }
 
             // Step 4: the safety backup exists and is verified before anything
@@ -581,6 +698,42 @@ public sealed class RestoreService(
         }
 
         return (key, null);
+    }
+
+    /// <summary>
+    /// Stores the pasted key as this device's recovery key when no key file
+    /// exists yet (docs/M13_PLAN.md §1.10). An existing device key is never
+    /// overwritten: the restore still runs, and the safety backup is encrypted
+    /// with whichever key this device already holds. The key value itself is
+    /// never logged.
+    /// </summary>
+    private async Task<RestoreStartOutcome.Failure?> AdoptSuppliedKeyAsync(
+        IServiceProvider services,
+        byte[] recoveryKey,
+        CancellationToken cancellationToken)
+    {
+        var keyStore = services.GetRequiredService<RecoveryKeyStore>();
+
+        try
+        {
+            await keyStore
+                .WriteIfAbsentAsync(Base64Url.EncodeToString(recoveryKey), cancellationToken)
+                .ConfigureAwait(false);
+
+            return null;
+        }
+        catch (Exception exception) when (exception is InvalidDataException or ArgumentException)
+        {
+            logger.LogError(
+                exception,
+                "The recovery key supplied with the clean-install restore could not be stored on this device.");
+
+            return Failure(
+                StatusCodes.Status500InternalServerError,
+                ErrorCodes.InternalError,
+                "The recovery key could not be stored on this device; the restore was aborted " +
+                "before any data was touched.");
+        }
     }
 
     /// <summary>
