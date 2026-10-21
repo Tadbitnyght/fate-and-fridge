@@ -83,6 +83,15 @@ public abstract record RestoreExecutionOutcome
     public sealed record Success(string RestoreId) : RestoreExecutionOutcome;
 
     public sealed record Failure(string RestoreId, string Code, string Message) : RestoreExecutionOutcome;
+
+    /// <summary>
+    /// The database restore committed, but a step after the commit failed. The
+    /// restored database is already in place, so the process must still stop and
+    /// restart (migrations and the startup check run on the next start). The
+    /// <c>202</c> response was already sent; this outcome is logged and recorded
+    /// in <see cref="RestoreState"/> only.
+    /// </summary>
+    public sealed record AppliedRestartRequired(string RestoreId, string Error) : RestoreExecutionOutcome;
 }
 
 /// <summary>
@@ -490,11 +499,19 @@ public sealed class RestoreService(
 
     /// <summary>
     /// Runs the background half of an accepted restore and always releases the
-    /// operation gate. A failure leaves the original data intact (the database
-    /// restore is one transaction and the file swap rolls back), clears
-    /// maintenance mode, records the failure in <see cref="RestoreState"/>, and
-    /// returns a mapped error.
+    /// operation gate.
     /// </summary>
+    /// <remarks>
+    /// Until <c>pg_restore</c> returns, a failure leaves the original data
+    /// intact: the database restore is one transaction and the file swap has not
+    /// run, so the failure is mapped, maintenance mode is cleared, and the
+    /// upload/staging files are removed. Once <c>pg_restore</c> has committed the
+    /// database already is the archive's, so no later failure may claim
+    /// otherwise: the marker is written and the graceful stop is requested so the
+    /// container restarts and migrations run, and the result is
+    /// <see cref="RestoreExecutionOutcome.AppliedRestartRequired"/> rather than
+    /// <see cref="RestoreExecutionOutcome.Failure"/>.
+    /// </remarks>
     public async Task<RestoreExecutionOutcome> ExecuteAsync(
         RestoreOperation operation,
         CancellationToken cancellationToken)
@@ -507,46 +524,104 @@ public sealed class RestoreService(
 
         try
         {
-            state.MarkPhase("extracting");
-            var manifest = await ExtractAsync(operation, stagingDirectory, cancellationToken)
-                .ConfigureAwait(false);
+            // ---- Before the database commit: nothing has been replaced. ----
 
-            state.EnterMaintenance(restoreId);
+            BackupManifest manifest;
+            try
+            {
+                state.MarkPhase("extracting");
+                manifest = await ExtractAsync(operation, stagingDirectory, cancellationToken)
+                    .ConfigureAwait(false);
 
-            state.MarkPhase("restoring");
-            await restoreRunner.TerminateConnectionsAsync(cancellationToken).ConfigureAwait(false);
-            await restoreRunner
-                .RestoreAsync(Path.Combine(stagingDirectory, DatabaseDumpEntryName), cancellationToken)
-                .ConfigureAwait(false);
+                state.EnterMaintenance(restoreId);
 
-            // Step 8: every client must sign in again.
-            state.MarkPhase("sessions");
-            await RevokeSessionsAsync(cancellationToken).ConfigureAwait(false);
+                state.MarkPhase("restoring");
+                await restoreRunner.TerminateConnectionsAsync(cancellationToken).ConfigureAwait(false);
+                await restoreRunner
+                    .RestoreAsync(Path.Combine(stagingDirectory, DatabaseDumpEntryName), cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (RestoreFailureException failure)
+            {
+                return Fail(
+                    operation,
+                    failure.Code,
+                    failure.Message,
+                    exception: null,
+                    restoreDirectory,
+                    stagingDirectory);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return Fail(
+                    operation,
+                    ErrorCodes.RestoreFailed,
+                    "The restore was cancelled; the original data is intact.",
+                    exception: null,
+                    restoreDirectory,
+                    stagingDirectory);
+            }
+            catch (Exception exception)
+            {
+                return Fail(
+                    operation,
+                    ErrorCodes.RestoreFailed,
+                    "The restore failed; the original data is intact. See the application log for the recorded error.",
+                    exception,
+                    restoreDirectory,
+                    stagingDirectory);
+            }
 
-            // Step 9: audit into the restored database, with raw SQL so it works
-            // even when the restored schema is older than this build.
-            state.MarkPhase("audit");
-            await WriteRestoreAuditAsync(operation, manifest, cancellationToken).ConfigureAwait(false);
+            // ---- pg_restore has committed: the database is the archive's. ----
 
-            state.MarkPhase("files");
-            SwapLiveDirectories(restoreDirectory, restoreId, stagingDirectory);
+            var markerDocument = new RestoreMarkerDocument
+            {
+                RestoreId = restoreId,
+                BackupFilename = operation.BackupFilename,
+                SafetyBackupFilename = operation.SafetyBackupFilename,
+                AppVersion = AppInfo.Version,
+                SchemaVersion = manifest.SchemaVersion,
+                CompletedAt = timeProvider.GetUtcNow(),
+            };
 
-            state.MarkPhase("retention");
-            await PruneSafetyBackupsAsync(cancellationToken).ConfigureAwait(false);
+            // Directories a failed swap rollback could not move back: they still
+            // hold the only copy of the previous files and must not be reclaimed.
+            var preservedOriginals = new List<string>();
 
-            state.MarkPhase("marker");
-            RestoreMarker.Write(
-                configuration,
-                new RestoreMarkerDocument
-                {
-                    RestoreId = restoreId,
-                    BackupFilename = operation.BackupFilename,
-                    SafetyBackupFilename = operation.SafetyBackupFilename,
-                    AppVersion = AppInfo.Version,
-                    SchemaVersion = manifest.SchemaVersion,
-                    CompletedAt = timeProvider.GetUtcNow(),
-                },
-                logger);
+            try
+            {
+                // Step 8: every client must sign in again.
+                state.MarkPhase("sessions");
+                await RevokeSessionsAsync(cancellationToken).ConfigureAwait(false);
+
+                // Step 9: audit into the restored database, with raw SQL so it works
+                // even when the restored schema is older than this build.
+                state.MarkPhase("audit");
+                await WriteRestoreAuditAsync(operation, manifest, cancellationToken).ConfigureAwait(false);
+
+                state.MarkPhase("files");
+                SwapLiveDirectories(restoreDirectory, restoreId, stagingDirectory, preservedOriginals);
+
+                state.MarkPhase("retention");
+                await PruneSafetyBackupsAsync(cancellationToken).ConfigureAwait(false);
+
+                state.MarkPhase("marker");
+                RestoreMarker.Write(configuration, markerDocument, logger);
+
+                // The marker is on disk, so the whole working directory (upload,
+                // staging copy, and the swapped-out originals) is reclaimable.
+                RemoveDirectory(restoreDirectory);
+            }
+            catch (Exception exception)
+            {
+                return FailAfterCommit(
+                    operation,
+                    markerDocument,
+                    exception,
+                    restoreDirectory,
+                    stagingDirectory,
+                    preservedOriginals);
+            }
 
             state.MarkPhase("restarting");
             restartSignal.RequestRestart();
@@ -558,28 +633,6 @@ public sealed class RestoreService(
                 restoreId);
 
             return new RestoreExecutionOutcome.Success(restoreId);
-        }
-        catch (RestoreFailureException failure)
-        {
-            return Fail(operation, failure.Code, failure.Message, exception: null, stagingDirectory);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            return Fail(
-                operation,
-                ErrorCodes.RestoreFailed,
-                "The restore was cancelled; the original data is intact.",
-                exception: null,
-                stagingDirectory);
-        }
-        catch (Exception exception)
-        {
-            return Fail(
-                operation,
-                ErrorCodes.RestoreFailed,
-                "The restore failed; the original data is intact. See the application log for the recorded error.",
-                exception,
-                stagingDirectory);
         }
         finally
         {
@@ -623,6 +676,7 @@ public sealed class RestoreService(
         string code,
         string message,
         Exception? exception,
+        string restoreDirectory,
         string stagingDirectory)
     {
         state.ExitMaintenance();
@@ -646,9 +700,74 @@ public sealed class RestoreService(
                 message);
         }
 
-        RemoveStaging(stagingDirectory);
+        RemoveStagingAndUpload(restoreDirectory, stagingDirectory);
         return new RestoreExecutionOutcome.Failure(operation.RestoreId, code, message);
     }
+
+    /// <summary>
+    /// Handles a failure after <c>pg_restore</c> committed. The database is
+    /// already the archive's, so this never claims the original data is intact:
+    /// it records the error, writes the marker (best effort) and requests the
+    /// graceful stop that applies migrations on the next start, and only then
+    /// clears maintenance mode (docs/M13_PLAN.md §1.9 step 8).
+    /// </summary>
+    private RestoreExecutionOutcome FailAfterCommit(
+        RestoreOperation operation,
+        RestoreMarkerDocument document,
+        Exception exception,
+        string restoreDirectory,
+        string stagingDirectory,
+        IReadOnlyCollection<string> preservedOriginals)
+    {
+        var message =
+            "The restored database was applied, but a step after the commit failed. " +
+            "The application is restarting so migrations run against the restored schema; " +
+            "see the application log for the recorded error.";
+
+        logger.LogError(
+            exception,
+            "Restore {RestoreId} applied the restored database, but a post-commit step failed: {Message}",
+            operation.RestoreId,
+            message);
+
+        state.MarkFailed(message);
+
+        try
+        {
+            RestoreMarker.Write(
+                configuration,
+                document with { PostStepError = Bound(exception.Message) },
+                logger);
+        }
+        catch (Exception markerException) when (markerException is IOException or UnauthorizedAccessException)
+        {
+            logger.LogError(
+                markerException,
+                "The restore marker for {RestoreId} could not be written after the post-commit failure.",
+                operation.RestoreId);
+        }
+
+        // The database has committed, so the upload, the staging copy, and the
+        // swapped-out originals are reclaimable — except a directory a failed
+        // rollback still needs.
+        ReclaimRestoreFiles(restoreDirectory, stagingDirectory, preservedOriginals);
+
+        // Keep the phase at "failed": the error must stay visible in the state
+        // even though the restart signal is the next thing that happens.
+        try
+        {
+            restartSignal.RequestRestart();
+        }
+        finally
+        {
+            state.ExitMaintenance();
+        }
+
+        return new RestoreExecutionOutcome.AppliedRestartRequired(operation.RestoreId, message);
+    }
+
+    private static string Bound(string message) =>
+        message.Length <= 500 ? message : message[..500];
 
     private static RestoreStartOutcome.Failure Failure(int statusCode, string code, string message) =>
         new(statusCode, code, message);
@@ -1054,7 +1173,8 @@ public sealed class RestoreService(
     private void SwapLiveDirectories(
         string restoreDirectory,
         string restoreId,
-        string stagingDirectory)
+        string stagingDirectory,
+        List<string> preservedOriginals)
     {
         var dataRoot = AppPaths.DataRoot(configuration);
         (string Name, string Live, string Staged)[] pairs =
@@ -1098,7 +1218,7 @@ public sealed class RestoreService(
             logger.LogError(
                 exception,
                 "The restored images/config could not be swapped into place; rolling the file swap back.");
-            RollbackSwap(placed, movedLive);
+            RollbackSwap(placed, movedLive, preservedOriginals);
 
             throw new RestoreFailureException(
                 ErrorCodes.RestoreFailed,
@@ -1108,7 +1228,8 @@ public sealed class RestoreService(
 
     private void RollbackSwap(
         List<(string Live, string Staged)> placed,
-        List<(string Old, string Live)> movedLive)
+        List<(string Old, string Live)> movedLive,
+        List<string> preservedOriginals)
     {
         for (var index = placed.Count - 1; index >= 0; index--)
         {
@@ -1145,6 +1266,7 @@ public sealed class RestoreService(
                     "The original directory {OriginalDirectory} could not be restored during rollback; " +
                     "it is preserved next to the restore working directory.",
                     old);
+                preservedOriginals.Add(old);
             }
         }
     }
@@ -1179,18 +1301,106 @@ public sealed class RestoreService(
         }
     }
 
-    private void RemoveStaging(string stagingDirectory)
+    /// <summary>
+    /// Removes a failed restore's working files before the database commit: the
+    /// upload and the staging copy are reclaimable, while any <c>old-*</c>
+    /// directory (there is none yet) would still be needed for a rollback.
+    /// </summary>
+    private void RemoveStagingAndUpload(string restoreDirectory, string stagingDirectory)
+    {
+        TryDeleteFile(Path.Combine(restoreDirectory, UploadFileName));
+        RemoveDirectory(stagingDirectory);
+        TryDeleteEmptyDirectory(restoreDirectory);
+    }
+
+    /// <summary>
+    /// Reclaims a post-commit restore's working files. The database already is
+    /// the archive's, so the <c>old-*</c> copies are deleted too — except those a
+    /// failed swap rollback reported as the only remaining copy of the previous
+    /// files (docs/M13_PLAN.md §1.9).
+    /// </summary>
+    private void ReclaimRestoreFiles(
+        string restoreDirectory,
+        string stagingDirectory,
+        IReadOnlyCollection<string> preservedOriginals)
+    {
+        TryDeleteFile(Path.Combine(restoreDirectory, UploadFileName));
+        RemoveDirectory(stagingDirectory);
+
+        string[] oldDirectories;
+        try
+        {
+            oldDirectories = Directory.Exists(restoreDirectory)
+                ? Directory.GetDirectories(restoreDirectory, "old-*")
+                : [];
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(
+                exception,
+                "The replaced directories of the restore working directory could not be enumerated.");
+            return;
+        }
+
+        foreach (var directory in oldDirectories)
+        {
+            if (preservedOriginals.Contains(directory, StringComparer.Ordinal))
+            {
+                continue;
+            }
+
+            RemoveDirectory(directory);
+        }
+
+        TryDeleteEmptyDirectory(restoreDirectory);
+    }
+
+    private void RemoveDirectory(string directory)
     {
         try
         {
-            if (Directory.Exists(stagingDirectory))
+            if (Directory.Exists(directory))
             {
-                Directory.Delete(stagingDirectory, recursive: true);
+                Directory.Delete(directory, recursive: true);
             }
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            logger.LogWarning(exception, "The restore staging directory could not be removed.");
+            logger.LogWarning(
+                exception,
+                "The restore working directory {Directory} could not be removed.",
+                directory);
+        }
+    }
+
+    private void TryDeleteFile(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(exception, "The restore working file {FilePath} could not be removed.", path);
+        }
+    }
+
+    private void TryDeleteEmptyDirectory(string directory)
+    {
+        try
+        {
+            if (Directory.Exists(directory)
+                && !Directory.EnumerateFileSystemEntries(directory).Any())
+            {
+                Directory.Delete(directory);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(exception, "The empty restore directory {Directory} could not be removed.", directory);
         }
     }
 

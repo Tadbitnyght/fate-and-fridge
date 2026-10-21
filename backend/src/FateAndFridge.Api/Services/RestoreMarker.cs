@@ -146,6 +146,15 @@ public static class RestoreMarker
             document.SchemaVersion,
             document.CompletedAt.ToString("O", CultureInfo.InvariantCulture));
 
+        if (!string.IsNullOrWhiteSpace(document.PostStepError))
+        {
+            logger.LogError(
+                "Restore {RestoreId} applied the restored database, but a step after the commit failed: " +
+                "{PostStepError} The restarted instance has applied migrations against the restored schema.",
+                document.RestoreId,
+                document.PostStepError);
+        }
+
         if (!await CanReachDatabaseAsync(services, logger, cancellationToken).ConfigureAwait(false))
         {
             logger.LogError(
@@ -201,6 +210,14 @@ public sealed record RestoreMarkerDocument
     /// <summary>The schema version recorded in the restored archive's manifest.</summary>
     [JsonPropertyName("schema_version")]
     public required string SchemaVersion { get; init; }
+
+    /// <summary>
+    /// Set when the database restore committed but a later step (the file swap,
+    /// retention, or the marker itself) failed. The restore still applied, so the
+    /// process must restart; the startup check reports the recorded failure.
+    /// </summary>
+    [JsonPropertyName("post_step_error")]
+    public string? PostStepError { get; init; }
 
     [JsonPropertyName("completed_at")]
     public required DateTimeOffset CompletedAt { get; init; }

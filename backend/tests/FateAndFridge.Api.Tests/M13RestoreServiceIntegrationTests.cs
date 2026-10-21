@@ -306,6 +306,9 @@ public sealed class M13RestoreServiceIntegrationTests(M13BackupFixture fixture) 
 
         signal.Invocations.Should().Be(1);
 
+        Directory.Exists(RestoreService.RestoreDirectory(configuration, "restore-success")).Should().BeFalse(
+            "a successful restore reclaims its upload, staging, and swapped-out originals");
+
         state.IsMaintenanceActive.Should().BeFalse();
         state.Phase.Should().Be("completed");
         state.LastError.Should().BeNull();
@@ -390,7 +393,7 @@ public sealed class M13RestoreServiceIntegrationTests(M13BackupFixture fixture) 
     }
 
     [Fact]
-    public async Task A_file_swap_failure_rolls_the_directories_back()
+    public async Task A_file_swap_failure_after_the_commit_still_marks_and_requests_the_restart()
     {
         var dataDir = SeedDataDirectory(RecoveryKey);
         var archivePath = await WriteArchiveAsync(dataDir);
@@ -404,23 +407,78 @@ public sealed class M13RestoreServiceIntegrationTests(M13BackupFixture fixture) 
 
         // Make the second rename impossible: config/dp-keys becomes a file, so
         // moving the staged directory onto it fails after images/ was already
-        // placed, which forces the rollback path.
+        // placed, which forces the rollback path. The database restore itself
+        // already committed before the swap ran.
         var dataProtectionDirectory = Path.Combine(dataDir, "config", "dp-keys");
         Directory.Delete(dataProtectionDirectory, recursive: true);
         await File.WriteAllTextAsync(dataProtectionDirectory, "not a directory", Ct);
 
         var execution = await Restores(factory).ExecuteAsync(accepted.Operation, Ct);
 
-        var failure = execution.Should().BeOfType<RestoreExecutionOutcome.Failure>().Subject;
-        failure.Code.Should().Be(ErrorCodes.RestoreFailed);
+        // The files were rolled back, but the database is already the archive's:
+        // the restore must not claim otherwise and must still restart.
+        var applied = execution.Should()
+            .BeOfType<RestoreExecutionOutcome.AppliedRestartRequired>().Subject;
+        applied.RestoreId.Should().Be("restore-swap-failure");
+        applied.Error.Should().Contain("restored database was applied");
 
         File.ReadAllBytes(Path.Combine(dataDir, "images", "recipes", "pasta.jpg"))
             .Should().Equal(OriginalImage, "the rollback restores the original images");
         File.Exists(dataProtectionDirectory).Should().BeTrue(
             "the failed target was never a directory and is left untouched");
-        RestoreMarker.Exists(configuration).Should().BeFalse();
+
+        RestoreMarker.Exists(configuration).Should().BeTrue(
+            "the marker makes the next start apply migrations and report the outcome");
+        var marker = RestoreMarker.TryRead(configuration, NullLogger());
+        marker.Should().NotBeNull();
+        marker!.RestoreId.Should().Be("restore-swap-failure");
+        marker.PostStepError.Should().NotBeNullOrWhiteSpace();
+        signal.Invocations.Should().Be(1, "the process must stop so migrations run");
+
+        var state = factory.Services.GetRequiredService<RestoreState>();
+        state.IsMaintenanceActive.Should().BeFalse();
+        state.Phase.Should().Be("failed");
+        state.LastError.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task A_pre_commit_pg_restore_failure_removes_the_upload_and_keeps_the_original_data()
+    {
+        var dataDir = SeedDataDirectory(RecoveryKey);
+
+        var runner = RecordingPgRestoreRunner.Failing("pg_restore: error: could not execute query");
+        var signal = new RecordingRestartSignal();
+        using var factory = CreateFactory(dataDir, runner, signal);
+        var configuration = factory.Services.GetRequiredService<IConfiguration>();
+
+        // An upload lives in the restore's private working directory, the same
+        // place the endpoint streams it to.
+        var uploadPath = RestoreService.UploadPath(configuration, "restore-upload-failure");
+        Directory.CreateDirectory(Path.GetDirectoryName(uploadPath)!);
+        var archivePath = await WriteArchiveAsync(dataDir);
+        File.Move(archivePath, uploadPath);
+        var upload = new RestoreSource.Upload(
+            uploadPath,
+            RestoreService.UploadFileName,
+            Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(uploadPath, Ct))));
+
+        var accepted = (await BeginAsync(factory, upload, "restore-upload-failure"))
+            .Should().BeOfType<RestoreStartOutcome.Accepted>().Subject;
+
+        var execution = await Restores(factory).ExecuteAsync(accepted.Operation, Ct);
+
+        execution.Should().BeOfType<RestoreExecutionOutcome.Failure>()
+            .Which.Code.Should().Be(ErrorCodes.RestoreFailed);
+
+        RestoreMarker.Exists(configuration).Should().BeFalse("nothing was committed");
         signal.Invocations.Should().Be(0);
-        factory.Services.GetRequiredService<RestoreState>().IsMaintenanceActive.Should().BeFalse();
+        File.Exists(uploadPath).Should().BeFalse("the failed upload is reclaimed, not left behind");
+        Directory.Exists(Path.Combine(
+                RestoreService.RestoreDirectory(configuration, "restore-upload-failure"),
+                "staging"))
+            .Should().BeFalse();
+        File.ReadAllBytes(Path.Combine(dataDir, "images", "recipes", "pasta.jpg"))
+            .Should().Equal(OriginalImage);
     }
 
     // ------------------------------------------------------------------
