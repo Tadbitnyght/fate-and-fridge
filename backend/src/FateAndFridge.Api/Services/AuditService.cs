@@ -114,6 +114,10 @@ public static class AuditEventTypes
     // M13-03: an Admin deleted one archive (file removed, row marked deleted).
     public const string BackupDeleted = "backup.deleted";
 
+    // M13-07: an Admin downloaded the recovery key through the typed EXPORT
+    // gate; the key itself is never part of the audit row (docs/SECURITY.md §11).
+    public const string RecoveryKeyExported = "recovery_key.exported";
+
     // M12-04: the explicit, age-based audit retention prune.
     public const string AuditPruned = "audit.pruned";
 }
@@ -158,6 +162,9 @@ public static class AuditEntityTypes
     public const string Auth = "auth";
 
     public const string Backup = "backup";
+
+    /// <summary>The recovery-key file (M13-07 export audit row).</summary>
+    public const string RecoveryKey = "recovery_key";
 
     /// <summary>The audit log itself (used by the retention prune row).</summary>
     public const string AuditLog = "audit_log";

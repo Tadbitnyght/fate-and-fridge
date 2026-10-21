@@ -1787,12 +1787,13 @@ Bulk/date-range correction is deferred to V2 (docs/FUTURE_FEATURES.md).
 
 ## 18. Backup
 
-Implemented contract (M13-03, restore in M13-04; docs/M13_PLAN.md §1.4–§1.9,
-§2.2). Every route is under `/api/v1/admin` and is **Admin-only** on the existing
-`admin` role (and the single-user system actor): anonymous → `401 AUTH_REQUIRED`,
-a member → `403 FORBIDDEN`. **No new permission key is introduced.** Bodies are
-JSON with snake_case fields unless a route documents a multipart upload; a wrong
-`Content-Type` is `415 UNSUPPORTED_MEDIA_TYPE`.
+Implemented contract (M13-03, restore in M13-04, recovery-key export in M13-07;
+docs/M13_PLAN.md §1.4–§1.11, §2.2). Every route is under `/api/v1/admin` and is
+**Admin-only** on the existing `admin` role (and the single-user system actor):
+anonymous → `401 AUTH_REQUIRED`, a member → `403 FORBIDDEN`. **No new permission
+key is introduced.** Bodies are JSON with snake_case fields unless a route
+documents a multipart upload; a wrong `Content-Type` is
+`415 UNSUPPORTED_MEDIA_TYPE`.
 
 ### Row shape
 
@@ -1890,6 +1891,42 @@ Request body:
 - `409 BACKUP_IN_PROGRESS` — the row is still `pending`; a running create's file
   is never deleted underneath it.
 - `500 BACKUP_FAILED` — the file could not be removed; the row is left unchanged.
+
+### `POST /api/v1/admin/recovery-key/export`
+
+Downloads the household recovery key file (M13-07; docs/M13_PLAN.md §1.11,
+docs/SECURITY.md §11). Admin-only on the existing `admin` role; no new
+permission key.
+
+Request body:
+
+```json
+{ "reason": "Offline copy in the safe", "confirmation": "EXPORT" }
+```
+
+- `reason` is required (≤ 500 characters) and `confirmation` must equal
+  `EXPORT` exactly (ordinal, case-sensitive, after trimming). The shared
+  `DangerousActionGuard` enforces this server-side, independently of the UI
+  dialog (`REASON_REQUIRED`, `REASON_TOO_LONG`, `REASON_INVALID`,
+  `CONFIRMATION_MISMATCH` with `details.field_errors`).
+- Success: **`200`** with the key as a **`text/plain` attachment** named
+  `recovery.key`:
+
+  ```http
+  Content-Type: text/plain
+  Content-Disposition: attachment; filename=recovery.key
+  ```
+
+  The response is deliberately **not** JSON and the app never renders the key
+  inline; the download is the only exposure point besides the single display at
+  setup completion.
+- Audited as `recovery_key.exported` (`entity_type = "recovery_key"`) with the
+  actor, reason, and client IP. The audit payload carries only the file name:
+  the key is **never** written to the audit log, application logs, or error
+  messages. The audit row is committed before the key is returned, so a failed
+  audit write fails the request rather than producing an unlogged download.
+- `409 BACKUP_KEY_MISSING` — the key file is absent or unusable. The export never
+  creates a key.
 
 ### `POST /api/v1/admin/backups/restore`
 
@@ -1994,9 +2031,9 @@ of that table snapshot, so it is never pruned by the restore that produced it.
 
 ### Not yet implemented (later M13 issues)
 
-Recovery-key export (M13-07). Its contract lives in docs/M13_PLAN.md §2.2 until
-then. The pre-setup restore route (`POST /api/v1/setup/restore`) is documented
-with the rest of setup in §21.
+The pre-setup restore route (`POST /api/v1/setup/restore`) is documented with
+the rest of setup in §21. Version display (M13-08) and the update check (M13-09)
+are still to come.
 
 ### Backups UI (M13-06)
 
@@ -2009,6 +2046,12 @@ deletes with a reason plus the typed `DELETE`, and restores either a stored row
 `GET /api/v1/health` through connection errors and the maintenance window,
 re-entering the app only once health answers. Every refusal code above is shown
 readably; the UI never claims a restore succeeded before the app answers.
+
+The same section carries a **Recovery key** card (M13-07). It explains that the
+key is needed to restore a backup and must be stored offline, and offers
+**Download recovery key** through the shared dangerous-action dialog (reason +
+typed `EXPORT`). The download uses the guarded export route above; the key is
+never rendered in the DOM and never appears in the page's text.
 
 ---
 

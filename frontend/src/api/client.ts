@@ -152,18 +152,44 @@ export interface DownloadedFile {
   filename: string
 }
 
+/** Optional shape for downloads that need a guarded POST (M13-07 export). */
+export interface ApiDownloadOptions {
+  method?: 'GET' | 'POST'
+  body?: unknown
+  signal?: AbortSignal
+}
+
 /**
  * Downloads a file response (docs/API.md §16 export) with the same credentials
  * as {@link apiRequest}. A non-2xx response is still the shared JSON error
  * envelope, so failures surface as an {@link ApiError} rather than a broken
  * download; the filename comes from `Content-Disposition` when present and
  * otherwise falls back to the caller's suggestion.
+ *
+ * `options` is optional; existing GET callers keep the original behaviour. A
+ * guarded export (for example the recovery key) passes `method: 'POST'` and a
+ * JSON body, and gets the same CSRF echo as every other unsafe request.
  */
-export async function apiDownload(path: string, fallbackFilename: string): Promise<DownloadedFile> {
+export async function apiDownload(
+  path: string,
+  fallbackFilename: string,
+  options: ApiDownloadOptions = {},
+): Promise<DownloadedFile> {
+  const method = options.method ?? 'GET'
+  const headers: Record<string, string> = { Accept: 'application/json, text/csv' }
+  if (options.body !== undefined) {
+    headers['Content-Type'] = 'application/json'
+  }
+  if (UNSAFE_METHODS.has(method) && csrfToken !== null) {
+    headers['X-CSRF-TOKEN'] = csrfToken
+  }
+
   const response = await fetch(`${API_BASE}${path}`, {
-    method: 'GET',
+    method,
     credentials: 'include',
-    headers: { Accept: 'application/json, text/csv' },
+    headers,
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    signal: options.signal,
   })
 
   if (!response.ok) {

@@ -202,6 +202,9 @@ test('admin saves the IP allowlist with the lockout confirmation', async ({ page
 
 const backupFilename = 'fatefridge-0.1.0-20261021T120000Z.ffbackup'
 
+/** A base64url-shaped 32-byte recovery key used to prove it never reaches the DOM. */
+const recoveryKeyText = 'AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA'
+
 interface BackupRow {
   id: number
   filename: string
@@ -269,6 +272,17 @@ async function mockBackupsApi(page: Page): Promise<void> {
       })
       return
     }
+    if (path.endsWith('/admin/recovery-key/export') && method === 'POST') {
+      await route.fulfill({
+        status: 200,
+        headers: {
+          'Content-Type': 'text/plain',
+          'Content-Disposition': 'attachment; filename="recovery.key"',
+        },
+        body: recoveryKeyText,
+      })
+      return
+    }
     if (path.endsWith('/download')) {
       await route.fulfill({
         status: 200,
@@ -330,6 +344,31 @@ test('admin lists, creates, and downloads a backup', async ({ page }) => {
   await page.getByRole('button', { name: `Download ${backupFilename}` }).click()
   const download = await downloadPromise
   expect(download.suggestedFilename()).toBe(backupFilename)
+})
+
+test('admin downloads the recovery key only through the guarded dialog', async ({ page }) => {
+  await mockBackupsApi(page)
+  await page.goto('/settings/backups')
+
+  await page.getByRole('button', { name: 'Download recovery key' }).click()
+  const dialog = page.getByRole('dialog')
+  const confirm = dialog.getByRole('button', { name: 'Download recovery key' })
+  await expect(confirm).toBeDisabled()
+
+  await dialog.getByLabel('Reason').fill('Offline copy in the safe')
+  await dialog.getByRole('checkbox').check()
+  await expect(confirm).toBeDisabled()
+  await dialog.getByLabel('Type EXPORT to confirm').fill('EXPORT')
+  await expect(confirm).toBeEnabled()
+
+  const downloadPromise = page.waitForEvent('download')
+  await confirm.click()
+  const download = await downloadPromise
+  expect(download.suggestedFilename()).toBe('recovery.key')
+
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  // The key is never rendered, even after the download completes.
+  await expect(page.getByText(recoveryKeyText)).toHaveCount(0)
 })
 
 test('admin restore shows the restarting state after the 202', async ({ page }) => {

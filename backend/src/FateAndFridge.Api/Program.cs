@@ -360,6 +360,7 @@ app.MapGroceryEndpoints();
 app.MapStatisticsEndpoints();
 app.MapAdminEndpoints();
 app.MapBackupEndpoints();
+app.MapRecoveryKeyEndpoints();
 app.MapOperationEndpoints();
 app.MapImportEndpoints();
 

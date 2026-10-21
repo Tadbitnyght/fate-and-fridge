@@ -67,11 +67,15 @@ const healthPayload = {
   environment: 'test',
 }
 
+/** A base64url-shaped 32-byte key used to prove it never reaches the DOM. */
+const RECOVERY_KEY_TEXT = 'AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA'
+
 interface BackupsMockOptions {
   list?: BackupRow[]
   create?: MockRoute | MockResponse
   delete?: MockRoute | MockResponse
   restore?: MockRoute | MockResponse
+  recoveryKey?: MockRoute | MockResponse
   session?: unknown
 }
 
@@ -119,9 +123,26 @@ function installBackupsMocks(options: BackupsMockOptions = {}): MockFetch {
         }
       : { path: '/admin/backups/restore', method: 'POST', ...options.restore }
 
+  const recoveryKeyRoute: MockRoute =
+    options.recoveryKey === undefined
+      ? {
+          path: '/admin/recovery-key/export',
+          method: 'POST',
+          respond: () => ({
+            status: 200,
+            raw: RECOVERY_KEY_TEXT,
+            headers: {
+              'Content-Type': 'text/plain',
+              'Content-Disposition': 'attachment; filename="recovery.key"',
+            },
+          }),
+        }
+      : { path: '/admin/recovery-key/export', method: 'POST', ...options.recoveryKey }
+
   return installMockFetch([
     { path: '/setup/status', body: setupCompleteStatus },
     { path: '/auth/session', body: options.session ?? adminSession },
+    recoveryKeyRoute,
     // Download first: its URL also contains `/admin/backups`.
     {
       path: '/download',
@@ -531,12 +552,87 @@ describe('backups section', () => {
     expect(healthCalls).toBeGreaterThanOrEqual(3)
   })
 
+  it('downloads the recovery key only after the reason and typed EXPORT, never rendering it', async () => {
+    const mock = renderBackupsSection()
+    await screen.findByRole('table', { name: 'Backups, newest first' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download recovery key' }))
+    const dialog = await screen.findByRole('dialog')
+    const confirm = within(dialog).getByRole('button', { name: 'Download recovery key' })
+    expect(confirm).toBeDisabled()
+
+    fireEvent.change(within(dialog).getByLabelText('Reason'), {
+      target: { value: 'Offline copy in the safe' },
+    })
+    fireEvent.click(within(dialog).getByRole('checkbox'))
+    expect(confirm).toBeDisabled()
+
+    // A near miss is not accepted: the comparison is exact.
+    fireEvent.change(within(dialog).getByLabelText('Type EXPORT to confirm'), {
+      target: { value: 'export' },
+    })
+    expect(confirm).toBeDisabled()
+    expect(mock.callsFor('/admin/recovery-key/export')).toBe(0)
+
+    fireEvent.change(within(dialog).getByLabelText('Type EXPORT to confirm'), {
+      target: { value: 'EXPORT' },
+    })
+    expect(confirm).toBeEnabled()
+    fireEvent.click(confirm)
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(saveDownloadedFile).toHaveBeenCalledTimes(1))
+
+    const saved = vi.mocked(saveDownloadedFile).mock.calls[0][0]
+    expect(saved.filename).toBe('recovery.key')
+    expect(await saved.blob.text()).toBe(RECOVERY_KEY_TEXT)
+
+    // The key only ever exists in the downloaded blob, never in the DOM.
+    expect(document.body.textContent ?? '').not.toContain(RECOVERY_KEY_TEXT)
+
+    const bodies = requestBodies(mock, '/admin/recovery-key/export', 'POST')
+    expect(bodies).toHaveLength(1)
+    expect(JSON.parse(String(bodies[0]))).toEqual({
+      reason: 'Offline copy in the safe',
+      confirmation: 'EXPORT',
+    })
+  })
+
+  it('shows a readable message and keeps the export dialog usable when the key is missing', async () => {
+    renderBackupsSection({
+      recoveryKey: {
+        status: 409,
+        body: {
+          error: {
+            code: 'BACKUP_KEY_MISSING',
+            message: 'The recovery key file is missing or unusable.',
+            details: {},
+          },
+        },
+      },
+    })
+    await screen.findByRole('table', { name: 'Backups, newest first' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download recovery key' }))
+    const dialog = await fillDangerousDialog('EXPORT')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Download recovery key' }))
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      /no usable recovery key file/i,
+    )
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Download recovery key' })).toBeEnabled()
+    expect(saveDownloadedFile).not.toHaveBeenCalled()
+  })
+
   it('hides the section from members and never fetches the backup list', async () => {
     const mock = renderBackupsSection({ session: memberSession })
     await screen.findByRole('heading', { name: 'Backups' })
 
     expect(screen.getByText(/limited to admins/i)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Create backup' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Download recovery key' })).not.toBeInTheDocument()
     expect(mock.callsFor('/admin/backups')).toBe(0)
+    expect(mock.callsFor('/admin/recovery-key/export')).toBe(0)
   })
 })

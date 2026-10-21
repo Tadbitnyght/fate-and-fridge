@@ -14,6 +14,7 @@ import {
 } from '../../api/backups'
 import { fetchHealth, isApiError } from '../../api/client'
 import { ErrorCodes } from '../../api/errorCodes'
+import { EXPORT_RECOVERY_KEY_CONFIRMATION, exportRecoveryKey } from '../../api/recoveryKey'
 import {
   DangerousActionDialog,
   type DangerousActionValues,
@@ -133,6 +134,30 @@ function deleteFailureMessage(error: unknown): string {
   }
 }
 
+/** Readable recovery-key export failures (docs/API.md §18). */
+function recoveryKeyFailureMessage(error: unknown): string {
+  if (!isApiError(error)) {
+    return 'The download request could not reach the server. Check that it is reachable and try again.'
+  }
+  switch (error.code) {
+    case ErrorCodes.BackupKeyMissing:
+      return 'The server has no usable recovery key file, so there is nothing to download. Complete setup or restore the key file on the server first.'
+    case ErrorCodes.ReasonRequired:
+      return 'Enter a reason for exporting the recovery key.'
+    case ErrorCodes.ConfirmationMismatch:
+      return `Type ${EXPORT_RECOVERY_KEY_CONFIRMATION} exactly to confirm the export.`
+    case ErrorCodes.ReasonTooLong:
+      return 'The reason is too long. Keep it under 500 characters.'
+    case ErrorCodes.ReasonInvalid:
+    case ErrorCodes.ValidationFailed:
+      return error.message.length > 0 ? error.message : 'Check the reason and try again.'
+    default:
+      return error.message.length > 0
+        ? error.message
+        : 'The recovery key could not be downloaded. Check that the server is reachable and try again.'
+  }
+}
+
 /** Readable restore failures (docs/API.md §18). */
 function restoreFailureMessage(error: unknown): string {
   if (!isApiError(error)) {
@@ -210,6 +235,10 @@ export function BackupsSection({
 
   const [downloadingId, setDownloadingId] = useState<number | null>(null)
   const [downloadError, setDownloadError] = useState<string | null>(null)
+
+  const [recoveryKeyOpen, setRecoveryKeyOpen] = useState(false)
+  const [recoveryKeyError, setRecoveryKeyError] = useState<string | null>(null)
+  const [recoveryKeyBusy, setRecoveryKeyBusy] = useState(false)
 
   const [restoring, setRestoring] = useState<RestoreAccepted | null>(null)
   const [pollState, setPollState] = useState<PollState>('waiting')
@@ -385,6 +414,24 @@ export function BackupsSection({
     }
   }
 
+  async function handleExportRecoveryKey(values: DangerousActionValues): Promise<void> {
+    setRecoveryKeyError(null)
+    setRecoveryKeyBusy(true)
+    try {
+      saveDownloadedFile(
+        await exportRecoveryKey({
+          reason: values.reason,
+          confirmation: values.confirmation ?? '',
+        }),
+      )
+      setRecoveryKeyOpen(false)
+    } catch (error) {
+      setRecoveryKeyError(recoveryKeyFailureMessage(error))
+    } finally {
+      setRecoveryKeyBusy(false)
+    }
+  }
+
   function handleChooseUpload(file: File | null): void {
     setUploadError(null)
     setUploadFile(file)
@@ -435,6 +482,31 @@ export function BackupsSection({
         database, recipe images, and encryption keys — never the recovery key, so an archive cannot
         be opened without it.
       </p>
+
+      <div className="settings-subsection backups-recovery-key">
+        <h4 id="recovery-key-heading">Recovery key</h4>
+        <p className="page-note">
+          The recovery key is needed to restore a backup. Store it offline in a safe place: an
+          archive cannot be opened without it. It is never shown inline on this page and is never
+          stored inside a backup.
+        </p>
+        <div className="settings-actions">
+          <button
+            type="button"
+            onClick={() => {
+              setRecoveryKeyError(null)
+              setRecoveryKeyOpen(true)
+            }}
+          >
+            Download recovery key
+          </button>
+        </div>
+        {!recoveryKeyOpen && recoveryKeyError !== null && (
+          <p className="form__error" role="alert">
+            {recoveryKeyError}
+          </p>
+        )}
+      </div>
 
       {created !== null && (
         <div className="form__status backups-created" role="status">
@@ -584,6 +656,34 @@ export function BackupsSection({
           </button>
         </div>
       </div>
+
+      {recoveryKeyOpen && (
+        <DangerousActionDialog
+          title="Download recovery key"
+          description="Download this server’s recovery key file so you can keep a copy offline."
+          warnings={[
+            'Anyone with this key and a backup archive can read the household data.',
+            'Store the downloaded file offline, for example in a password manager or a safe.',
+            'The key is never shown on this page: the download is the only copy the app provides.',
+          ]}
+          reasonLabel="Reason"
+          acknowledgementLabel="I understand this key must be stored securely offline."
+          confirmation={{
+            label: `Type ${EXPORT_RECOVERY_KEY_CONFIRMATION} to confirm`,
+            expected: EXPORT_RECOVERY_KEY_CONFIRMATION,
+            hint: 'The confirmation is case-sensitive.',
+          }}
+          confirmLabel="Download recovery key"
+          busy={recoveryKeyBusy}
+          error={recoveryKeyBusy ? null : recoveryKeyError}
+          onConfirm={(values) => void handleExportRecoveryKey(values)}
+          onClose={() => {
+            if (!recoveryKeyBusy) {
+              setRecoveryKeyOpen(false)
+            }
+          }}
+        />
+      )}
 
       {createOpen && (
         <DangerousActionDialog
