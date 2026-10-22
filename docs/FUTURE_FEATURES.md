@@ -48,6 +48,7 @@ that plan.
 | [Authentication: 2FA / passkeys](#authentication-2fa--passkeys) | V2 | `V2_BACKLOG.md`, `PRODUCT_SPEC.md §47` |
 | [Scheduled & remote backups](#scheduled--remote-backups) | V2 | `V2_BACKLOG.md`, `PRODUCT_SPEC.md §47`, owner 2026-10-22 |
 | [Recovery-key protection](#recovery-key-protection) | V2 | Owner 2026-10-22, `M13_PLAN.md §1.11` |
+| [In-app changelog & update notes](#in-app-changelog--update-notes) | V2 | Owner 2026-10-22, `CHANGELOG.md` |
 | [Advanced duplicate detection](#advanced-duplicate-detection) | V2 | `V2_BACKLOG.md`, `PRODUCT_SPEC.md §47`, `M4_VERIFICATION.md` |
 | [Statistics expansion](#statistics-expansion) | V2 | `V2_BACKLOG.md`, `PRODUCT_SPEC.md §12` |
 | [Printing enhancements](#printing-enhancements) | V2 | `V2_BACKLOG.md`, `PRODUCT_SPEC.md §26` |
@@ -208,6 +209,25 @@ Notes: raised by the product owner 2026-10-22. M13 ships the plaintext
 download; encrypting it changes the restore credential model (every backup is
 keyed from it), so it is a deliberate V2 redesign rather than a small hardening
 patch. Source: this registry, `docs/M13_PLAN.md` §1.11, `docs/SECURITY.md` §11.
+
+## In-app changelog & update notes
+Status: **V2**
+
+- A **CHANGELOG link in the footer** that opens the full list of changes for
+  every released version, so a household can see what an update contained without
+  leaving the app.
+- A **"What's new" popup on first load after the version changes**, showing the
+  release notes for the running version (not on every visit), dismissible and
+  remembered per device/version, and keyboard/screen-reader accessible.
+- Content comes from the release metadata the update check already reads (or a
+  bundled `CHANGELOG.md` rendered in-app) — **no telemetry, no external tracking**,
+  and the popup must still work offline (falling back to the bundled changelog).
+
+Notes: raised by the product owner 2026-10-22. M13 ships the current version and a
+dismissible "a newer release exists" banner, but no changelog surface and no
+post-update notes; the GitHub release body is already available from the same
+single releases GET and is currently unused. Source: this registry,
+`docs/M13_PLAN.md` §1.13/§1.14, `CHANGELOG.md`.
 
 ## Advanced duplicate detection
 Status: **V2**

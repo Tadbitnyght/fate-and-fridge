@@ -124,6 +124,14 @@ export const FUTURE_FEATURES: FutureFeature[] = [
     source: 'docs/V2_BACKLOG.md, docs/PRODUCT_SPEC.md §47, product owner 2026-10-22',
   },
   {
+    id: 'in-app-changelog-update-notes',
+    title: 'In-app changelog & update notes',
+    status: 'v2',
+    summary:
+      'A footer CHANGELOG link opening the full list of changes for every released version, plus a dismissible "What is new" popup on the first load after the version changes that summarises that version. Content comes from the release metadata already fetched by the update check or a bundled changelog (offline-capable, no telemetry). V1 (M13) shows only a dismissible newer-release banner and no changelog surface.',
+    source: 'docs/M13_PLAN.md §1.13/§1.14, CHANGELOG.md, product owner 2026-10-22',
+  },
+  {
     id: 'recovery-key-protection',
     title: 'Recovery-key protection',
     status: 'v2',
