@@ -1600,6 +1600,20 @@ public sealed class M9LiveSyncEventMatrixTests(M1SetupFixture fixture) : IAsyncL
         // audit.pruned row. No audit live-sync entity exists, so the admin
         // audit viewer simply refetches.
         "POST /api/v1/admin/audit/prune",
+        // Backup maintenance (M13): archives are admin-local files with no
+        // live-sync entity; the backups list refetches after a create/delete.
+        "POST /api/v1/admin/backups",
+        "DELETE /api/v1/admin/backups/{id}",
+        // Restore replaces the database and then restarts the process, so every
+        // socket is torn down; there is nothing to broadcast to live clients.
+        "POST /api/v1/admin/backups/restore",
+        "POST /api/v1/setup/restore",
+        // Recovery-key export is a guarded download that mutates nothing.
+        "POST /api/v1/admin/recovery-key/export",
+        // Update-check state is admin-local application settings; the About
+        // section refetches, and no entity clients cache is affected.
+        "POST /api/v1/admin/updates/check",
+        "PATCH /api/v1/admin/updates",
     ];
 
     private static HashSet<string> DiscoverMutatingRoutes(ApiFactory factory)
