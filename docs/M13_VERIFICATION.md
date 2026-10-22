@@ -277,4 +277,13 @@ rollback; tests cover both the success and rollback paths.
 
 ## CI status after completion
 
-_Pending._
+**GREEN.** Run **`39761716784`** on **`1f9e3a1`** (the tagged tree) —
+`conclusion: success`, all four jobs green:
+
+- Backend (format, build, migrations, tests): success (16m 26s)
+- Frontend (lint, types, tests, build): success (57s)
+- Compose configuration: success (5s)
+- Docker stack acceptance + Playwright: success (2m 11s)
+
+This satisfies the `BUG-009`/`BUG-010` precedent (a green CI run on `main` before
+the milestone is declared done). The tag `m13-complete` marks this commit.
