@@ -408,7 +408,7 @@ export const MILESTONES: Milestone[] = [
     id: 'M13',
     number: 13,
     name: 'Backup / Restore / Updates',
-    status: 'complete',
+    status: 'in_progress',
     summary:
       'Encrypted manual backups with validated, safety-backup-first restore (including a clean install), recovery-key export, release version display, and a privacy-preserving update check.',
     features: [
@@ -419,16 +419,9 @@ export const MILESTONES: Milestone[] = [
       'Recovery-key export behind the dangerous-action confirmation',
       'Release version display and a cached, offline-tolerant GitHub Releases update check',
     ],
-    completedOn: '2026-10-21',
-    evidence: [
-      { label: 'Backend tests', value: '2481' },
-      { label: 'Vitest', value: '542' },
-      { label: 'Playwright (hermetic)', value: '77 passed / 3 pre-existing stack skips' },
-      { label: 'M13 verification', value: 'independent review + full §4 battery' },
-      { label: 'Backend gates', value: 'format/build/EF clean' },
-    ],
     issues: [162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172],
-    issuesNote: 'Tracking #162; M13-01…M13-10: #163–#172. Runbook: docs/M13_PLAN.md.',
+    issuesNote:
+      'Tracking #162; M13-01…M13-10: #163–#172. Runbook: docs/M13_PLAN.md. Live restore round-trip found blockers; see docs/M13_VERIFICATION.md.',
   },
   {
     id: 'M14',

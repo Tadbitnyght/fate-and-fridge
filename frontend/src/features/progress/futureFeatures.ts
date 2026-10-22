@@ -120,8 +120,16 @@ export const FUTURE_FEATURES: FutureFeature[] = [
     title: 'Scheduled & remote backups',
     status: 'v2',
     summary:
-      'User-configurable backup schedules targeting a local folder, SMB/NFS, S3-compatible storage, OneDrive, or Google Drive. V1 (M13) provides on-demand encrypted backup/restore only.',
-    source: 'docs/V2_BACKLOG.md, docs/PRODUCT_SPEC.md §47',
+      'User-configurable recurring backups (every N days, weekly or monthly, at a chosen time) with rolling retention that keeps the last X scheduled archives before overwriting the oldest, targeting a local folder, SMB/NFS, S3-compatible storage, OneDrive or Google Drive. V1 (M13) provides on-demand encrypted backup/restore and a fixed last-5 safety-backup retention only.',
+    source: 'docs/V2_BACKLOG.md, docs/PRODUCT_SPEC.md §47, product owner 2026-10-22',
+  },
+  {
+    id: 'recovery-key-protection',
+    title: 'Recovery-key protection',
+    status: 'v2',
+    summary:
+      'Store recovery.key encrypted at rest and export only an encrypted envelope, so no plaintext key ever leaves the process or lands in a downloaded file. Unlock with a user-supplied passphrase (or an equivalent user-held secret) so a copied file is not enough, while preserving a documented disaster-recovery path for a clean install. V1 (M13) keeps the plaintext /data/config/recovery.key (mode 0600) and an Admin-only guarded download.',
+    source: 'docs/M13_PLAN.md §1.11, docs/SECURITY.md §11, product owner 2026-10-22',
   },
   {
     id: 'advanced-duplicate-detection',

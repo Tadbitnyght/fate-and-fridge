@@ -1,6 +1,7 @@
 # M13 Verification — Backup / Restore / Updates
 
-Status: **in progress** (live deployment gate pending)
+Status: **in progress** — the live restore round-trip found two blocker defects;
+the manifest was rolled back from `complete` until they are fixed and re-verified.
 Runbook: `docs/M13_PLAN.md` (approved 2026-10-20). Coverage map:
 `docs/M13_TEST_MATRIX.md`. Tracking: #162; M13-01…M13-10: #163–#172.
 
@@ -123,12 +124,79 @@ registry-parity guard cannot silently skip.
 
 ## Live deployment verification
 
-_Pending: a rebuild/redeploy from the completed commit, then (a) non-destructive
-checks on the production instance (health, About/version, the update check against
-the real public release, `/progress`), and (b) the real `pg_dump`/`pg_restore`
-round trip on a **disposable** stack (create → download → restore → restart →
-migrations → sessions revoked → `backup.restored`), because the client binaries
-cannot be exercised on the workstation._
+### Production deployment (part A — non-destructive)
+
+Rebuilt/redeployed from the completed tree. Both the workstation and the NAS
+checkout were confirmed at **`3dd2842`** (clean). The stack was rebuilt with
+`scripts/deploy.sh up` and the **`M13Backups`** migration applied.
+
+- **Image / container:** `fate-and-fridge:0.1.0` =
+  `sha256:27d4efe0bcc4778edee3d541902bce6e2d42c40439bd13bdbe3dcb5cfa2a7ef1`
+  (local build, no registry digest); app container `5f717f1c427a`, `Up
+  (healthy)`, `0.0.0.0:50080->8080`; PostgreSQL `Up (healthy)`, not published.
+- **Health:** `GET /api/v1/health` → 200; `GET /api/v1/health/db` → 200.
+- **Migration:** `GET /api/v1/about` → `{"app_version":"0.1.0",
+  "schema_version":"20261021023131_M13Backups"}` — the M13 migration applied and
+  the About read works for an authenticated (single-user) caller.
+- **Real `pg_dump` in the image (the path the workstation cannot test):**
+  `POST /api/v1/admin/backups` → **201** with
+  `{"id":1,"filename":"fatefridge-0.1.0-20261022T012841Z.ffbackup",
+  "kind":"manual","status":"completed","size_bytes":815704,
+  "checksum":"566cd48dd96facb83dec993b8a86685acf4e71993f4c9b13cfc43f28c535a1c7"}`;
+  `GET /api/v1/admin/backups/1/download` → **200**,
+  `application/octet-stream`, attachment with that filename, **815,704 bytes**;
+  the first bytes are **`FFBK`** (magic + format 0001 + KDF 01 + reserved 00 +
+  salt), and the file contains **no** `CREATE TABLE` / `PGDMP` markers and no
+  recovery-key text — the payload is genuinely encrypted.
+- **Real update check against the public release:** `GET /api/v1/updates` → 200
+  `{"current_version":"0.1.0","latest_version":"0.1.0",
+  "update_available":false,"last_checked_at":"2026-10-22T01:25:19.5588166+00:00",
+  "last_error":null,"enabled":true,
+  "release_url":"https://github.com/Tadbitnyght/fate-and-fridge/releases/tag/v0.1.0"}`
+  — the unauthenticated GitHub Releases call works on the real network, SemVer
+  matches, and no banner is shown.
+- **`/progress`** rendered live in Chromium: **`14 of 15 milestones complete
+  (93%).`**, the **`M13 — Backup / Restore / Updates`** card shows **Complete**
+  and `Completed 2026-10-21`, no milestone reports "In progress"; the served
+  bundle is `index-CsNOEZsb.js`.
+- The production archive is left in `/data/backups` as evidence; nothing was
+  restored, pruned or deleted on production.
+
+### Real restore round-trip (part B — disposable stack) — **FAILED**
+
+A throwaway compose project (`faf-m13-verify`, own data dir, port 50081, own
+image tag) proved the real `pg_restore` path end to end. The data outcome was
+correct — the app came back healthy, migrations ran, the post-backup recipe was
+gone, only the backup's data remained, `setup/status` was completed, the safety
+archive existed on disk, `.restore/` was reclaimed and `config/recovery.key`
+survived — **but two blocker defects were exposed**, which is exactly why the
+workstation-only suite was not sufficient:
+
+1. **`backup.restored` is never written (audit gap).** `PgRestoreRunner` terminates
+   **all** sessions on the target database — including the application's own
+   pooled connection — so the subsequent `DELETE FROM user_sessions` fails with
+   **`57P01: terminating connection due to administrator command`**. That aborts
+   the post-commit path before `WriteRestoreAuditAsync`, so no `backup.restored`
+   audit row exists (the API still returned `202` and the app restarted, so it
+   looked successful). Destructive operations must be audited (Definition of Done).
+   The terminate count is also wrong (`Terminated -1 session(s)`).
+2. **The backup catalog is corrupted after a restore.** `pg_dump` snapshots
+   `backup_metadata` while the manual row is still `pending`/`size_bytes 0`/empty
+   checksum (it is marked `completed` after the dump finishes), and the safety
+   backup row is inserted after the dump — so restoring yields a **stale `pending`
+   row** and **no safety row**, while the disk holds two valid archives. The
+   catalog must be reconciled from the on-disk archives/manifests after a restore.
+
+Production was verified untouched before and after (same archive, checksum, size;
+`safety/` empty; both containers healthy), and the disposable stack and its image
+were torn down (no containers/networks/volumes remain; port 50081 refused).
+
+**Disposition:** M13 stays `in_progress`. Fix both blockers (open the
+revoke/audit connection **after** the terminate or exclude the app's backend PID
+and treat a `57P01` on post-commit steps as non-fatal/retried; reconcile
+`backup_metadata` from the archives post-restore and mark the restored archive
+`completed`), fix the terminate count, then re-run this round-trip and require
+the audit row **and** a coherent catalog before completion.
 
 ---
 

@@ -46,7 +46,8 @@ that plan.
 | [Voice integrations](#voice-integrations) | V2 | `V2_BACKLOG.md`, `PRODUCT_SPEC.md §47` |
 | [External API credentials / integrations](#external-api-credentials--integrations) | V2 | `V2_BACKLOG.md`, `PRODUCT_SPEC.md §47` |
 | [Authentication: 2FA / passkeys](#authentication-2fa--passkeys) | V2 | `V2_BACKLOG.md`, `PRODUCT_SPEC.md §47` |
-| [Scheduled & remote backups](#scheduled--remote-backups) | V2 | `V2_BACKLOG.md`, `PRODUCT_SPEC.md §47` |
+| [Scheduled & remote backups](#scheduled--remote-backups) | V2 | `V2_BACKLOG.md`, `PRODUCT_SPEC.md §47`, owner 2026-10-22 |
+| [Recovery-key protection](#recovery-key-protection) | V2 | Owner 2026-10-22, `M13_PLAN.md §1.11` |
 | [Advanced duplicate detection](#advanced-duplicate-detection) | V2 | `V2_BACKLOG.md`, `PRODUCT_SPEC.md §47`, `M4_VERIFICATION.md` |
 | [Statistics expansion](#statistics-expansion) | V2 | `V2_BACKLOG.md`, `PRODUCT_SPEC.md §12` |
 | [Printing enhancements](#printing-enhancements) | V2 | `V2_BACKLOG.md`, `PRODUCT_SPEC.md §26` |
@@ -174,12 +175,39 @@ Source: `docs/V2_BACKLOG.md`, `docs/PRODUCT_SPEC.md §47`.
 ## Scheduled & remote backups
 Status: **V2**
 
-- User-configurable backup schedule.
+- User-configurable **recurring schedule**: run the same encrypted backup path as
+  M13 automatically — every N days (e.g. every 3 days), weekly, or monthly, at a
+  user-selected time.
+- **Rolling retention**: keep the last **X** scheduled backups (X user-defined)
+  and overwrite/delete the oldest once X is reached, independently of the M13
+  safety-backup retention.
 - Targets: local folder, SMB/NFS, S3-compatible, OneDrive, Google Drive.
 
-Notes: V1 (M13) provides on-demand encrypted backup/restore and a recovery key;
-scheduled/remote targets are deferred. Source: `docs/V2_BACKLOG.md`,
-`docs/PRODUCT_SPEC.md §47`.
+Notes: V1 (M13) provides on-demand encrypted backup/restore, a fixed last-5
+safety-backup retention, and a recovery key; scheduled runs, user-defined
+frequency, and rolling retention are deferred. Recurring-schedule and
+rolling-retention detail raised by the product owner 2026-10-22. Source:
+`docs/V2_BACKLOG.md`, `docs/PRODUCT_SPEC.md §47`.
+
+## Recovery-key protection
+Status: **V2**
+
+- Store `recovery.key` **encrypted at rest** instead of as a plaintext base64url
+  file (M13 keeps it plaintext with mode `0600`), and make the Admin export hand
+  out only an **encrypted envelope** — no plaintext key ever leaves the process
+  or lands in a downloaded file.
+- Unlock with a **user-supplied passphrase** (or an equivalent user-held secret):
+  the passphrase is required to export and to restore on a rebuilt device, so
+  "only the program knows the key" cannot be defeated by copying one file.
+- Preserve disaster recovery: the household must still be able to restore onto a
+  clean install, so any device-held secret needs a documented, user-held recovery
+  path (the passphrase) rather than becoming unrecoverable.
+
+Notes: raised by the product owner 2026-10-22. M13 ships the plaintext
+`/data/config/recovery.key` (mode `0600`, never logged) plus an Admin-only guarded
+download; encrypting it changes the restore credential model (every backup is
+keyed from it), so it is a deliberate V2 redesign rather than a small hardening
+patch. Source: this registry, `docs/M13_PLAN.md` §1.11, `docs/SECURITY.md` §11.
 
 ## Advanced duplicate detection
 Status: **V2**
