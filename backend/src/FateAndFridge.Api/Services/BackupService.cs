@@ -1,11 +1,13 @@
 using System.Buffers.Text;
 using System.Globalization;
 using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 using FateAndFridge.Api.Backup;
 using FateAndFridge.Api.Data;
 using FateAndFridge.Api.Domain;
 using FateAndFridge.Api.Errors;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace FateAndFridge.Api.Services;
 
@@ -62,6 +64,19 @@ public abstract record BackupDeleteOutcome
 }
 
 /// <summary>
+/// What one catalog reconciliation found on disk and changed in
+/// <c>backup_metadata</c> (docs/M13_PLAN.md §1.9). <see cref="Skipped"/> is true
+/// when the restored database predates the table, so nothing could be
+/// reconciled.
+/// </summary>
+public sealed record BackupCatalogReconciliation(
+    int Discovered,
+    int Added,
+    int Updated,
+    int MarkedDeleted,
+    bool Skipped);
+
+/// <summary>
 /// The M13-03 backup lifecycle (docs/M13_PLAN.md §1.4–§1.8, §2.1, §4;
 /// docs/SECURITY.md §11, §12): <c>pg_dump</c> capture, encrypted archive
 /// creation, the <c>backup_metadata</c> row, list/download/delete, and the
@@ -105,6 +120,14 @@ public sealed class BackupService(
 
     private const int MaximumFilenameAttempts = 100;
 
+    /// <summary>
+    /// Server-generated archive names: <c>fatefridge-{version}-{timestamp}.ffbackup</c>
+    /// with an optional <c>-{n}</c> collision suffix (see <see cref="BackupNaming"/>).
+    /// </summary>
+    private static readonly Regex ArchiveNamePattern = new(
+        $@"^fatefridge-(?<appVersion>.+)-(?<timestamp>\d{{8}}T\d{{6}}Z)(?:-(?<sequence>\d+))?{Regex.Escape(BackupNaming.Extension)}$",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
     /// <summary>Absolute <c>{DataDir}/backups</c> directory.</summary>
     public static string ArchivesDirectory(IConfiguration configuration) =>
         Path.Combine(AppPaths.DataRoot(configuration), ArchivesDirectoryName);
@@ -134,6 +157,189 @@ public sealed class BackupService(
             .ThenByDescending(backup => backup.Id)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Makes <c>backup_metadata</c> agree with the archives that actually exist
+    /// on disk (docs/M13_PLAN.md §1.9, §2.1). A <c>pg_dump</c> snapshot is taken
+    /// while the backup row is still <c>pending</c> (and before the safety row
+    /// exists), so after a restore the catalog can disagree with
+    /// <c>{DataDir}/backups</c>. This enumerates both archive directories,
+    /// upserts one completed row per file with the ciphertext SHA-256 and size,
+    /// marks rows whose file is gone <c>deleted</c> (history is kept), and never
+    /// deletes a file.
+    /// </summary>
+    /// <remarks>
+    /// Idempotent: a second run over the same disk state changes nothing. It is
+    /// called once after a restore and once at startup when the restore marker
+    /// is consumed, never per request. A restored database that predates
+    /// <c>backup_metadata</c> is skipped.
+    /// </remarks>
+    public async Task<BackupCatalogReconciliation> ReconcileCatalogAsync(
+        CancellationToken cancellationToken)
+    {
+        List<BackupMetadata> rows;
+        try
+        {
+            rows = await dbContext.BackupMetadata
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.UndefinedTable)
+        {
+            logger.LogWarning(
+                "The restored database has no backup_metadata table; the catalog was not reconciled.");
+            return new BackupCatalogReconciliation(0, 0, 0, 0, Skipped: true);
+        }
+
+        var rowsByFilename = rows.ToDictionary(row => row.Filename, StringComparer.Ordinal);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var runningSchemaVersion = await ReadSchemaVersionAsync(cancellationToken).ConfigureAwait(false);
+        var added = 0;
+        var updated = 0;
+
+        foreach (var (directory, kind) in new[]
+                 {
+                     (ArchivesDirectory(configuration), BackupKind.Manual),
+                     (SafetyArchivesDirectory(configuration), BackupKind.Safety),
+                 })
+        {
+            if (!Directory.Exists(directory))
+            {
+                continue;
+            }
+
+            foreach (var path in Directory.EnumerateFiles(
+                         directory,
+                         "*" + BackupNaming.Extension,
+                         SearchOption.TopDirectoryOnly))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var filename = Path.GetFileName(path);
+                if (!seen.Add(filename))
+                {
+                    continue;
+                }
+
+                var info = new FileInfo(path);
+                var checksum = await ComputeFileSha256Async(path, cancellationToken).ConfigureAwait(false);
+                var (appVersion, createdAt) = ParseArchiveName(filename);
+
+                if (rowsByFilename.TryGetValue(filename, out var row))
+                {
+                    var changed =
+                        row.Status != BackupStatus.Completed ||
+                        row.SizeBytes != info.Length ||
+                        !string.Equals(row.Checksum, checksum, StringComparison.OrdinalIgnoreCase) ||
+                        row.Kind != kind ||
+                        row.Error is not null;
+
+                    row.Status = BackupStatus.Completed;
+                    row.SizeBytes = info.Length;
+                    row.Checksum = checksum;
+                    row.Kind = kind;
+                    row.Error = null;
+
+                    if (createdAt is not null)
+                    {
+                        row.CreatedAt = createdAt.Value;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(row.AppVersion))
+                    {
+                        row.AppVersion = appVersion ?? AppInfo.Version;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(row.SchemaVersion))
+                    {
+                        row.SchemaVersion = runningSchemaVersion;
+                    }
+
+                    if (changed)
+                    {
+                        updated++;
+                    }
+
+                    continue;
+                }
+
+                dbContext.BackupMetadata.Add(new BackupMetadata
+                {
+                    Filename = filename,
+                    AppVersion = appVersion ?? AppInfo.Version,
+                    SchemaVersion = runningSchemaVersion,
+                    CreatedAt = createdAt ?? new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero),
+                    CreatedByUserId = null,
+                    Checksum = checksum,
+                    SizeBytes = info.Length,
+                    Kind = kind,
+                    Status = BackupStatus.Completed,
+                    Error = null,
+                });
+                added++;
+            }
+        }
+
+        var markedDeleted = 0;
+        foreach (var row in rows)
+        {
+            // A pending row may legitimately have no file yet (a backup can be
+            // running); only completed/restored rows lose their archive.
+            if (row.Status is BackupStatus.Pending or BackupStatus.Deleted)
+            {
+                continue;
+            }
+
+            if (seen.Contains(row.Filename))
+            {
+                continue;
+            }
+
+            row.Status = BackupStatus.Deleted;
+            markedDeleted++;
+        }
+
+        if (added > 0 || updated > 0 || markedDeleted > 0)
+        {
+            await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        return new BackupCatalogReconciliation(seen.Count, added, updated, markedDeleted, Skipped: false);
+    }
+
+    private static async Task<string> ComputeFileSha256Async(string path, CancellationToken cancellationToken)
+    {
+        await using var input = new FileStream(
+            path,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            bufferSize: 81920,
+            FileOptions.Asynchronous | FileOptions.SequentialScan);
+
+        var hash = await SHA256.HashDataAsync(input, cancellationToken).ConfigureAwait(false);
+        return Convert.ToHexStringLower(hash);
+    }
+
+    private static (string? AppVersion, DateTimeOffset? CreatedAt) ParseArchiveName(string filename)
+    {
+        var match = ArchiveNamePattern.Match(filename);
+        if (!match.Success)
+        {
+            return (null, null);
+        }
+
+        DateTimeOffset? createdAt = DateTimeOffset.TryParseExact(
+            match.Groups["timestamp"].Value,
+            "yyyyMMdd'T'HHmmss'Z'",
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+            out var parsed)
+            ? parsed
+            : null;
+
+        return (match.Groups["appVersion"].Value, createdAt);
     }
 
     /// <summary>

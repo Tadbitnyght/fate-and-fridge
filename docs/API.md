@@ -1991,17 +1991,33 @@ confirmation=RESTORE
   uploaded file's base name (reporting only — never used as a path).
 - The restore then continues **in the background**: the archive is extracted to
   `<DataDir>/backups/.restore/<restore_id>/` (checksums re-verified, entry paths
-  rejected for absolute paths/`..`/links), maintenance mode is entered, other
-  database sessions are terminated, and `pg_restore --clean --if-exists
-  --no-owner --no-privileges --single-transaction` replaces the database.
-  Afterwards all `user_sessions` are deleted (every client must sign in again), a
-  `backup.restored` audit row is written **into the restored database** (raw SQL,
-  so a slightly older restored schema still works), `images/` and
-  `config/dp-keys/` are swapped from staging, a
-  `<DataDir>/backups/restore.pending` marker is written, and the application
-  requests a graceful stop so `restart: unless-stopped` restarts the container.
-  On the next start migrations run, the marker is logged, database connectivity
-  is verified, and the marker is cleared.
+  rejected for absolute paths/`..`/links), maintenance mode is entered, every
+  **other** session on the target database is terminated (the runner's own
+  maintenance backend is spared; the reported count is the real number of
+  terminated sessions), and `pg_restore --clean --if-exists --no-owner
+  --no-privileges --single-transaction` replaces the database. After
+  `pg_restore` returns the application's pooled connections are dropped
+  (`NpgsqlConnection.ClearAllPools()`), so every post-commit step opens a
+  **fresh** connection instead of reusing a backend that was terminated
+  (`57P01`). All `user_sessions` are then deleted (every client must sign in
+  again), a `backup.restored` audit row is written **into the restored
+  database** (raw SQL, so a slightly older restored schema still works),
+  `images/` and `config/dp-keys/` are swapped from staging, the backup catalog
+  is reconciled with the archives on disk (see **Catalog reconciliation**
+  below), a `<DataDir>/backups/restore.pending` marker is written, and the
+  application requests a graceful stop so `restart: unless-stopped` restarts
+  the container. On the next start migrations run, the marker is logged,
+  database connectivity is verified, the catalog is reconciled again
+  (idempotently), and the marker is cleared.
+- **Post-commit resilience and the audit guarantee:** the session revoke and the
+  audit insert each run on a fresh connection and are retried **once** after a
+  `57P01`/transient connection failure (the pool is cleared first). The audit is
+  attempted even when the revoke failed, so a committed restore is never
+  silently unaudited. If a step still fails, it is recorded as
+  `post_step_error` in the marker (and the log), the application **still
+  restarts** into the restored database, and the outcome is
+  `APPLIED_RESTART_REQUIRED` rather than a success — the restored database is
+  never reported as intact/failed when it has actually been applied.
 - **Maintenance window:** while the restore runs, every route except
   `/api/v1/health` (and its subroutes) answers **`503 RESTORE_IN_PROGRESS`** with
   the shared error envelope. Health stays available so the container health check
@@ -2021,6 +2037,34 @@ confirmation=RESTORE
     order). A swap failure therefore rolls back files only: the database is
     already restored, and the safety backup is the way back. A retry of the
     restore from the same archive completes the swap.
+
+### Catalog reconciliation
+
+`backup_metadata` is a **projection of the archive files**, not independent
+state. A `pg_dump` snapshot is taken while the manual row is still `pending`
+(with `size_bytes = 0` and an empty checksum) and before the safety row exists,
+so the catalog inside a restored archive can disagree with the disk. After a
+successful restore — and once at startup when the restored marker is consumed —
+the catalog is reconciled from disk:
+
+- `{DataDir}/backups/*.ffbackup` is enumerated as `kind = "manual"` and
+  `{DataDir}/backups/safety/*.ffbackup` as `kind = "safety"` (top level only, so
+  `safety/`, `.tmp/`, and `.restore/` are never treated as archives);
+- one row is upserted per **filename**: the real `size_bytes` and the SHA-256 of
+  the **encrypted** archive (streamed), `status = "completed"`, `created_at`
+  from the filename timestamp (falling back to the file mtime), `app_version`
+  from the filename (or the running app), `schema_version` from the running
+  schema (or the restored row when it already has one), and
+  `created_by_user_id = null` when unknown;
+- a non-`pending` row whose file no longer exists is marked `deleted` (history
+  is kept, including `restored` rows); a `pending` row is left alone because a
+  backup may legitimately not have written its file yet;
+- **no file is ever deleted** from this path.
+
+Reconciliation is idempotent: a second pass over the same disk state changes
+nothing (discovered/added/updated/deleted counts are all zero). It is not run
+per request. A restored database that predates `backup_metadata` is skipped with
+a warning.
 
 ### Retention
 

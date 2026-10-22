@@ -1,9 +1,10 @@
 # M13 Verification — Backup / Restore / Updates
 
-Status: **in progress** — the live restore round-trip found two blocker defects;
-the manifest was rolled back from `complete` until they are fixed and re-verified.
-Runbook: `docs/M13_PLAN.md` (approved 2026-10-20). Coverage map:
-`docs/M13_TEST_MATRIX.md`. Tracking: #162; M13-01…M13-10: #163–#172.
+Status: **in progress** — the live restore round-trip found two blocker defects,
+both now fixed (audit guarantee + catalog reconciliation); the round-trip must be
+re-run on a disposable stack before completion. Runbook: `docs/M13_PLAN.md`
+(approved 2026-10-20). Coverage map: `docs/M13_TEST_MATRIX.md`. Tracking: #162;
+M13-01…M13-10: #163–#172.
 
 ---
 
@@ -162,7 +163,7 @@ checkout were confirmed at **`3dd2842`** (clean). The stack was rebuilt with
 - The production archive is left in `/data/backups` as evidence; nothing was
   restored, pruned or deleted on production.
 
-### Real restore round-trip (part B — disposable stack) — **FAILED**
+### Real restore round-trip (part B — disposable stack) — blockers found, fixed
 
 A throwaway compose project (`faf-m13-verify`, own data dir, port 50081, own
 image tag) proved the real `pg_restore` path end to end. The data outcome was
@@ -191,12 +192,34 @@ Production was verified untouched before and after (same archive, checksum, size
 `safety/` empty; both containers healthy), and the disposable stack and its image
 were torn down (no containers/networks/volumes remain; port 50081 refused).
 
-**Disposition:** M13 stays `in_progress`. Fix both blockers (open the
-revoke/audit connection **after** the terminate or exclude the app's backend PID
-and treat a `57P01` on post-commit steps as non-fatal/retried; reconcile
-`backup_metadata` from the archives post-restore and mark the restored archive
-`completed`), fix the terminate count, then re-run this round-trip and require
-the audit row **and** a coherent catalog before completion.
+**Fixes (both blockers closed in code):**
+
+1. **Audit guaranteed + fresh connections + real count.** `PgRestoreRunner` no
+   longer counts an `ExecuteNonQuery` (which reported `-1`): it reads one row per
+   terminated backend, so the log states the real number, and it keeps excluding
+   its own maintenance backend. After termination and again when `pg_restore`
+   returns it calls `NpgsqlConnection.ClearAllPools()`, so no post-commit step can
+   reuse a terminated backend. `RestoreService` runs the session revoke and the
+   `backup.restored` insert through a fresh-connection retry (once on
+   `57P01`/`57P02`/`57P03`/`08…`/transient/timeout); the audit is attempted even
+   if the revoke fails, and a step that still fails is recorded as
+   `post_step_error` in the marker while the application still restarts.
+   `M13RestoreServiceIntegrationTests` now reproduces the terminated pooled
+   connection with a real `pg_terminate_backend` and asserts the audit row is
+   still written.
+2. **Catalog reconciled from disk.** `BackupService.ReconcileCatalogAsync`
+   enumerates `backups/*.ffbackup` (manual) and `backups/safety/*.ffbackup`
+   (safety), upserts one `completed` row per filename with the real size and
+   streamed SHA-256 of the encrypted file, marks non-pending rows whose file is
+   gone `deleted`, never deletes a file, and is idempotent. It runs after a
+   successful restore (before the marker) and once at startup when the marker is
+   consumed. Tests cover the pending manual row, a safety file without a row, an
+   orphan row, and the idempotent second pass.
+
+**Disposition:** M13 stays `in_progress` until this round-trip is re-run on a
+disposable stack and proves the `backup.restored` row is present **and** the
+restored catalog is coherent (manual archive `completed` with the disk checksum,
+safety archive present, no stale `pending` row, `.restore/` reclaimed).
 
 ---
 

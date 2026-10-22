@@ -162,10 +162,54 @@ public static class RestoreMarker
             return;
         }
 
+        await ReconcileCatalogAsync(services, logger, cancellationToken).ConfigureAwait(false);
+
         if (Delete(configuration, logger))
         {
             logger.LogInformation(
                 "The restored database is reachable; the restore marker was cleared.");
+        }
+    }
+
+    /// <summary>
+    /// Reconciles the restored catalog with the archives on disk exactly once
+    /// after the marker is consumed (docs/M13_PLAN.md §1.9). The restored
+    /// <c>backup_metadata</c> is a <c>pg_dump</c> snapshot taken while the manual
+    /// row was still pending, so it is refreshed from the files. Idempotent and
+    /// never fatal for startup.
+    /// </summary>
+    private static async Task ReconcileCatalogAsync(
+        IServiceProvider services,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var scope = services.CreateAsyncScope();
+            var backups = scope.ServiceProvider.GetRequiredService<BackupService>();
+            var reconciliation = await backups
+                .ReconcileCatalogAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            if (reconciliation.Skipped)
+            {
+                return;
+            }
+
+            logger.LogInformation(
+                "Reconciled the backup catalog from disk after the restore: {ArchiveCount} archive(s), " +
+                "{AddedCount} added, {UpdatedCount} updated, {DeletedCount} marked deleted.",
+                reconciliation.Discovered,
+                reconciliation.Added,
+                reconciliation.Updated,
+                reconciliation.MarkedDeleted);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogError(
+                exception,
+                "post_step_error: the backup catalog could not be reconciled after the restore; " +
+                "the next successful restore reconciles it again.");
         }
     }
 

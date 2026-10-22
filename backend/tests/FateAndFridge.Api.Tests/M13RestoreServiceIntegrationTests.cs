@@ -358,6 +358,111 @@ public sealed class M13RestoreServiceIntegrationTests(M13BackupFixture fixture) 
     }
 
     [Fact]
+    public async Task A_restore_reconciles_the_backup_catalog_from_the_archives_on_disk()
+    {
+        var dataDir = SeedDataDirectory(RecoveryKey);
+        var manualFilename = $"fatefridge-{AppInfo.Version}-20261020T120000Z.ffbackup";
+        var archivePath = await WriteArchiveAsync(dataDir, fileName: manualFilename);
+        var archiveChecksum = Convert.ToHexStringLower(
+            SHA256.HashData(await File.ReadAllBytesAsync(archivePath, Ct)));
+
+        var safetyFilename = $"fatefridge-{AppInfo.Version}-20261020T100000Z.ffbackup";
+        var safetyDirectory = Directory.CreateDirectory(
+            Path.Combine(dataDir, "backups", "safety")).FullName;
+        var safetyPath = Path.Combine(safetyDirectory, safetyFilename);
+        File.Copy(archivePath, safetyPath);
+
+        const string goneFilename = "fatefridge-0.1.0-20250101T000000Z.ffbackup";
+        var schemaVersion = await LatestSchemaVersionAsync();
+
+        await using (var context = fixture.CreateContext())
+        {
+            context.BackupMetadata.AddRange(
+                new BackupMetadata
+                {
+                    Filename = manualFilename,
+                    AppVersion = AppInfo.Version,
+                    SchemaVersion = schemaVersion,
+                    CreatedAt = SeedTimestamp,
+                    Checksum = string.Empty,
+                    SizeBytes = 0,
+                    Kind = BackupKind.Manual,
+                    Status = BackupStatus.Pending,
+                },
+                new BackupMetadata
+                {
+                    Filename = goneFilename,
+                    AppVersion = AppInfo.Version,
+                    SchemaVersion = schemaVersion,
+                    CreatedAt = SeedTimestamp,
+                    Checksum = new string('a', 64),
+                    SizeBytes = 123,
+                    Kind = BackupKind.Manual,
+                    Status = BackupStatus.Completed,
+                });
+            await context.SaveChangesAsync(Ct);
+        }
+
+        using var factory = CreateFactory(
+            dataDir,
+            RecordingPgRestoreRunner.Succeeding(),
+            new RecordingRestartSignal());
+
+        var outcome = await BeginAsync(factory, UploadSource(archivePath), "restore-catalog");
+        var accepted = outcome.Should().BeOfType<RestoreStartOutcome.Accepted>().Subject;
+
+        var execution = await Restores(factory).ExecuteAsync(accepted.Operation, Ct);
+        execution.Should().BeOfType<RestoreExecutionOutcome.Success>();
+
+        await using (var context = fixture.CreateContext())
+        {
+            var manual = await context.BackupMetadata
+                .AsNoTracking()
+                .SingleAsync(backup => backup.Filename == manualFilename, Ct);
+            manual.Status.Should().Be(BackupStatus.Completed);
+            manual.SizeBytes.Should().Be(new FileInfo(archivePath).Length);
+            manual.Checksum.Should().Be(archiveChecksum);
+            manual.CreatedAt.Should().Be(new DateTimeOffset(2026, 10, 20, 12, 0, 0, TimeSpan.Zero));
+
+            var safety = await context.BackupMetadata
+                .AsNoTracking()
+                .SingleAsync(backup => backup.Filename == safetyFilename, Ct);
+            safety.Kind.Should().Be(BackupKind.Safety);
+            safety.Status.Should().Be(BackupStatus.Completed);
+            safety.SizeBytes.Should().Be(new FileInfo(safetyPath).Length);
+            safety.Checksum.Should().Be(archiveChecksum);
+            safety.CreatedByUserId.Should().BeNull();
+
+            var gone = await context.BackupMetadata
+                .AsNoTracking()
+                .SingleAsync(backup => backup.Filename == goneFilename, Ct);
+            gone.Status.Should().Be(BackupStatus.Deleted);
+        }
+
+        // Reconciliation is a projection of the files: it never deletes one.
+        File.Exists(archivePath).Should().BeTrue();
+        File.Exists(safetyPath).Should().BeTrue();
+        File.Exists(Path.Combine(dataDir, "backups", goneFilename)).Should().BeFalse();
+
+        // A second pass over the same disk state changes nothing.
+        var second = await WithBackupServiceAsync(
+            factory.Services,
+            service => service.ReconcileCatalogAsync(Ct));
+        second.Skipped.Should().BeFalse();
+        second.Added.Should().Be(0);
+        second.Updated.Should().Be(0);
+        second.MarkedDeleted.Should().Be(0);
+
+        await using (var context = fixture.CreateContext())
+        {
+            (await context.BackupMetadata.AsNoTracking().CountAsync(
+                backup => backup.Filename == manualFilename, Ct)).Should().Be(1);
+            (await context.BackupMetadata.AsNoTracking().CountAsync(
+                backup => backup.Filename == safetyFilename, Ct)).Should().Be(1);
+        }
+    }
+
+    [Fact]
     public async Task Two_restores_are_refused_and_so_is_a_backup_during_a_restore()
     {
         var dataDir = SeedDataDirectory(RecoveryKey);

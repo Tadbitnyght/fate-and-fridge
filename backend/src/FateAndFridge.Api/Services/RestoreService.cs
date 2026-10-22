@@ -636,6 +636,12 @@ public sealed class RestoreService(
                 state.MarkPhase("retention");
                 await PruneSafetyBackupsAsync(cancellationToken).ConfigureAwait(false);
 
+                // Step 10: the restored backup_metadata is a pg_dump snapshot taken
+                // while the row was still pending (and before the safety row
+                // existed). Reconcile it with the archives that are really on disk.
+                state.MarkPhase("catalog");
+                await ReconcileCatalogAsync(cancellationToken).ConfigureAwait(false);
+
                 state.MarkPhase("marker");
                 RestoreMarker.Write(configuration, markerDocument, logger);
 
@@ -1259,6 +1265,35 @@ public sealed class RestoreService(
             TimeoutException => true,
             _ => false,
         };
+
+    /// <summary>
+    /// Reconciles the restored <c>backup_metadata</c> with the archives on disk
+    /// (docs/M13_PLAN.md §1.9). The catalog is a projection of the files: rows
+    /// are upserted by filename with the real size and checksum, and rows whose
+    /// file is gone are marked <c>deleted</c>. Never deletes a file, and is
+    /// idempotent, so the startup path can run it again.
+    /// </summary>
+    private async Task ReconcileCatalogAsync(CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var backups = scope.ServiceProvider.GetRequiredService<BackupService>();
+        var reconciliation = await backups
+            .ReconcileCatalogAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        if (reconciliation.Skipped)
+        {
+            return;
+        }
+
+        logger.LogInformation(
+            "Reconciled the backup catalog after the restore: {ArchiveCount} archive(s) on disk, " +
+            "{AddedCount} added, {UpdatedCount} updated, {DeletedCount} marked deleted.",
+            reconciliation.Discovered,
+            reconciliation.Added,
+            reconciliation.Updated,
+            reconciliation.MarkedDeleted);
+    }
 
     /// <summary>
     /// Replaces <c>images/</c> and <c>config/dp-keys/</c> with the staged
