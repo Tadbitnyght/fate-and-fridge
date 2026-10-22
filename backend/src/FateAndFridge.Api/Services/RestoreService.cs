@@ -588,16 +588,47 @@ public sealed class RestoreService(
             // hold the only copy of the previous files and must not be reclaimed.
             var preservedOriginals = new List<string>();
 
+            var postCommitErrors = new List<string>();
+
             try
             {
-                // Step 8: every client must sign in again.
+                // Step 8: every client must sign in again. The pool was dropped
+                // after pg_restore, so each attempt opens a fresh connection, and a
+                // 57P01/transient failure is retried once.
                 state.MarkPhase("sessions");
-                await RevokeSessionsAsync(cancellationToken).ConfigureAwait(false);
+                var revokeError = await RunPostCommitStepAsync(
+                        "sessions",
+                        RevokeSessionsAsync,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+                if (revokeError is not null)
+                {
+                    postCommitErrors.Add($"sessions: {revokeError.Message}");
+                }
 
                 // Step 9: audit into the restored database, with raw SQL so it works
-                // even when the restored schema is older than this build.
+                // even when the restored schema is older than this build. It is
+                // attempted even when the revoke failed: a restore must never
+                // silently go unaudited.
                 state.MarkPhase("audit");
-                await WriteRestoreAuditAsync(operation, manifest, cancellationToken).ConfigureAwait(false);
+                var auditError = await RunPostCommitStepAsync(
+                        "audit",
+                        token => WriteRestoreAuditAsync(operation, manifest, token),
+                        cancellationToken)
+                    .ConfigureAwait(false);
+                if (auditError is not null)
+                {
+                    postCommitErrors.Add($"audit: {auditError.Message}");
+                }
+
+                if (postCommitErrors.Count > 0)
+                {
+                    // FailAfterCommit writes the marker (with the post_step_error)
+                    // and requests the restart, so a committed restore is never
+                    // reported as silently successful.
+                    throw new InvalidOperationException(
+                        $"post_step_error: {string.Join("; ", postCommitErrors)}");
+                }
 
                 state.MarkPhase("files");
                 SwapLiveDirectories(restoreDirectory, restoreId, stagingDirectory, preservedOriginals);
@@ -1163,6 +1194,71 @@ public sealed class RestoreService(
                 "The restored database has no audit_events table; the backup.restored row was not written.");
         }
     }
+
+    /// <summary>
+    /// Runs one post-commit step, retrying once after a transient connection
+    /// failure with a fresh connection pool. Returns the failure instead of
+    /// throwing, so the caller can still attempt the remaining steps and report
+    /// every one of them.
+    /// </summary>
+    private async Task<Exception?> RunPostCommitStepAsync(
+        string step,
+        Func<CancellationToken, Task> action,
+        CancellationToken cancellationToken)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await action(cancellationToken).ConfigureAwait(false);
+                return null;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                if (attempt == 1 && IsTransientConnectionFailure(exception))
+                {
+                    logger.LogWarning(
+                        exception,
+                        "post_step_error: the post-restore {Step} step hit a transient connection failure; " +
+                        "dropping the connection pool and retrying once with a fresh connection.",
+                        step);
+                    NpgsqlConnection.ClearAllPools();
+                    continue;
+                }
+
+                logger.LogError(
+                    exception,
+                    "post_step_error: the post-restore {Step} step failed after {AttemptCount} attempt(s).",
+                    step,
+                    attempt);
+                return exception;
+            }
+        }
+    }
+
+    /// <summary>
+    /// True for the failures a terminated backend produces: PostgreSQL
+    /// <c>57P01</c>/<c>57P02</c>/<c>57P03</c>, the connection-level <c>08…</c>
+    /// states, any Npgsql transient error, and a timeout.
+    /// </summary>
+    private static bool IsTransientConnectionFailure(Exception exception) =>
+        exception switch
+        {
+            PostgresException postgres => postgres.SqlState is
+                PostgresErrorCodes.AdminShutdown or
+                PostgresErrorCodes.CrashShutdown or
+                PostgresErrorCodes.CannotConnectNow or
+                PostgresErrorCodes.ConnectionFailure or
+                PostgresErrorCodes.ConnectionDoesNotExist or
+                PostgresErrorCodes.SqlClientUnableToEstablishSqlConnection,
+            NpgsqlException { IsTransient: true } => true,
+            TimeoutException => true,
+            _ => false,
+        };
 
     /// <summary>
     /// Replaces <c>images/</c> and <c>config/dp-keys/</c> with the staged

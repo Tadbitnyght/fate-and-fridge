@@ -19,6 +19,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 
 namespace FateAndFridge.Api.Tests;
 
@@ -312,6 +313,48 @@ public sealed class M13RestoreServiceIntegrationTests(M13BackupFixture fixture) 
         state.IsMaintenanceActive.Should().BeFalse();
         state.Phase.Should().Be("completed");
         state.LastError.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task A_terminated_connection_is_retried_and_the_restore_audit_row_is_still_written()
+    {
+        var dataDir = SeedDataDirectory(RecoveryKey);
+        var archivePath = await WriteArchiveAsync(dataDir);
+        await SeedUserAndSessionAsync();
+
+        var recorder = new RecordingLoggerProvider();
+        var runner = new TerminatingPgRestoreRunner(fixture.ConnectionString);
+        var signal = new RecordingRestartSignal();
+        using var factory = CreateFactory(dataDir, runner, signal, recorder);
+        var state = factory.Services.GetRequiredService<RestoreState>();
+
+        var outcome = await BeginAsync(factory, UploadSource(archivePath), "restore-terminated");
+        var accepted = outcome.Should().BeOfType<RestoreStartOutcome.Accepted>().Subject;
+
+        var execution = await Restores(factory).ExecuteAsync(accepted.Operation, Ct);
+
+        execution.Should().BeOfType<RestoreExecutionOutcome.Success>(
+            "the post-commit step must recover from the connection the runner terminated");
+        state.Phase.Should().Be("completed");
+        state.LastError.Should().BeNull();
+
+        recorder.Messages.Should().Contain(
+            message => message.Contains("post_step_error", StringComparison.Ordinal)
+                && message.Contains("retrying once", StringComparison.Ordinal),
+            "the first revoke attempt hits the pooled connection killed by the runner");
+
+        await using var context = fixture.CreateContext();
+
+        var audit = await context.AuditEvents
+            .AsNoTracking()
+            .SingleAsync(entry => entry.EventType == AuditEventTypes.BackupRestored, Ct);
+        audit.EntityType.Should().Be(AuditEntityTypes.Backup);
+        audit.EntityId.Should().Be(Path.GetFileName(archivePath));
+        audit.Reason.Should().Be(Reason);
+        audit.MetadataJson.Should().Contain("restore-terminated");
+
+        (await context.UserSessions.AsNoTracking().CountAsync(Ct)).Should().Be(0);
+        signal.Invocations.Should().Be(1);
     }
 
     [Fact]
@@ -832,7 +875,8 @@ public sealed class M13RestoreServiceIntegrationTests(M13BackupFixture fixture) 
     private ApiFactory CreateFactory(
         string dataDir,
         IPgRestoreRunner runner,
-        IRestoreRestartSignal signal) =>
+        IRestoreRestartSignal signal,
+        RecordingLoggerProvider? recorder = null) =>
         fixture.CreateFactory(dataDir, services =>
         {
             services.RemoveAll<TimeProvider>();
@@ -846,6 +890,11 @@ public sealed class M13RestoreServiceIntegrationTests(M13BackupFixture fixture) 
             services.RemoveAll<IPgDumpVersionReader>();
             services.AddSingleton<IPgDumpVersionReader>(new FakePgDumpVersionReader(PgDump17));
             services.AddSingleton<IStartupFilter, TestRemoteIpStartupFilter>();
+
+            if (recorder is not null)
+            {
+                services.AddLogging(logging => logging.AddProvider(recorder));
+            }
         });
 
     /// <summary>

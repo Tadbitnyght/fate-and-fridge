@@ -1,4 +1,5 @@
 using FateAndFridge.Api.Services;
+using Npgsql;
 
 namespace FateAndFridge.Api.Tests.Support;
 
@@ -74,6 +75,56 @@ public sealed class GatedPgRestoreRunner : IPgRestoreRunner
         RestoredPaths.Add(dumpPath);
         Started.TrySetResult();
         await Release.Task.WaitAsync(cancellationToken);
+    }
+}
+
+/// <summary>
+/// Reproduces the live 57P01 failure: it holds an application-pooled connection
+/// across a <c>pg_terminate_backend</c> sweep and returns without clearing the
+/// pool, so the next pooled use is a dead connection. The restore service must
+/// retry it with a fresh connection and still write the <c>backup.restored</c>
+/// audit row.
+/// </summary>
+public sealed class TerminatingPgRestoreRunner(string connectionString) : IPgRestoreRunner
+{
+    public int TerminateCalls { get; private set; }
+
+    public List<string> RestoredPaths { get; } = [];
+
+    public Task TerminateConnectionsAsync(CancellationToken cancellationToken)
+    {
+        TerminateCalls++;
+        return Task.CompletedTask;
+    }
+
+    public async Task RestoreAsync(string dumpPath, CancellationToken cancellationToken)
+    {
+        RestoredPaths.Add(dumpPath);
+
+        // Leave at least one connection in the application's pool, then kill its
+        // backend from a separate, non-pooled session.
+        await using (var pooled = new NpgsqlConnection(connectionString))
+        {
+            await pooled.OpenAsync(cancellationToken);
+        }
+
+        var maintenance = new NpgsqlConnectionStringBuilder(connectionString)
+        {
+            Pooling = false,
+        };
+
+        await using var connection = new NpgsqlConnection(maintenance.ConnectionString);
+        await connection.OpenAsync(cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT pg_terminate_backend(pid)
+            FROM pg_stat_activity
+            WHERE datname = current_database()
+              AND pid <> pg_backend_pid()
+            """;
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 }
 

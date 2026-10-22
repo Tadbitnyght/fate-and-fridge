@@ -101,9 +101,12 @@ public sealed class PgRestoreRunner : IPgRestoreRunner
             await using var connection = new NpgsqlConnection(maintenanceConnectionString);
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
 
+            // Read one row per terminated backend so the reported count is the
+            // real number of sessions; a bare SELECT through ExecuteNonQuery
+            // reports -1 ("Terminated -1 session(s)" in the live round-trip).
             await using var command = new NpgsqlCommand(
                 """
-                SELECT pg_terminate_backend(pid)
+                SELECT pid, pg_terminate_backend(pid)
                 FROM pg_stat_activity
                 WHERE datname = @database
                   AND pid <> pg_backend_pid()
@@ -112,9 +115,25 @@ public sealed class PgRestoreRunner : IPgRestoreRunner
             command.CommandTimeout = (int)TimeSpan.FromMinutes(1).TotalSeconds;
             command.Parameters.AddWithValue("database", targetDatabase);
 
-            var terminated = await command
-                .ExecuteNonQueryAsync(cancellationToken)
-                .ConfigureAwait(false);
+            var terminated = 0;
+            await using (var reader = await command
+                             .ExecuteReaderAsync(cancellationToken)
+                             .ConfigureAwait(false))
+            {
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    if (reader.GetBoolean(1))
+                    {
+                        terminated++;
+                    }
+                }
+            }
+
+            // The application's pool still holds the backends that were just
+            // terminated. Drop the pool so no later step (session revocation,
+            // the audit insert, or any other query) reuses a dead connection.
+            NpgsqlConnection.ClearAllPools();
+
             _logger.LogInformation(
                 "Terminated {TerminatedCount} session(s) on the restore target database.",
                 terminated);
@@ -194,6 +213,12 @@ public sealed class PgRestoreRunner : IPgRestoreRunner
             {
                 TryKill(process);
             }
+
+            // pg_restore has returned; every connection the application pooled
+            // before the database was replaced is stale. Drop the pool here so
+            // the post-commit steps open fresh connections to the restored
+            // database instead of failing with 57P01.
+            NpgsqlConnection.ClearAllPools();
         }
     }
 
