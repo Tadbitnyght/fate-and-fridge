@@ -132,6 +132,14 @@ export const FUTURE_FEATURES: FutureFeature[] = [
     source: 'docs/M13_PLAN.md §1.13/§1.14, CHANGELOG.md, product owner 2026-10-22',
   },
   {
+    id: 'ingredients-main-nav',
+    title: 'Ingredients as a top-level tab',
+    status: 'v2',
+    summary:
+      'Move ingredient management out of Settings → Reference Data into its own entry in the main navigation so ingredients are one click away. Navigation/IA only: the existing ingredients API, aliases, merge/retire flows and permissions are reused, with no contract or schema change. Decide whether departments, units, proteins and tags follow or stay under Settings.',
+    source: 'docs/FUTURE_FEATURES.md (raised 2026-10-22), frontend/src/pages/SettingsPage.tsx',
+  },
+  {
     id: 'recovery-key-protection',
     title: 'Recovery-key protection',
     status: 'v2',

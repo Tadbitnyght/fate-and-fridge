@@ -49,6 +49,7 @@ that plan.
 | [Scheduled & remote backups](#scheduled--remote-backups) | V2 | `V2_BACKLOG.md`, `PRODUCT_SPEC.md §47`, owner 2026-10-22 |
 | [Recovery-key protection](#recovery-key-protection) | V2 | Owner 2026-10-22, `M13_PLAN.md §1.11` |
 | [In-app changelog & update notes](#in-app-changelog--update-notes) | V2 | Owner 2026-10-22, `CHANGELOG.md` |
+| [Ingredients as a top-level tab](#ingredients-as-a-top-level-tab) | V2 | Owner 2026-10-22, `SettingsPage.tsx` |
 | [Advanced duplicate detection](#advanced-duplicate-detection) | V2 | `V2_BACKLOG.md`, `PRODUCT_SPEC.md §47`, `M4_VERIFICATION.md` |
 | [Statistics expansion](#statistics-expansion) | V2 | `V2_BACKLOG.md`, `PRODUCT_SPEC.md §12` |
 | [Printing enhancements](#printing-enhancements) | V2 | `V2_BACKLOG.md`, `PRODUCT_SPEC.md §26` |
@@ -228,6 +229,24 @@ dismissible "a newer release exists" banner, but no changelog surface and no
 post-update notes; the GitHub release body is already available from the same
 single releases GET and is currently unused. Source: this registry,
 `docs/M13_PLAN.md` §1.13/§1.14, `CHANGELOG.md`.
+
+## Ingredients as a top-level tab
+Status: **V2**
+
+- Move **ingredient management out of Settings → Reference Data** into its own
+  entry in the **main navigation**, so ingredients are one click away from
+  anywhere instead of buried in the admin console.
+- **Navigation/IA only**: reuse the existing ingredients API, list/search,
+  aliases, merge and retire flows, and the same permissions (`recipes.view` to
+  read, `reference_data.edit` to write). No contract or schema change.
+- Decide at implementation whether departments, units, proteins and tags stay
+  under Settings → Reference Data or follow ingredients, to avoid two parallel
+  admin surfaces; the main tab bar is currently Calendar, Dashboard, Recipes,
+  Groceries, Statistics, Settings.
+
+Notes: raised by the product owner 2026-10-22. V1 keeps all reference data inside
+the settings console; this is a discoverability change for everyday cooking (see
+`docs/PRODUCT_SPEC.md` §5). Source: this registry, `frontend/src/pages/SettingsPage.tsx`.
 
 ## Advanced duplicate detection
 Status: **V2**
