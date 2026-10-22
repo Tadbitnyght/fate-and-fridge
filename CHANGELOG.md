@@ -292,7 +292,7 @@ versions follow [Semantic Versioning](https://semver.org/).
   new permission key**; **no schema change and no migration**. One known rare race
   (a reroll racing a hard delete) is recorded as `BUG-011`.
 
-- Milestone 13 — backup / restore / updates (2026-10-21): V1 data safety and
+- Milestone 13 — backup / restore / updates (2026-10-22): V1 data safety and
   release awareness per `docs/PRODUCT_SPEC.md` §45/§46. **Manual encrypted
   backups**: one `.ffbackup` file per backup containing a `pg_dump` of the
   database, the recipe images, the Data Protection keys, and a checksummed

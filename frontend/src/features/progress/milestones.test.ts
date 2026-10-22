@@ -318,23 +318,38 @@ describe('milestone manifest', () => {
     )
   })
 
-  it('keeps M13 in progress with its sub-issue links', () => {
+  it('marks M13 complete with its sub-issue links and verification evidence', () => {
     const m13 = MILESTONES.find((milestone) => milestone.id === 'M13')
-    // The live restore round-trip found blockers; M13 returns to in_progress
-    // until they are fixed and re-verified (docs/M13_VERIFICATION.md).
-    expect(m13?.status).toBe('in_progress')
+    expect(m13?.status).toBe('complete')
+    expect(m13?.completedOn).toBe('2026-10-22')
+    // The tag is cut after the live redeploy is verified.
     for (const issue of [162, 163, 172]) {
       expect(m13?.issues).toContain(issue)
     }
     expect(m13?.issuesNote).toMatch(/M13-01/)
+    expect(m13?.evidence).toEqual(
+      expect.arrayContaining([
+        { label: 'Backend tests', value: '2487' },
+        { label: 'Vitest', value: '542' },
+        {
+          label: 'Playwright (hermetic)',
+          value: '77 passed / 3 pre-existing stack skips',
+        },
+        {
+          label: 'M13 verification',
+          value: 'independent review + 3 live restore round-trips',
+        },
+        { label: 'Backend gates', value: 'format/build/EF clean' },
+      ]),
+    )
   })
 
   it('computes the progress summary from the manifest', () => {
     expect(progressSummary()).toEqual({
       total: 16,
-      completed: 13,
-      inProgress: 1,
-      percent: Math.round((13 / 16) * 100),
+      completed: 14,
+      inProgress: 0,
+      percent: Math.round((14 / 16) * 100),
     })
     expect(
       progressSummary([

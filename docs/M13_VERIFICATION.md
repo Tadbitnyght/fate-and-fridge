@@ -1,8 +1,10 @@
 # M13 Verification — Backup / Restore / Updates
 
-Status: **in progress** — the live restore round-trip found three blocker defects,
-all now fixed (audit guarantee + catalog reconciliation + the image/key swap);
-the round-trip must be re-run on a disposable stack before completion. Runbook:
+Status: **complete** (2026-10-22) — three live restore round-trips. The first
+found two blockers (the missing `backup.restored` audit row and a corrupted
+catalog) and the second found a third (the file swap renaming bind-mount roots);
+all three are fixed and the third round-trip passed every criterion, including a
+fourth cosmetic fix (preserving the live directory mode). Runbook:
 `docs/M13_PLAN.md` (approved 2026-10-20). Coverage map:
 `docs/M13_TEST_MATRIX.md`. Tracking: #162; M13-01…M13-10: #163–#172.
 
@@ -116,7 +118,7 @@ registry-parity guard cannot silently skip.
 | `dotnet format FateAndFridge.slnx --verify-no-changes` | clean |
 | `dotnet build -c Release FateAndFridge.slnx` | succeeded, 0 warnings / 0 errors |
 | `dotnet ef migrations has-pending-model-changes` | no pending model changes |
-| Backend tests (full Release suite) | **2481 passed / 0 failed / 3 skipped** (the one failure in the first full run was the M9 live-sync route guard, fixed in `7616f64` and re-run green) |
+| Backend tests (full Release suite) | **2487 passed / 0 failed / 3 skipped** (the M9 route guard was fixed earlier in `7616f64`) |
 | Vitest | 51 files / 542 tests passed (one earlier run flaked 3 pre-existing timeouts; a clean re-run passed) |
 | Playwright (hermetic) | 77 passed / 3 gated stack skips |
 | `npm run lint` / `format:check` / `typecheck` | clean |
@@ -246,12 +248,31 @@ row present, no stale `pending`), the restart, migrations, session revocation an
 `.restore` reclamation all **passed** — and it exposed defect 3 above, which the
 copy-based swap now fixes.
 
-**Disposition:** M13 stays `in_progress` until a third round-trip on a disposable
-stack proves **all** of: the `backup.restored` row present, a coherent restored
-catalog (manual archive `completed` with the disk checksum, safety archive
-present, no stale `pending`), **images and dp-keys actually replaced with no
-`fail:` lines or `post_step_error`**, `.restore/` reclaimed, `recovery.key`
-intact, and a healthy restart with migrations applied.
+**Disposition:** **PASS.** The third round-trip on a disposable stack proved every
+criterion: healthy restart (`RestartCount 1`); `schema_version` =
+`20261021023131_M13Backups`; only the backup's recipe remained; **`images/recipes/marker-keep.txt`
+was restored with the content `keep` and the post-backup `images/stale.txt` was
+gone** (the copy-based swap replaces contents); exactly **one** `backup.restored`
+audit row with the restore id, backup filename and safety filename; the catalog was
+coherent (manual `completed` with checksum `096d3c8a…` matching the file on disk,
+safety `completed` with `fe10b33d…` matching its file, **no stale `pending` row**);
+`.restore/` was empty and the marker cleared; `config/recovery.key` was intact
+(43 bytes, mode 0600); the log had **zero** `post-commit step failed` /
+`could not be swapped` lines and showed `Terminated 1 session(s)`,
+`Reconciled the backup catalog after the restore: … 1 added, 1 updated`,
+`Wrote the restore marker`, `requesting a graceful application stop`, and after the
+restart `Reconciled the backup catalog from disk after the restore: … 0 added, 0 updated`
+and `the restore marker was cleared`. Production was verified untouched (same
+single archive, same checksum, both containers healthy) and the disposable stack,
+network, image and data dir were torn down.
+
+The round-trip also surfaced a fourth, cosmetic issue — the swap adopted the
+archive's directory mode on the live root (`0777 → 0755`), which matters because
+the deployment's `data/images` is a world-writable SMB share. Fixed in `ff4a03c`:
+the live root's mode is captured, re-applied after the copy, and restored on
+rollback; tests cover both the success and rollback paths.
+
+**Final M13 restore verdict: PASS.**
 
 ---
 
