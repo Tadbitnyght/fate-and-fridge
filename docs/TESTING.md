@@ -345,6 +345,57 @@ Coverage map: `docs/M12_TEST_MATRIX.md`; independent verdict and live evidence:
 
 ---
 
+## 10.4 Backup, Restore, Key Export and Update Tests (M13)
+
+Coverage map: `docs/M13_TEST_MATRIX.md`; independent verdicts and live evidence:
+`docs/M13_VERIFICATION.md`.
+
+- **Archive crypto:** round-trip equality; wrong key → `BACKUP_KEY_MISMATCH`;
+  flipped key-check/salt → `BACKUP_KEY_MISMATCH`; every other header/body/tag
+  byte → `BACKUP_INTEGRITY_FAILED`; truncation at a chunk boundary and mid-chunk,
+  chunk reordering, and trailing bytes all fail; unsafe tar names (`..`,
+  absolute, backslash, NUL, duplicates) are rejected on read **and** write; two
+  archives from the same key carry different key-checks; the recovery key and any
+  plaintext marker never appear in the ciphertext; a 64 MiB round-trip streams
+  with flat memory.
+- **Backup:** `pg_dump` is invoked without a shell and with `PGPASSWORD` only;
+  a client older than the server refuses the backup; temp files live on the data
+  volume and the archive is written temp-then-renamed; the metadata row moves
+  pending → completed/failed with the ciphertext checksum and size; concurrent
+  creates are refused; deletion needs the typed `DELETE`; the last five **safety**
+  archives are retained (reconciled from disk) and manual archives are never
+  auto-pruned; `backup.created`/`backup.deleted` are audited.
+- **Restore:** every validation failure (key, format, integrity, checksum, newer
+  schema) leaves **no** mutation, no marker, no safety backup; success creates and
+  verifies the safety backup, enters maintenance (`503` except health), restores
+  in a single transaction, empties `user_sessions`, writes `backup.restored` into
+  the restored database, swaps images/dp-keys, writes the marker and requests the
+  restart; a pre-commit failure leaves the data intact, while a **post-commit**
+  failure still restarts and records the error; restore working directories and
+  uploads are reclaimed.
+- **Clean-install restore:** only before setup (`409` after); typed `RESTORE`; the
+  pasted key's shape is validated before anything, adopted after archive/schema
+  validation and before the safety backup, and never overwrites an existing key;
+  no actor is recorded.
+- **Key export:** Admin-only; typed `EXPORT`; attachment-only with
+  `Cache-Control: no-store`; the key never appears in any audit field, error, log
+  or DOM; the key file is never created by the export.
+- **Version/updates:** `GET /about` is authenticated and returns the real SemVer +
+  applied migration (degrading to `null`); the update request is exactly one
+  bodiless GET with only `User-Agent: FateAndFridge/<version>` and
+  `Accept: application/vnd.github+json` (asserted at the handler, including the
+  exact header set); SemVer comparison (`0.9.0 < 0.10.0`), drafts/prereleases
+  ignored, 24 h TTL, forced check, disabled ⇒ zero HTTP, oversized/404/5xx/timeout/
+  offline → a short `last_error` with a 200 and no throw; `GET /updates` never
+  touches the network; the banner is `role="status"`, dismissible per device by
+  version, and links only to an absolute https release URL.
+- **Permissions/scope:** every admin route is `RequireAdmin()`, `GET /updates` and
+  `GET /about` are authenticated, the pre-setup restore is the only
+  unauthenticated route and only before setup, the seven-key model is unchanged,
+  and there is exactly one new migration.
+
+---
+
 ## 11. Accessibility Tests
 - keyboard navigation
 - focus trapping in dialogs

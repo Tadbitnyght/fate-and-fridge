@@ -292,6 +292,36 @@ versions follow [Semantic Versioning](https://semver.org/).
   new permission key**; **no schema change and no migration**. One known rare race
   (a reroll racing a hard delete) is recorded as `BUG-011`.
 
+- Milestone 13 — backup / restore / updates (2026-10-21): V1 data safety and
+  release awareness per `docs/PRODUCT_SPEC.md` §45/§46. **Manual encrypted
+  backups**: one `.ffbackup` file per backup containing a `pg_dump` of the
+  database, the recipe images, the Data Protection keys, and a checksummed
+  manifest, sealed with **chunked AES-256-GCM** (per-chunk nonce/tag, header +
+  index in the AAD so truncation/reordering/tampering fail) under a key derived
+  via **HKDF-SHA256 from the setup recovery key** — which is deliberately **not**
+  inside the archive. Backups are listed, created, downloaded and deleted from an
+  Admin **Settings → Backups** section, tracked in the new **`backup_metadata`**
+  table (one `M13Backups` migration), and the last **5 safety backups** are
+  retained. **Restore** validates the archive (format, key, integrity, checksum,
+  schema) **before any mutation**, takes a **mandatory safety backup**, enters a
+  maintenance window (`503` everywhere but health), extracts to a staging area
+  with path-traversal guards, restores with `pg_restore --clean --single-transaction`,
+  **revokes every session**, writes a `backup.restored` audit row into the
+  restored database, swaps images/Data Protection keys with rollback, and then
+  restarts the container so migrations run; a post-commit failure still restarts
+  rather than serving a half-restored instance. The **setup wizard can restore
+  onto a clean install** from an archive plus the pasted recovery key. The
+  **recovery key is exportable** only through a reason + typed-`EXPORT`
+  confirmation, audited, never inline. A **Settings → About** section and a shell
+  footer show the app and schema versions, and a **privacy-preserving update
+  check** reads the public GitHub Releases API with a single unauthenticated GET
+  (neutral `User-Agent`, no body, no identifiers), compares SemVer, ignores
+  drafts/prereleases, caches for 24 hours, tolerates offline, and shows a
+  dismissible dashboard notice — **no telemetry and no self-update**. The runtime
+  image now ships `postgresql-client-17` (PGDG) with a build-time version
+  assertion so an older client can never silently break backups. **No new
+  permission key**; **one migration** (`backup_metadata`).
+
 ### Changed
 
 - Product UI dates now render as **MM-DD-YY** (e.g. `2026-10-05` → `10-05-26`)
