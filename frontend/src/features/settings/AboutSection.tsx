@@ -68,6 +68,15 @@ function UpdateStatusPanel({ status }: { status: UpdateStatus }): JSX.Element {
   const checkDisabled = !status.enabled || checkMutation.isPending
   const preferencePending = preferenceMutation.isPending
 
+  // A 200 answer can still carry a recorded `last_error`: the check ran, but the
+  // feed failed. Claiming success then would contradict the failure note, so the
+  // success line is only shown when neither answer recorded an error.
+  const checkCompletedCleanly =
+    checkMutation.isSuccess &&
+    !checkMutation.isPending &&
+    checkMutation.data?.last_error === null &&
+    status.last_error === null
+
   return (
     <div
       className="settings-subsection about-updates"
@@ -104,7 +113,12 @@ function UpdateStatusPanel({ status }: { status: UpdateStatus }): JSX.Element {
       </dl>
 
       {!status.enabled && (
-        <p className="page-note" role="note" data-testid="about-updates-disabled">
+        <p
+          className="page-note"
+          role="note"
+          id="about-updates-disabled"
+          data-testid="about-updates-disabled"
+        >
           Update checks are turned off, so nothing is sent to the release feed. Turn them on to see
           the latest published version; Check now does nothing while they are off.
         </p>
@@ -135,7 +149,7 @@ function UpdateStatusPanel({ status }: { status: UpdateStatus }): JSX.Element {
         >
           {checkMutation.isPending ? 'Checking…' : 'Check now'}
         </button>
-        {checkMutation.isSuccess && !checkMutation.isPending && (
+        {checkCompletedCleanly && (
           <p className="form__status" role="status">
             Checked with the release feed.
           </p>

@@ -141,7 +141,10 @@ Session model (approved M1):
 - Login sets an opaque, HttpOnly session cookie (`SameSite=Lax`, `Secure` when served over HTTPS).
 - Authenticated state-changing requests must present an antiforgery token; the frontend reads the token from the `X-CSRF-TOKEN` response header and echoes it in the `X-CSRF-TOKEN` request header on unsafe requests. Missing or invalid tokens fail with `403 CSRF_VALIDATION_FAILED`; safe methods and unauthenticated requests (including stale or invalid session cookies) are not validated, so those requests fall through to normal `401 AUTH_REQUIRED` handling.
 - Session lifetime is 30 days idle / 90 days absolute, with rotation on login, password change, and privilege change.
-- Login, session, change-password, and reset-password responses are sent with `Cache-Control: no-store`.
+- Login, session, change-password, and reset-password responses are sent with
+  `Cache-Control: no-store`. So is the Admin recovery-key export
+  (`POST /admin/recovery-key/export`, §18): the key file must never be stored
+  by a browser or an intermediary.
 - `GET /auth/session` returns the current user (or single-user household identity), effective permissions, auth mode, and `must_change_password`.
 - When `must_change_password` is true, every route except `/auth/session`, `/auth/change-password`, and `/auth/logout` fails with `PASSWORD_CHANGE_REQUIRED`.
 - Single-user mode has no session cookie and issues no antiforgery token; unsafe requests act as the system actor and are not CSRF-validated. Trusted-network deployment (and optionally the IP allowlist) is the protection model for this mode.

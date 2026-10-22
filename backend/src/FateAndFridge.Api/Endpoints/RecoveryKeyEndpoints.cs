@@ -136,6 +136,10 @@ public static class RecoveryKeyEndpoints
 
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
+        // The response carries the household key: browsers and intermediaries
+        // must never store it, like every other credential-bearing answer.
+        ResponseCache.NoStore(context);
+
         return Results.File(
             Encoding.UTF8.GetBytes(keyText),
             contentType: "text/plain",

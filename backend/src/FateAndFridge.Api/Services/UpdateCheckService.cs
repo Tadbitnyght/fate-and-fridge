@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using FateAndFridge.Api.Data;
 using Microsoft.EntityFrameworkCore;
@@ -239,6 +240,9 @@ public sealed class GitHubReleaseClient(HttpClient httpClient)
     /// <summary>Bound on the response body; a release payload is a few KiB.</summary>
     public const int MaxResponseBytes = 256 * 1024;
 
+    /// <summary>Size of one read from the release response stream.</summary>
+    private const int ReadChunkBytes = 8 * 1024;
+
     /// <summary>The whole exchange is bounded well below a page render.</summary>
     public static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);
 
@@ -251,6 +255,11 @@ public sealed class GitHubReleaseClient(HttpClient httpClient)
         ArgumentNullException.ThrowIfNull(client);
 
         client.Timeout = RequestTimeout;
+
+        // Defence in depth: a buffered read of this client is bounded too. The
+        // explicit stream cap in GetLatestReleaseAsync is what enforces the limit.
+        client.MaxResponseContentBufferSize = MaxResponseBytes;
+
         client.DefaultRequestHeaders.UserAgent.Clear();
         client.DefaultRequestHeaders.UserAgent.ParseAdd($"FateAndFridge/{AppInfo.Version}");
         client.DefaultRequestHeaders.Accept.Clear();
@@ -266,8 +275,10 @@ public sealed class GitHubReleaseClient(HttpClient httpClient)
     /// </summary>
     public async Task<ReleaseFeedResult> GetLatestReleaseAsync(CancellationToken cancellationToken)
     {
+        // ResponseHeadersRead: nothing is buffered until this method chooses to
+        // read, so the byte cap below is the only thing that can grow memory.
         using var response = await httpClient
-            .GetAsync(LatestReleaseUrl, cancellationToken)
+            .GetAsync(LatestReleaseUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
             .ConfigureAwait(false);
 
         if (!response.IsSuccessStatusCode)
@@ -275,13 +286,34 @@ public sealed class GitHubReleaseClient(HttpClient httpClient)
             return ReleaseFeedResult.Failure((int)response.StatusCode);
         }
 
-        var body = await response.Content
-            .ReadAsStringAsync(cancellationToken)
+        // A declared length above the cap is refused before a single body byte
+        // is read; a chunked answer is caught by the capped read loop instead.
+        if (response.Content.Headers.ContentLength is > MaxResponseBytes)
+        {
+            return ReleaseFeedResult.Failure(0);
+        }
+
+        using var stream = await response.Content
+            .ReadAsStreamAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        return body.Length > MaxResponseBytes
-            ? ReleaseFeedResult.Failure(0)
-            : ReleaseFeedResult.Success(body);
+        using var buffer = new MemoryStream();
+        var chunk = new byte[ReadChunkBytes];
+        int read;
+        while ((read = await stream.ReadAsync(chunk, cancellationToken).ConfigureAwait(false)) > 0)
+        {
+            if (buffer.Length + read > MaxResponseBytes)
+            {
+                // Over the cap: the body is discarded, never buffered, and the
+                // caller records the quiet "unexpected response" failure.
+                return ReleaseFeedResult.Failure(0);
+            }
+
+            buffer.Write(chunk, 0, read);
+        }
+
+        return ReleaseFeedResult.Success(
+            Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length));
     }
 }
 

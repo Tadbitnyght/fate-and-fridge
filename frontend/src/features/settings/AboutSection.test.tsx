@@ -161,6 +161,48 @@ describe('About section (M13-08 / M13-09)', () => {
     expect(screen.getByTestId('about-latest-version')).toHaveTextContent('0.2.0')
   })
 
+  it('does not claim success when a 200 check recorded a feed error', async () => {
+    // The server answers 200 for a feed failure: the note is the only truth.
+    const failed = updateStatus({ last_error: 'The release feed returned HTTP 503.' })
+    let fetches = 0
+    let posts = 0
+
+    installMockFetch(
+      baseRoutes({
+        path: '/updates',
+        respond: () => {
+          fetches += 1
+          return { body: failed }
+        },
+      }).map((route) =>
+        route.method === 'POST'
+          ? {
+              ...route,
+              respond: () => {
+                posts += 1
+                return { body: failed }
+              },
+            }
+          : route,
+      ),
+    )
+
+    renderWithProviders(<App />, { route: '/settings/about' })
+
+    const status = await screen.findByTestId('about-update-status')
+    fireEvent.click(within(status).getByRole('button', { name: 'Check now' }))
+
+    await waitFor(() => expect(posts).toBe(1))
+    // The mutation settles only after the invalidated status refetch resolves.
+    await waitFor(() => expect(fetches).toBeGreaterThan(1))
+    await waitFor(() =>
+      expect(within(status).getByRole('button', { name: 'Check now' })).toBeEnabled(),
+    )
+
+    expect(within(status).getByTestId('about-update-error')).toHaveTextContent('HTTP 503')
+    expect(screen.queryByText('Checked with the release feed.')).not.toBeInTheDocument()
+  })
+
   it('shows the server’s 403 readably when a member forces a check', async () => {
     installMockFetch(
       baseRoutes({ path: '/updates', body: updateStatus() }).map((route) =>
@@ -223,11 +265,17 @@ describe('About section (M13-08 / M13-09)', () => {
 
     await waitFor(() => expect(toggle).not.toBeChecked())
     expect(patchedBody).toEqual({ enabled: false })
-    expect(screen.getByTestId('about-updates-disabled')).toHaveTextContent(
-      /update checks are turned off/i,
-    )
+    const disabledNote = screen.getByTestId('about-updates-disabled')
+    expect(disabledNote).toHaveTextContent(/update checks are turned off/i)
+    expect(disabledNote).toHaveAttribute('id', 'about-updates-disabled')
     // Disabled means the server makes no outbound call, so Check now is inert.
-    expect(screen.getByRole('button', { name: 'Check now' })).toBeDisabled()
+    const checkButton = screen.getByRole('button', { name: 'Check now' })
+    expect(checkButton).toBeDisabled()
+    // The button's `aria-describedby` must resolve to the note that exists.
+    expect(checkButton).toHaveAttribute('aria-describedby', 'about-updates-disabled')
+    expect(document.getElementById(checkButton.getAttribute('aria-describedby')!)).toBe(
+      disabledNote,
+    )
   })
 
   it('renders a quiet loading line for the update status while the versions load', async () => {

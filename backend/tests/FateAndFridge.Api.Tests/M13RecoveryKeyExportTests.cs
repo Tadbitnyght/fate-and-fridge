@@ -67,6 +67,11 @@ public sealed class M13RecoveryKeyExportTests(M13BackupFixture fixture) : IAsync
         disposition.Should().StartWith("attachment;");
         disposition.Should().Contain("recovery.key");
 
+        // A credential-bearing download must never be stored by a browser or
+        // an intermediary.
+        response.Headers.CacheControl.Should().NotBeNull();
+        response.Headers.CacheControl!.NoStore.Should().BeTrue();
+
         var keyText = Base64Url.EncodeToString(RecoveryKey);
         (await response.Content.ReadAsStringAsync(Ct)).Should().Be(keyText);
 

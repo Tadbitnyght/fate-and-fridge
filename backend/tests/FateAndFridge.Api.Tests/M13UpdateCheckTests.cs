@@ -98,6 +98,58 @@ public sealed class M13UpdateCheckTests(M13BackupFixture fixture) : IAsyncLifeti
             request.Url.StartsWith("https://api.github.com/", StringComparison.Ordinal));
     }
 
+    // ---- Response size cap ----------------------------------------------
+
+    [Fact]
+    public async Task A_declared_content_length_above_the_cap_is_refused_before_the_body_is_read()
+    {
+        var handler = new StubReleaseFeedHandler
+        {
+            Responder = (_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    new string('a', GitHubReleaseClient.MaxResponseBytes + 1),
+                    Encoding.UTF8,
+                    "application/json"),
+            }),
+        };
+        using var client = CreateClient(handler);
+
+        var result = await new GitHubReleaseClient(client).GetLatestReleaseAsync(Ct);
+
+        result.IsSuccess.Should().BeFalse();
+        result.StatusCode.Should().Be(0);
+        result.Body.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task An_unknown_length_body_is_capped_in_bytes_not_utf16_characters()
+    {
+        // 131_073 chars of 'é' are 262_146 UTF-8 bytes: over the byte cap while
+        // still under it when counted as UTF-16 characters.
+        var oversized = new string('é', (GitHubReleaseClient.MaxResponseBytes / 2) + 1);
+        oversized.Length.Should().BeLessThan(GitHubReleaseClient.MaxResponseBytes);
+
+        var content = new StringContent(oversized, Encoding.UTF8, "application/json");
+        content.Headers.ContentLength = null;
+
+        var handler = new StubReleaseFeedHandler
+        {
+            Responder = (_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = content,
+            }),
+        };
+        using var client = CreateClient(handler);
+
+        var result = await new GitHubReleaseClient(client).GetLatestReleaseAsync(Ct);
+
+        result.IsSuccess.Should().BeFalse();
+        result.StatusCode.Should().Be(0);
+        result.Body.Should().BeNull();
+    }
+
+
     // ---- SemVer ----------------------------------------------------------
 
     [Theory]
@@ -438,6 +490,42 @@ public sealed class M13UpdateCheckTests(M13BackupFixture fixture) : IAsyncLifeti
         status.GetProperty("update_available").GetBoolean().Should().BeFalse();
         status.GetProperty("last_error").ValueKind.Should().Be(JsonValueKind.Null);
     }
+
+    [Fact]
+    public async Task An_oversized_release_payload_is_recorded_as_a_quiet_error()
+    {
+        var dataDir = fixture.NewDataDirectory();
+        await SeedMultiuserHouseholdAsync();
+        await SeedUserAsync("root", AdminPassword, UserRole.Admin);
+
+        var handler = new StubReleaseFeedHandler
+        {
+            Responder = (_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    new string('a', GitHubReleaseClient.MaxResponseBytes + 1),
+                    Encoding.UTF8,
+                    "application/json"),
+            }),
+        };
+        using var factory = CreateFactory(dataDir, handler);
+        using var session = await SignInAsync(factory, "root", AdminPassword);
+
+        var response = await session.PostAsync(CheckPath);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var status = await ReadJsonAsync(response);
+        status.GetProperty("last_error").GetString().Should().Be(
+            "The release feed returned an unexpected response.");
+        status.GetProperty("latest_version").ValueKind.Should().Be(JsonValueKind.Null);
+
+        await using var context = fixture.CreateContext();
+        var stored = await context.ApplicationSettings
+            .AsNoTracking()
+            .SingleAsync(setting => setting.Key == UpdateCheckService.LastErrorKey, Ct);
+        stored.ValueJson.Should().Contain("unexpected response");
+    }
+
 
     // ---- Permissions -----------------------------------------------------
 
