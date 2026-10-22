@@ -420,6 +420,8 @@ export const MILESTONES: Milestone[] = [
       'Release version display and a cached, offline-tolerant GitHub Releases update check',
     ],
     completedOn: '2026-10-22',
+    tag: 'm13-complete',
+    commit: 'a385a79',
     evidence: [
       { label: 'Backend tests', value: '2487' },
       { label: 'Vitest', value: '542' },

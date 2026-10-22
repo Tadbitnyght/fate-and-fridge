@@ -129,41 +129,40 @@ registry-parity guard cannot silently skip.
 
 ### Production deployment (part A — non-destructive)
 
-Rebuilt/redeployed from the completed tree. Both the workstation and the NAS
-checkout were confirmed at **`3dd2842`** (clean). The stack was rebuilt with
-`scripts/deploy.sh up` and the **`M13Backups`** migration applied.
+**First deploy (from `3dd2842`)** proved the real binaries on the live image:
+`POST /api/v1/admin/backups` → 201 with
+`fatefridge-0.1.0-20261022T012841Z.ffbackup` (815,704 bytes, checksum
+`566cd48d…`), the download returned `application/octet-stream` + attachment with
+`FFBK` magic and **no** `CREATE TABLE`/`PGDMP`/key text, `/api/v1/about` reported
+the applied `M13Backups` migration, and `GET /api/v1/updates` reached the real
+public release (`v0.1.0`) unauthenticated with `update_available: false`.
+
+**Final redeploy (from `a385a79`, after the four restore fixes)** — the gate:
 
 - **Image / container:** `fate-and-fridge:0.1.0` =
-  `sha256:27d4efe0bcc4778edee3d541902bce6e2d42c40439bd13bdbe3dcb5cfa2a7ef1`
-  (local build, no registry digest); app container `5f717f1c427a`, `Up
-  (healthy)`, `0.0.0.0:50080->8080`; PostgreSQL `Up (healthy)`, not published.
+  `sha256:21050928cc954f878c60f21c15c0a5ffa6e3456a3a79a2b4519441c38b1501aa`
+  (local build, no registry digest); app container
+  `967347444cb08b142e7c4c19430f05baca7f54f102285607f4b44f9043681532`, `Up
+  (healthy)`, `0.0.0.0:50080->8080`; PostgreSQL `Up (healthy)`, **not published**.
+  The NAS checkout was confirmed at `a385a79` (clean) before the build.
 - **Health:** `GET /api/v1/health` → 200; `GET /api/v1/health/db` → 200.
-- **Migration:** `GET /api/v1/about` → `{"app_version":"0.1.0",
-  "schema_version":"20261021023131_M13Backups"}` — the M13 migration applied and
-  the About read works for an authenticated (single-user) caller.
-- **Real `pg_dump` in the image (the path the workstation cannot test):**
-  `POST /api/v1/admin/backups` → **201** with
-  `{"id":1,"filename":"fatefridge-0.1.0-20261022T012841Z.ffbackup",
-  "kind":"manual","status":"completed","size_bytes":815704,
-  "checksum":"566cd48dd96facb83dec993b8a86685acf4e71993f4c9b13cfc43f28c535a1c7"}`;
-  `GET /api/v1/admin/backups/1/download` → **200**,
-  `application/octet-stream`, attachment with that filename, **815,704 bytes**;
-  the first bytes are **`FFBK`** (magic + format 0001 + KDF 01 + reserved 00 +
-  salt), and the file contains **no** `CREATE TABLE` / `PGDMP` markers and no
-  recovery-key text — the payload is genuinely encrypted.
-- **Real update check against the public release:** `GET /api/v1/updates` → 200
-  `{"current_version":"0.1.0","latest_version":"0.1.0",
-  "update_available":false,"last_checked_at":"2026-10-22T01:25:19.5588166+00:00",
-  "last_error":null,"enabled":true,
-  "release_url":"https://github.com/Tadbitnyght/fate-and-fridge/releases/tag/v0.1.0"}`
-  — the unauthenticated GitHub Releases call works on the real network, SemVer
-  matches, and no banner is shown.
-- **`/progress`** rendered live in Chromium: **`14 of 15 milestones complete
-  (93%).`**, the **`M13 — Backup / Restore / Updates`** card shows **Complete**
-  and `Completed 2026-10-21`, no milestone reports "In progress"; the served
-  bundle is `index-CsNOEZsb.js`.
-- The production archive is left in `/data/backups` as evidence; nothing was
-  restored, pruned or deleted on production.
+- **Startup log:** no `fail:`/`crit:`/`Unhandled` lines; "No migrations were
+  applied. The database is already up to date." (the migration landed in the
+  first deploy); reference data already seeded.
+- **Version/schema:** `GET /api/v1/about` →
+  `{"app_version":"0.1.0","schema_version":"20261021023131_M13Backups"}`.
+- **Update check:** `GET /api/v1/updates` → 200, current/latest `0.1.0`,
+  `update_available: false`, `last_error: null`, `last_checked_at`
+  `2026-10-22T03:07:35Z`, `release_url` → `…/releases/tag/v0.1.0`.
+- **Backups/audit:** `GET /api/v1/admin/backups` still lists only the one manual
+  archive (815,704 bytes, unchanged checksum); `GET /api/v1/admin/audit?limit=3`
+  → 200 with a cursor.
+- **`/progress`** rendered live in Chromium: **`14 of 16 milestones complete
+  (88%).`**, the **`M13 — Backup / Restore / Updates`** card **Complete** with
+  `Completed 2026-10-22`, **no** milestone "In progress"; the served bundle
+  `index-C0OszLb8.js` matches the fresh build output.
+- Nothing was restored, pruned or deleted on production; the archive is left in
+  `/data/backups` as evidence.
 
 ### Real restore round-trip (part B — disposable stack) — blockers found, fixed
 
