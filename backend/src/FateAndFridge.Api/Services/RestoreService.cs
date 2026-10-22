@@ -1307,8 +1307,12 @@ public sealed class RestoreService(
     /// on the same filesystem). Each target is therefore snapshotted by copying
     /// its children to <c>old-&lt;name&gt;</c>, emptied by deleting its children,
     /// and filled by copying the staged children in — the mount root itself is
-    /// never renamed, moved, or deleted. Any failure copies the snapshots back
-    /// and surfaces as a post-commit error, never as success.
+    /// never renamed, moved, or deleted. The root's mode is captured before the
+    /// children are deleted and re-applied after the copy, because
+    /// <c>images/</c> is a bind-mounted SMB share whose mode comes from the mount
+    /// options: a restore must never narrow the mount-root permissions, and
+    /// ownership is never touched. Any failure copies the snapshots back — mode
+    /// included — and surfaces as a post-commit error, never as success.
     /// </remarks>
     private void SwapLiveDirectories(
         string restoreDirectory,
@@ -1324,8 +1328,9 @@ public sealed class RestoreService(
         ];
 
         // Every target that was touched, oldest first: the live directory, its
-        // pre-swap content snapshot, and whether the live directory existed.
-        var snapshots = new List<(string Live, string Snapshot, bool LiveExisted)>();
+        // pre-swap content snapshot, whether the live directory existed, and the
+        // mode the mount root had before the swap.
+        var snapshots = new List<(string Live, string Snapshot, bool LiveExisted, UnixFileMode? LiveMode)>();
 
         try
         {
@@ -1345,17 +1350,30 @@ public sealed class RestoreService(
                 fileOperations.DeleteDirectory(snapshot);
                 Directory.CreateDirectory(snapshot);
 
+                // Captured before the children are deleted: copying children in
+                // leaves the root's own mode alone on most filesystems, but a
+                // mount that derives it (or any swap that recreates the root)
+                // must still end up with the mode this device had.
+                var liveMode = liveExisted ? fileOperations.GetDirectoryMode(pair.Live) : null;
+
                 if (liveExisted)
                 {
                     fileOperations.CopyDirectoryContents(pair.Live, snapshot);
                 }
 
-                snapshots.Add((pair.Live, snapshot, liveExisted));
+                snapshots.Add((pair.Live, snapshot, liveExisted, liveMode));
 
                 fileOperations.ClearDirectoryContents(pair.Live);
                 if (stagedExisted)
                 {
                     fileOperations.CopyDirectoryContents(pair.Staged, pair.Live);
+                }
+
+                // The bind-mount root keeps the permissions the household set,
+                // whatever mode the archive's staging tree was extracted with.
+                if (liveMode is { } mode)
+                {
+                    fileOperations.SetDirectoryMode(pair.Live, mode);
                 }
             }
         }
@@ -1375,17 +1393,19 @@ public sealed class RestoreService(
     /// <summary>
     /// Copies the pre-swap snapshot of every target that was already touched back
     /// into its live directory (a copy, never a rename, for the same bind-mount
-    /// reason as <see cref="SwapLiveDirectories"/>). A snapshot that cannot be
-    /// copied back holds the only remaining copy of the previous files, so it is
-    /// preserved instead of reclaimed.
+    /// reason as <see cref="SwapLiveDirectories"/>), and re-applies the mode the
+    /// mount root had before the swap, so a rolled-back restore leaves the
+    /// permissions exactly as it found them. A snapshot that cannot be copied back
+    /// holds the only remaining copy of the previous files, so it is preserved
+    /// instead of reclaimed.
     /// </summary>
     private void RollbackSwap(
-        List<(string Live, string Snapshot, bool LiveExisted)> snapshots,
+        List<(string Live, string Snapshot, bool LiveExisted, UnixFileMode? LiveMode)> snapshots,
         List<string> preservedOriginals)
     {
         for (var index = snapshots.Count - 1; index >= 0; index--)
         {
-            var (live, snapshot, liveExisted) = snapshots[index];
+            var (live, snapshot, liveExisted, liveMode) = snapshots[index];
             try
             {
                 if (!liveExisted)
@@ -1398,6 +1418,11 @@ public sealed class RestoreService(
 
                 fileOperations.ClearDirectoryContents(live);
                 fileOperations.CopyDirectoryContents(snapshot, live);
+
+                if (liveMode is { } mode)
+                {
+                    fileOperations.SetDirectoryMode(live, mode);
+                }
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {

@@ -2045,7 +2045,10 @@ confirmation=RESTORE
   3. the verified staging children are copied in.
 
   Relative paths and file modes are kept; symlinks are never followed (the
-  archive reader rejects them). Only the `dp-keys` subdirectory is swapped —
+  archive reader rejects them). The **live directory's own mode is preserved**
+  across the swap and re-applied on rollback, so a restore never narrows the
+  mount-root permissions (the deployment's `data/images` is a world-writable SMB
+  share). Only the `dp-keys` subdirectory is swapped —
   `config/recovery.key` is never read, moved, or rewritten. A copy failure
   copies the snapshots back and surfaces as the post-commit error described
   above; a snapshot that cannot be copied back holds the only remaining copy and

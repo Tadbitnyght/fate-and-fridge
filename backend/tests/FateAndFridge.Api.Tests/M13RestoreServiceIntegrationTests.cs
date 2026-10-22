@@ -46,6 +46,15 @@ public sealed class M13RestoreServiceIntegrationTests(M13BackupFixture fixture) 
     private const string PgDump17 = "pg_dump (PostgreSQL) 17.4 (Debian 17.4-1.pgdg120+1)";
     private const string Reason = "Restore the pre-upgrade archive";
 
+    /// <summary>
+    /// The mode the deployment mounts <c>{DataDir}/images</c> with (an SMB share
+    /// the household edits from Windows).
+    /// </summary>
+    private const UnixFileMode WorldReadWriteExecute =
+        UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+        UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute |
+        UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute;
+
     private static readonly DateTimeOffset Now = new(2026, 10, 21, 15, 0, 0, TimeSpan.Zero);
 
     private static readonly DateTimeOffset SeedTimestamp = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
@@ -514,6 +523,106 @@ public sealed class M13RestoreServiceIntegrationTests(M13BackupFixture fixture) 
     }
 
     // ------------------------------------------------------------------
+    // The mount roots keep their permissions across the swap
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task A_restore_preserves_the_live_directory_mode_of_the_mount_roots()
+    {
+        // In the deployment {DataDir}/images is a bind-mounted SMB share, mounted
+        // world-writable so the household can edit it from Windows. A restore
+        // replaces the contents of the mount root; it must never narrow the
+        // mount-root permissions it did not set (docs/API.md §18).
+        var dataDir = SeedDataDirectory(RecoveryKey);
+        var images = Path.Combine(dataDir, "images");
+        var dataProtectionKeys = Path.Combine(dataDir, "config", "dp-keys");
+        var archivePath = await WriteArchiveAsync(dataDir);
+
+        using var factory = CreateFactory(
+            dataDir,
+            RecordingPgRestoreRunner.Succeeding(),
+            new RecordingRestartSignal());
+
+        // The startup pass owns dp-keys' mode (AppPaths hardens it to 0700), so
+        // the distinctive mount-root mode is applied to the started app, exactly
+        // as the deployment's mount options would.
+        _ = factory.Services;
+
+        if (!MarkWorldWritable(images) || !MarkWorldWritable(dataProtectionKeys))
+        {
+            Assert.Skip("Unix directory modes do not exist on Windows.");
+            return;
+        }
+
+        var accepted = (await BeginAsync(factory, UploadSource(archivePath), "restore-modes"))
+            .Should().BeOfType<RestoreStartOutcome.Accepted>().Subject;
+
+        var execution = await Restores(factory).ExecuteAsync(accepted.Operation, Ct);
+        execution.Should().BeOfType<RestoreExecutionOutcome.Success>();
+
+        // The contents were replaced, so the mode checks below are not vacuous.
+        File.ReadAllBytes(Path.Combine(images, "recipes", "pasta.jpg"))
+            .Should().Equal(RestoredImage);
+        File.Exists(Path.Combine(dataProtectionKeys, "key-abc.xml")).Should().BeTrue();
+
+        // Both mount roots keep the mode they had before the restore: the swap
+        // only replaces their children.
+        DirectoryModeShouldBe(
+            images,
+            WorldReadWriteExecute,
+            "a restore replaces the contents of the mount root, never its permissions");
+        DirectoryModeShouldBe(
+            dataProtectionKeys,
+            WorldReadWriteExecute,
+            "config/dp-keys keeps its mode too");
+    }
+    [Fact]
+    public async Task A_swap_re_applies_the_mount_root_mode_a_filesystem_reset()
+    {
+        // The deployment's images/ is a bind-mounted SMB share whose mode comes
+        // from the mount options: emptying and refilling it leaves the root at the
+        // mount's default instead of the mode the household set. The swap captures
+        // the mode first and must put it back (docs/API.md §18).
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Skip("Unix directory modes do not exist on Windows.");
+            return;
+        }
+
+        var dataDir = SeedDataDirectory(RecoveryKey);
+        var images = Path.Combine(dataDir, "images");
+        var archivePath = await WriteArchiveAsync(dataDir);
+
+        var fileOperations = new MountModeResettingRestoreFileOperations(
+            new SystemRestoreFileOperations(),
+            images);
+
+        using var factory = CreateFactory(
+            dataDir,
+            RecordingPgRestoreRunner.Succeeding(),
+            new RecordingRestartSignal(),
+            fileOperations: fileOperations);
+
+        _ = factory.Services;
+        MarkWorldWritable(images);
+
+        var accepted = (await BeginAsync(factory, UploadSource(archivePath), "restore-mode-reset"))
+            .Should().BeOfType<RestoreStartOutcome.Accepted>().Subject;
+
+        var execution = await Restores(factory).ExecuteAsync(accepted.Operation, Ct);
+        execution.Should().BeOfType<RestoreExecutionOutcome.Success>();
+
+        File.ReadAllBytes(Path.Combine(images, "recipes", "pasta.jpg"))
+            .Should().Equal(RestoredImage);
+        DirectoryModeShouldBe(
+            images,
+            WorldReadWriteExecute,
+            "the swap re-applies the captured mount-root mode after copying");
+    }
+
+
+
+    // ------------------------------------------------------------------
     // Failure and rollback
     // ------------------------------------------------------------------
 
@@ -619,19 +728,30 @@ public sealed class M13RestoreServiceIntegrationTests(M13BackupFixture fixture) 
         var recoveryKeyPath = Path.Combine(dataDir, "config", RecoveryKeyStore.FileName);
         var recoveryKeyBefore = await File.ReadAllBytesAsync(recoveryKeyPath, Ct);
 
+        var images = Path.Combine(dataDir, "images");
+
         // Fail after exactly one restored file reached the live images/ directory:
         // the mount root is then half-swapped and must be rolled back from the
         // pre-swap snapshot by copying, not by any rename.
         var fileOperations = new FailingCopyRestoreFileOperations(
             new SystemRestoreFileOperations(),
-            Path.Combine(dataDir, "images"));
+            images);
 
         var signal = new RecordingRestartSignal();
         using var factory = CreateFactory(
             dataDir,
             RecordingPgRestoreRunner.Succeeding(),
             signal,
-            fileOperations: fileOperations);
+            // The mount root re-derives 0755 whenever it is emptied or refilled,
+            // like the deployment's SMB share: only the rollback's re-apply of the
+            // captured mode can keep the household's 0777.
+            fileOperations: new MountModeResettingRestoreFileOperations(fileOperations, images));
+
+        _ = factory.Services;
+
+        // The mount root is world-writable before the swap; the rollback must give
+        // that mode back along with the original contents.
+        var unixModes = MarkWorldWritable(images);
         var configuration = factory.Services.GetRequiredService<IConfiguration>();
 
         var accepted = (await BeginAsync(factory, UploadSource(archivePath), "restore-copy-failure"))
@@ -650,6 +770,14 @@ public sealed class M13RestoreServiceIntegrationTests(M13BackupFixture fixture) 
         Directory.EnumerateFiles(Path.Combine(dataDir, "images"), "*", SearchOption.AllDirectories)
             .Select(Path.GetFileName)
             .Should().BeEquivalentTo(["pasta.jpg", "stale.jpg"]);
+
+        if (unixModes)
+        {
+            DirectoryModeShouldBe(
+                images,
+                WorldReadWriteExecute,
+                "the rollback restores the mount root's mode, not just its contents");
+        }
 
         // The swap failed before dp-keys was touched; the recovery key beside the
         // swapped subdirectory is never modified.
@@ -1194,6 +1322,32 @@ public sealed class M13RestoreServiceIntegrationTests(M13BackupFixture fixture) 
     }
 
     /// <summary>
+    /// Marks a directory world-writable, the mode the deployment's bind-mounted
+    /// SMB share has. Returns false on Windows, where Unix modes do not exist.
+    /// </summary>
+    private static bool MarkWorldWritable(string directory)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return false;
+        }
+
+        File.SetUnixFileMode(directory, WorldReadWriteExecute);
+        return true;
+    }
+
+    /// <summary>Asserts a directory's Unix mode, on hosts that have one.</summary>
+    private static void DirectoryModeShouldBe(string directory, UnixFileMode expected, string because)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        File.GetUnixFileMode(directory).Should().Be(expected, because);
+    }
+
+    /// <summary>
     /// Files that exist only on this device before a restore. A swap replaces the
     /// contents of <c>images/</c> and <c>config/dp-keys/</c>, so these must be gone
     /// after a successful restore and back after a rolled-back one.
@@ -1474,6 +1628,70 @@ public sealed class M13RestoreServiceIntegrationTests(M13BackupFixture fixture) 
             inner.ClearDirectoryContents(directory);
 
         public void DeleteDirectory(string directory) => inner.DeleteDirectory(directory);
+
+        public UnixFileMode? GetDirectoryMode(string directory) => inner.GetDirectoryMode(directory);
+
+        public void SetDirectoryMode(string directory, UnixFileMode mode) =>
+            inner.SetDirectoryMode(directory, mode);
+    }
+
+    /// <summary>
+    /// Reproduces a bind-mounted SMB share that re-derives a directory's mode from
+    /// the mount options: every clear or copy inside the watched mount root leaves
+    /// that root at 0755, so only the swap's own re-apply of the captured mode can
+    /// keep the household's 0777.
+    /// </summary>
+    private sealed class MountModeResettingRestoreFileOperations(
+        IRestoreFileOperations inner,
+        string mountRoot) : IRestoreFileOperations
+    {
+        private const UnixFileMode MountDefaultMode =
+            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+            UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+            UnixFileMode.OtherRead | UnixFileMode.OtherExecute;
+
+        public void CopyDirectoryContents(string sourceDirectory, string destinationDirectory)
+        {
+            inner.CopyDirectoryContents(sourceDirectory, destinationDirectory);
+
+            if (IsMountRoot(destinationDirectory))
+            {
+                ResetMountRoot();
+            }
+        }
+
+        public void ClearDirectoryContents(string directory)
+        {
+            inner.ClearDirectoryContents(directory);
+
+            if (IsMountRoot(directory))
+            {
+                ResetMountRoot();
+            }
+        }
+
+        public void DeleteDirectory(string directory) => inner.DeleteDirectory(directory);
+
+        public UnixFileMode? GetDirectoryMode(string directory) => inner.GetDirectoryMode(directory);
+
+        public void SetDirectoryMode(string directory, UnixFileMode mode) =>
+            inner.SetDirectoryMode(directory, mode);
+
+        private void ResetMountRoot()
+        {
+            if (OperatingSystem.IsWindows() || !Directory.Exists(mountRoot))
+            {
+                return;
+            }
+
+            File.SetUnixFileMode(mountRoot, MountDefaultMode);
+        }
+
+        private bool IsMountRoot(string directory) =>
+            string.Equals(
+                Path.GetFullPath(directory),
+                Path.GetFullPath(mountRoot),
+                StringComparison.Ordinal);
     }
 
     /// <summary>

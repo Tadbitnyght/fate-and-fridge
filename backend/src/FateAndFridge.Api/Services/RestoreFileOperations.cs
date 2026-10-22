@@ -37,6 +37,21 @@ public interface IRestoreFileOperations
 
     /// <summary>Deletes a directory tree when it exists.</summary>
     void DeleteDirectory(string directory);
+
+    /// <summary>
+    /// Reads the Unix mode of <paramref name="directory"/>, or null when the host
+    /// has no Unix modes or the mode cannot be read. A restore captures the mode
+    /// of each live target before it replaces the target's contents, so the
+    /// mount-root permissions survive the swap.
+    /// </summary>
+    UnixFileMode? GetDirectoryMode(string directory);
+
+    /// <summary>
+    /// Re-applies a mode captured by <see cref="GetDirectoryMode"/>. Best effort:
+    /// the contents are already in place, so a mode that cannot be re-applied is
+    /// not fatal. Ownership is deliberately never touched.
+    /// </summary>
+    void SetDirectoryMode(string directory, UnixFileMode mode);
 }
 
 /// <summary>
@@ -106,6 +121,53 @@ internal sealed class SystemRestoreFileOperations : IRestoreFileOperations
             Directory.Delete(directory, recursive: true);
         }
     }
+
+    /// <summary>
+    /// Reads the directory's mode, or null when it cannot be read. The swap
+    /// captures it before emptying the directory and re-applies it afterwards,
+    /// because the deployment's <c>images/</c> is a bind-mounted SMB share whose
+    /// mode is set by the mount options, not by this application.
+    /// </summary>
+    public UnixFileMode? GetDirectoryMode(string directory)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return null;
+        }
+
+        try
+        {
+            return File.GetUnixFileMode(directory);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // Nothing to re-apply: the copy leaves the current mode in place.
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Puts a captured directory mode back. Best effort only: the contents are
+    /// already copied, so a mode that cannot be re-applied must not fail the
+    /// restore. Ownership and group are left exactly as the mount set them.
+    /// </summary>
+    public void SetDirectoryMode(string directory, UnixFileMode mode)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        try
+        {
+            File.SetUnixFileMode(directory, mode);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // Best effort only.
+        }
+    }
+
 
     /// <summary>
     /// Keeps the source mode, which matters for the Data Protection key files
