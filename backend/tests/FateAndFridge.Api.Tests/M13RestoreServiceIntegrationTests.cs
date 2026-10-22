@@ -220,6 +220,9 @@ public sealed class M13RestoreServiceIntegrationTests(M13BackupFixture fixture) 
     public async Task A_successful_restore_runs_the_documented_sequence()
     {
         var dataDir = SeedDataDirectory(RecoveryKey);
+        SeedStaleFiles(dataDir);
+        var recoveryKeyPath = Path.Combine(dataDir, "config", RecoveryKeyStore.FileName);
+        var recoveryKeyBefore = await File.ReadAllBytesAsync(recoveryKeyPath, Ct);
         var archivePath = await WriteArchiveAsync(dataDir);
         var row = await SeedBackupRowAsync(dataDir, archivePath);
         await SeedUserAndSessionAsync();
@@ -290,11 +293,24 @@ public sealed class M13RestoreServiceIntegrationTests(M13BackupFixture fixture) 
             audit.MetadataJson.Should().Contain("restore-success");
         }
 
-        // Step 10: images/ and config/dp-keys/ were replaced.
+        // Step 10: the contents of the live mount roots were replaced by copying
+        // (never by renaming images/ or config/dp-keys/): the restored files are
+        // there and this device's stale files are gone.
         File.ReadAllBytes(Path.Combine(dataDir, "images", "recipes", "pasta.jpg"))
             .Should().Equal(RestoredImage);
+        Directory.EnumerateFileSystemEntries(Path.Combine(dataDir, "images", "recipes"))
+            .Select(Path.GetFileName)
+            .Should().BeEquivalentTo(["pasta.jpg"], "the pre-restore image is removed, not merged");
         File.ReadAllBytes(Path.Combine(dataDir, "config", "dp-keys", "key-abc.xml"))
             .Should().Equal(RestoredDataProtectionKey);
+        Directory.EnumerateFileSystemEntries(Path.Combine(dataDir, "config", "dp-keys"))
+            .Select(Path.GetFileName)
+            .Should().BeEquivalentTo(["key-abc.xml"], "the pre-restore key ring is replaced");
+
+        // Only the dp-keys subdirectory is swapped; the recovery key beside it is
+        // never read, moved, or rewritten.
+        File.ReadAllBytes(Path.Combine(dataDir, "config", RecoveryKeyStore.FileName))
+            .Should().Equal(recoveryKeyBefore, "config/recovery.key is outside the swap");
 
         // Step 11: marker plus graceful stop.
         RestoreMarker.Exists(configuration).Should().BeTrue();
@@ -308,7 +324,12 @@ public sealed class M13RestoreServiceIntegrationTests(M13BackupFixture fixture) 
         signal.Invocations.Should().Be(1);
 
         Directory.Exists(RestoreService.RestoreDirectory(configuration, "restore-success")).Should().BeFalse(
-            "a successful restore reclaims its upload, staging, and swapped-out originals");
+            "a successful restore reclaims its upload, staging, and pre-swap snapshots");
+        Directory.EnumerateDirectories(
+                Path.Combine(dataDir, "backups"),
+                "old-*",
+                SearchOption.AllDirectories)
+            .Should().BeEmpty("the old-* snapshots are reclaimed after success");
 
         state.IsMaintenanceActive.Should().BeFalse();
         state.Phase.Should().Be("completed");
@@ -541,7 +562,7 @@ public sealed class M13RestoreServiceIntegrationTests(M13BackupFixture fixture) 
     }
 
     [Fact]
-    public async Task A_file_swap_failure_after_the_commit_still_marks_and_requests_the_restart()
+    public async Task A_swap_failure_after_the_commit_still_marks_and_requests_the_restart()
     {
         var dataDir = SeedDataDirectory(RecoveryKey);
         var archivePath = await WriteArchiveAsync(dataDir);
@@ -553,10 +574,10 @@ public sealed class M13RestoreServiceIntegrationTests(M13BackupFixture fixture) 
         var accepted = (await BeginAsync(factory, UploadSource(archivePath), "restore-swap-failure"))
             .Should().BeOfType<RestoreStartOutcome.Accepted>().Subject;
 
-        // Make the second rename impossible: config/dp-keys becomes a file, so
-        // moving the staged directory onto it fails after images/ was already
-        // placed, which forces the rollback path. The database restore itself
-        // already committed before the swap ran.
+        // Make the second target impossible to fill: config/dp-keys becomes a
+        // file, so emptying it and recreating it as a directory fails after
+        // images/ was already copied in, which forces the rollback path. The
+        // database restore itself already committed before the swap ran.
         var dataProtectionDirectory = Path.Combine(dataDir, "config", "dp-keys");
         Directory.Delete(dataProtectionDirectory, recursive: true);
         await File.WriteAllTextAsync(dataProtectionDirectory, "not a directory", Ct);
@@ -587,6 +608,143 @@ public sealed class M13RestoreServiceIntegrationTests(M13BackupFixture fixture) 
         state.IsMaintenanceActive.Should().BeFalse();
         state.Phase.Should().Be("failed");
         state.LastError.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task A_failure_while_copying_the_restored_files_restores_the_original_contents()
+    {
+        var dataDir = SeedDataDirectory(RecoveryKey);
+        SeedStaleFiles(dataDir);
+        var archivePath = await WriteArchiveAsync(dataDir);
+        var recoveryKeyPath = Path.Combine(dataDir, "config", RecoveryKeyStore.FileName);
+        var recoveryKeyBefore = await File.ReadAllBytesAsync(recoveryKeyPath, Ct);
+
+        // Fail after exactly one restored file reached the live images/ directory:
+        // the mount root is then half-swapped and must be rolled back from the
+        // pre-swap snapshot by copying, not by any rename.
+        var fileOperations = new FailingCopyRestoreFileOperations(
+            new SystemRestoreFileOperations(),
+            Path.Combine(dataDir, "images"));
+
+        var signal = new RecordingRestartSignal();
+        using var factory = CreateFactory(
+            dataDir,
+            RecordingPgRestoreRunner.Succeeding(),
+            signal,
+            fileOperations: fileOperations);
+        var configuration = factory.Services.GetRequiredService<IConfiguration>();
+
+        var accepted = (await BeginAsync(factory, UploadSource(archivePath), "restore-copy-failure"))
+            .Should().BeOfType<RestoreStartOutcome.Accepted>().Subject;
+
+        var execution = await Restores(factory).ExecuteAsync(accepted.Operation, Ct);
+
+        execution.Should().BeOfType<RestoreExecutionOutcome.AppliedRestartRequired>(
+            "the database committed, so a failed swap is reported as applied-and-restarting");
+        fileOperations.CopiesBeforeFailure.Should().Be(1);
+
+        // The pre-restore contents are back byte for byte, including the stale
+        // file, and no staging/restored file survived the rollback.
+        File.ReadAllBytes(Path.Combine(dataDir, "images", "recipes", "pasta.jpg"))
+            .Should().Equal(OriginalImage);
+        Directory.EnumerateFiles(Path.Combine(dataDir, "images"), "*", SearchOption.AllDirectories)
+            .Select(Path.GetFileName)
+            .Should().BeEquivalentTo(["pasta.jpg", "stale.jpg"]);
+
+        // The swap failed before dp-keys was touched; the recovery key beside the
+        // swapped subdirectory is never modified.
+        File.ReadAllBytes(Path.Combine(dataDir, "config", "dp-keys", "key-abc.xml"))
+            .Should().Equal(OriginalDataProtectionKey);
+        File.ReadAllBytes(recoveryKeyPath).Should().Equal(recoveryKeyBefore);
+
+        RestoreMarker.Exists(configuration).Should().BeTrue(
+            "the failure happened after the database commit, so the marker must exist");
+        var marker = RestoreMarker.TryRead(configuration, NullLogger());
+        marker.Should().NotBeNull();
+        marker!.RestoreId.Should().Be("restore-copy-failure");
+        marker.PostStepError.Should().NotBeNullOrWhiteSpace(
+            "a committed restore is never reported as silently successful");
+        signal.Invocations.Should().Be(1, "the process must stop so migrations run");
+
+        var state = factory.Services.GetRequiredService<RestoreState>();
+        state.IsMaintenanceActive.Should().BeFalse();
+        state.Phase.Should().Be("failed");
+        state.LastError.Should().NotBeNull();
+
+        // The working directory (staging and the old-* snapshots) is reclaimed.
+        Directory.Exists(RestoreService.RestoreDirectory(configuration, "restore-copy-failure"))
+            .Should().BeFalse();
+        Directory.EnumerateDirectories(
+                Path.Combine(dataDir, "backups"),
+                "old-*",
+                SearchOption.AllDirectories)
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task The_swap_replaces_the_contents_of_a_mount_root_that_cannot_be_renamed()
+    {
+        // In the container images/ and config/dp-keys/ are bind-mount roots, and
+        // rename(2) on a mount root fails with EXDEV ("Resource busy") even on the
+        // same filesystem. Putting the restore's snapshot directory on a different
+        // filesystem reproduces exactly that kernel refusal for Directory.Move, so
+        // this test fails if the swap ever renames the live directory again.
+        var dataDir = SeedDataDirectory(RecoveryKey);
+        SeedStaleFiles(dataDir);
+        var archivePath = await WriteArchiveAsync(dataDir);
+        var recoveryKeyPath = Path.Combine(dataDir, "config", RecoveryKeyStore.FileName);
+        var recoveryKeyBefore = await File.ReadAllBytesAsync(recoveryKeyPath, Ct);
+
+        var otherFileSystem = AnotherFileSystem.TryCreate(dataDir);
+        if (otherFileSystem is null)
+        {
+            Assert.Skip(
+                "This host has no writable second filesystem to simulate a bind-mount root.");
+            return;
+        }
+
+        using var scratch = otherFileSystem;
+
+        // {DataDir}/backups now lives on the other filesystem (through a link), so
+        // the snapshots are across a filesystem boundary from the live directories.
+        var backups = Path.Combine(dataDir, "backups");
+        var otherBackups = Path.Combine(scratch.Root, "backups");
+        var archiveName = Path.GetFileName(archivePath);
+        Directory.CreateDirectory(otherBackups);
+        File.Move(archivePath, Path.Combine(otherBackups, archiveName));
+        Directory.Delete(backups, recursive: true);
+        Directory.CreateSymbolicLink(backups, otherBackups);
+
+        var signal = new RecordingRestartSignal();
+        using var factory = CreateFactory(
+            dataDir,
+            RecordingPgRestoreRunner.Succeeding(),
+            signal);
+
+        var accepted = (await BeginAsync(
+                factory,
+                UploadSource(Path.Combine(backups, archiveName)),
+                "restore-mount-root"))
+            .Should().BeOfType<RestoreStartOutcome.Accepted>().Subject;
+
+        var execution = await Restores(factory).ExecuteAsync(accepted.Operation, Ct);
+
+        execution.Should().BeOfType<RestoreExecutionOutcome.Success>(
+            "the swap copies inside the mount root instead of renaming it");
+
+        File.ReadAllBytes(Path.Combine(dataDir, "images", "recipes", "pasta.jpg"))
+            .Should().Equal(RestoredImage);
+        Directory.EnumerateFiles(Path.Combine(dataDir, "images", "recipes"))
+            .Select(Path.GetFileName)
+            .Should().BeEquivalentTo(["pasta.jpg"], "the contents were replaced, not merged");
+        File.ReadAllBytes(Path.Combine(dataDir, "config", "dp-keys", "key-abc.xml"))
+            .Should().Equal(RestoredDataProtectionKey);
+
+        Directory.Exists(Path.Combine(dataDir, "images")).Should().BeTrue(
+            "the mount root itself is kept; only its contents change");
+        Directory.Exists(Path.Combine(dataDir, "config", "dp-keys")).Should().BeTrue();
+        File.ReadAllBytes(recoveryKeyPath).Should().Equal(recoveryKeyBefore);
+        signal.Invocations.Should().Be(1);
     }
 
     [Fact]
@@ -981,7 +1139,8 @@ public sealed class M13RestoreServiceIntegrationTests(M13BackupFixture fixture) 
         string dataDir,
         IPgRestoreRunner runner,
         IRestoreRestartSignal signal,
-        RecordingLoggerProvider? recorder = null) =>
+        RecordingLoggerProvider? recorder = null,
+        IRestoreFileOperations? fileOperations = null) =>
         fixture.CreateFactory(dataDir, services =>
         {
             services.RemoveAll<TimeProvider>();
@@ -999,6 +1158,12 @@ public sealed class M13RestoreServiceIntegrationTests(M13BackupFixture fixture) 
             if (recorder is not null)
             {
                 services.AddLogging(logging => logging.AddProvider(recorder));
+            }
+
+            if (fileOperations is not null)
+            {
+                services.RemoveAll<IRestoreFileOperations>();
+                services.AddSingleton(fileOperations);
             }
         });
 
@@ -1026,6 +1191,21 @@ public sealed class M13RestoreServiceIntegrationTests(M13BackupFixture fixture) 
         }
 
         return dataDir;
+    }
+
+    /// <summary>
+    /// Files that exist only on this device before a restore. A swap replaces the
+    /// contents of <c>images/</c> and <c>config/dp-keys/</c>, so these must be gone
+    /// after a successful restore and back after a rolled-back one.
+    /// </summary>
+    private static void SeedStaleFiles(string dataDir)
+    {
+        File.WriteAllBytes(
+            Path.Combine(dataDir, "images", "recipes", "stale.jpg"),
+            Encoding.UTF8.GetBytes("stale recipe image"));
+        File.WriteAllBytes(
+            Path.Combine(dataDir, "config", "dp-keys", "key-stale.xml"),
+            Encoding.UTF8.GetBytes("<key id=\"stale\"/>"));
     }
 
     /// <summary>
@@ -1248,6 +1428,139 @@ public sealed class M13RestoreServiceIntegrationTests(M13BackupFixture fixture) 
 
     private static async Task<string> ReadErrorCodeAsync(HttpResponseMessage response) =>
         (await ReadJsonAsync(response)).GetProperty("error").GetProperty("code").GetString()!;
+
+    /// <summary>
+    /// Fails the copy that fills one live directory after a single restored file
+    /// has been written, so the swap is left half-applied and the rollback has to
+    /// restore the pre-swap snapshot. Everything else delegates to the production
+    /// implementation.
+    /// </summary>
+    private sealed class FailingCopyRestoreFileOperations(
+        IRestoreFileOperations inner,
+        string halfCopiedDirectory) : IRestoreFileOperations
+    {
+        private bool _failed;
+
+        public int CopiesBeforeFailure { get; private set; }
+
+        public void CopyDirectoryContents(string sourceDirectory, string destinationDirectory)
+        {
+            if (_failed
+                || !string.Equals(
+                    Path.GetFullPath(destinationDirectory),
+                    Path.GetFullPath(halfCopiedDirectory),
+                    StringComparison.Ordinal))
+            {
+                inner.CopyDirectoryContents(sourceDirectory, destinationDirectory);
+                return;
+            }
+
+            _failed = true;
+
+            var first = Directory
+                .EnumerateFiles(sourceDirectory, "*", SearchOption.AllDirectories)
+                .First();
+            var target = Path.Combine(
+                destinationDirectory,
+                Path.GetRelativePath(sourceDirectory, first));
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(first, target);
+            CopiesBeforeFailure++;
+
+            throw new IOException("simulated disk full while copying the restored files");
+        }
+
+        public void ClearDirectoryContents(string directory) =>
+            inner.ClearDirectoryContents(directory);
+
+        public void DeleteDirectory(string directory) => inner.DeleteDirectory(directory);
+    }
+
+    /// <summary>
+    /// A writable directory on a filesystem other than the data directory's.
+    /// Renaming a directory between the two is refused by the kernel with
+    /// <c>EXDEV</c>, exactly as renaming a bind-mount root is, which is what the
+    /// mount-root swap test needs.
+    /// </summary>
+    private sealed class AnotherFileSystem : IDisposable
+    {
+        private AnotherFileSystem(string root) => Root = root;
+
+        public string Root { get; }
+
+        public static AnotherFileSystem? TryCreate(string dataDir)
+        {
+            foreach (var candidate in new[] { "/dev/shm", "/run", "/var/tmp" })
+            {
+                if (!Directory.Exists(candidate))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    var root = Directory.CreateDirectory(
+                        Path.Combine(candidate, $"faf-m13-mount-root-{Guid.NewGuid():N}")).FullName;
+
+                    if (IsSameFileSystem(dataDir, root))
+                    {
+                        Directory.Delete(root, recursive: true);
+                        continue;
+                    }
+
+                    return new AnotherFileSystem(root);
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    // Try the next candidate.
+                }
+            }
+
+            return null;
+        }
+
+        public void Dispose()
+        {
+            try
+            {
+                if (Directory.Exists(Root))
+                {
+                    Directory.Delete(Root, recursive: true);
+                }
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // A leftover scratch directory is harmless.
+            }
+        }
+
+        /// <summary>
+        /// Proves the premise rather than assuming it: a directory move between
+        /// the two locations must be refused by the kernel.
+        /// </summary>
+        private static bool IsSameFileSystem(string dataDir, string root)
+        {
+            var probe = Directory.CreateDirectory(
+                Path.Combine(dataDir, $"fs-probe-{Guid.NewGuid():N}")).FullName;
+
+            try
+            {
+                Directory.Move(probe, Path.Combine(root, Path.GetFileName(probe)));
+                return true;
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                return false;
+            }
+            finally
+            {
+                if (Directory.Exists(probe))
+                {
+                    Directory.Delete(probe, recursive: true);
+                }
+            }
+        }
+    }
 
     private sealed record SignedInClient(HttpClient Client, string CsrfToken) : IDisposable
     {

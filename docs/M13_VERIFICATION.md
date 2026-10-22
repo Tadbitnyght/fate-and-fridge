@@ -1,10 +1,10 @@
 # M13 Verification — Backup / Restore / Updates
 
-Status: **in progress** — the live restore round-trip found two blocker defects,
-both now fixed (audit guarantee + catalog reconciliation); the round-trip must be
-re-run on a disposable stack before completion. Runbook: `docs/M13_PLAN.md`
-(approved 2026-10-20). Coverage map: `docs/M13_TEST_MATRIX.md`. Tracking: #162;
-M13-01…M13-10: #163–#172.
+Status: **in progress** — the live restore round-trip found three blocker defects,
+all now fixed (audit guarantee + catalog reconciliation + the image/key swap);
+the round-trip must be re-run on a disposable stack before completion. Runbook:
+`docs/M13_PLAN.md` (approved 2026-10-20). Coverage map:
+`docs/M13_TEST_MATRIX.md`. Tracking: #162; M13-01…M13-10: #163–#172.
 
 ---
 
@@ -187,12 +187,21 @@ workstation-only suite was not sufficient:
    backup row is inserted after the dump — so restoring yields a **stale `pending`
    row** and **no safety row**, while the disk holds two valid archives. The
    catalog must be reconciled from the on-disk archives/manifests after a restore.
+3. **The image / Data-Protection-key swap always fails.** `RestoreService` swapped
+   `images/` and `config/dp-keys/` with `Directory.Move(live, old)` followed by
+   `Directory.Move(staged, live)`. In the container both live paths are
+   **bind-mount roots** (`/data/images`, `/data/config`), and the kernel refuses
+   to rename a mount root (`EXDEV` / "Resource busy") even on the same
+   filesystem. Every restore therefore restored the database and reported the
+   *file swap* as failed: the rollback restored the originals and the marker
+   recorded `post_step_error`, but the images and the Data Protection key ring
+   were **never actually replaced** from the archive.
 
 Production was verified untouched before and after (same archive, checksum, size;
 `safety/` empty; both containers healthy), and the disposable stack and its image
 were torn down (no containers/networks/volumes remain; port 50081 refused).
 
-**Fixes (both blockers closed in code):**
+**Fixes (all three blockers closed in code):**
 
 1. **Audit guaranteed + fresh connections + real count.** `PgRestoreRunner` no
    longer counts an `ExecuteNonQuery` (which reported `-1`): it reads one row per
@@ -216,10 +225,33 @@ were torn down (no containers/networks/volumes remain; port 50081 refused).
    consumed. Tests cover the pending manual row, a safety file without a row, an
    orphan row, and the idempotent second pass.
 
-**Disposition:** M13 stays `in_progress` until this round-trip is re-run on a
-disposable stack and proves the `backup.restored` row is present **and** the
-restored catalog is coherent (manual archive `completed` with the disk checksum,
-safety archive present, no stale `pending` row, `.restore/` reclaimed).
+3. **Copy-based image/config swap (bind-mount roots cannot be renamed).** The
+   second round-trip found the swap calling `Directory.Move` on the live
+   `images/`/`config` bind-mount roots, which the kernel rejects (`EXDEV`/
+   "Resource busy") even on the same filesystem — so every restore reported a
+   post-commit failure and never replaced the images/Data-Protection keys. The
+   swap now snapshots the target **contents** into `.restore/<id>/old-*` by
+   recursive copy, clears the target's children (the mount root itself stays),
+   copies the verified staging content in, and rolls back by copying the snapshot
+   back; `config/recovery.key` is never touched. `IRestoreFileOperations` exposes
+   **no rename/move operation at all**, and the tests include a success case
+   (stale files removed, key byte-identical, snapshots reclaimed), a mid-copy
+   failure that restores the original contents and reports the post-commit error,
+   and a mount-root case where the live tree sits on a different filesystem so a
+   rename would fail with `EXDEV`.
+
+**Second round-trip (after the audit + catalog fixes):** the audit row, the real
+terminate count, the catalog (manual `completed` with the on-disk checksum, safety
+row present, no stale `pending`), the restart, migrations, session revocation and
+`.restore` reclamation all **passed** — and it exposed defect 3 above, which the
+copy-based swap now fixes.
+
+**Disposition:** M13 stays `in_progress` until a third round-trip on a disposable
+stack proves **all** of: the `backup.restored` row present, a coherent restored
+catalog (manual archive `completed` with the disk checksum, safety archive
+present, no stale `pending`), **images and dp-keys actually replaced with no
+`fail:` lines or `post_step_error`**, `.restore/` reclaimed, `recovery.key`
+intact, and a healthy restart with migrations applied.
 
 ---
 

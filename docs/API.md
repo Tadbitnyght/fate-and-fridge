@@ -2002,7 +2002,8 @@ confirmation=RESTORE
   (`57P01`). All `user_sessions` are then deleted (every client must sign in
   again), a `backup.restored` audit row is written **into the restored
   database** (raw SQL, so a slightly older restored schema still works),
-  `images/` and `config/dp-keys/` are swapped from staging, the backup catalog
+  the **contents** of `images/` and `config/dp-keys/` are replaced from staging
+  (copy-based, see **Filesystem swap** below), the backup catalog
   is reconciled with the archives on disk (see **Catalog reconciliation**
   below), a `<DataDir>/backups/restore.pending` marker is written, and the
   application requests a graceful stop so `restart: unless-stopped` restarts
@@ -2025,11 +2026,32 @@ confirmation=RESTORE
   when a *request* is refused because another backup/restore already holds the
   operation gate.
 - **Failure semantics:** `pg_restore` runs in one transaction, so a database
-  failure rolls back completely; a file-swap failure rolls the directory renames
-  back. Maintenance mode is cleared, the restore is marked failed, no marker is
-  written, the original data stays intact, and the app remains usable. The
+  failure rolls back completely and no file was touched. Maintenance mode is
+  cleared, the restore is marked failed, no marker is written, the original data
+  stays intact, and the app remains usable. The
   background failure is reported as `500 RESTORE_FAILED` in the application log
   (the `202` has already been sent); the safety backup is left for a retry.
+  A failure **after** the commit (including the filesystem swap) is never
+  reported as a plain failure: it goes through the post-commit path above
+  (`post_step_error` in the marker, restart, `APPLIED_RESTART_REQUIRED`).
+- **Filesystem swap (bind-mount roots):** `{DataDir}/images` and
+  `{DataDir}/config/dp-keys` are **bind-mount roots** in the container, and the
+  kernel refuses to rename a mount root (`EXDEV` / "Resource busy") even on the
+  same filesystem, so the swap never renames, moves, or deletes the live
+  directory. For each target:
+  1. its **children** are copied to a snapshot
+     (`<DataDir>/backups/.restore/<restore_id>/old-images` / `old-dp-keys`),
+  2. the target's children are deleted (the directory itself stays), and
+  3. the verified staging children are copied in.
+
+  Relative paths and file modes are kept; symlinks are never followed (the
+  archive reader rejects them). Only the `dp-keys` subdirectory is swapped —
+  `config/recovery.key` is never read, moved, or rewritten. A copy failure
+  copies the snapshots back and surfaces as the post-commit error described
+  above; a snapshot that cannot be copied back holds the only remaining copy and
+  is preserved instead of reclaimed, while success reclaims the `old-*` and
+  staging directories. The operation is idempotent: a retried restore rebuilds
+  its snapshots from the current state.
 - Documented limitations, by design:
   - the archive is decrypted **twice** — once to validate before any mutation,
     once to extract — rather than holding an open reader across the `202`;

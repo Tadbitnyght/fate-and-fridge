@@ -172,7 +172,8 @@ public sealed class RestoreOperation
 /// <c>pg_restore --clean --if-exists --no-owner --no-privileges
 /// --single-transaction</c>, session revocation, the <c>backup.restored</c>
 /// audit row written into the restored database with raw SQL, the
-/// <c>images/</c> and <c>config/dp-keys/</c> swap (with rollback), the restore
+/// <c>images/</c> and <c>config/dp-keys/</c> content swap (a copy inside the
+/// bind-mount roots, never a rename, with rollback), the restore
 /// marker, and a graceful stop.
 /// </para>
 /// <para>
@@ -187,6 +188,7 @@ public sealed class RestoreService(
     BackupOperationGate operationGate,
     RestoreState state,
     IRestoreRestartSignal restartSignal,
+    IRestoreFileOperations fileOperations,
     IConfiguration configuration,
     TimeProvider timeProvider,
     ILogger<RestoreService> logger)
@@ -631,7 +633,7 @@ public sealed class RestoreService(
                 }
 
                 state.MarkPhase("files");
-                SwapLiveDirectories(restoreDirectory, restoreId, stagingDirectory, preservedOriginals);
+                SwapLiveDirectories(restoreDirectory, stagingDirectory, preservedOriginals);
 
                 state.MarkPhase("retention");
                 await PruneSafetyBackupsAsync(cancellationToken).ConfigureAwait(false);
@@ -1296,14 +1298,20 @@ public sealed class RestoreService(
     }
 
     /// <summary>
-    /// Replaces <c>images/</c> and <c>config/dp-keys/</c> with the staged
-    /// copies: the live directories are renamed aside first, then the staged
-    /// ones are moved into place. Any failure moves everything back
-    /// (docs/M13_PLAN.md §1.9 step 6).
+    /// Replaces the **contents** of <c>images/</c> and <c>config/dp-keys/</c>
+    /// with the staged copies (docs/M13_PLAN.md §1.9 step 6).
     /// </summary>
+    /// <remarks>
+    /// Both live directories are bind-mount roots in the container, so they
+    /// cannot be renamed (the kernel reports <c>EXDEV</c> / "Resource busy" even
+    /// on the same filesystem). Each target is therefore snapshotted by copying
+    /// its children to <c>old-&lt;name&gt;</c>, emptied by deleting its children,
+    /// and filled by copying the staged children in — the mount root itself is
+    /// never renamed, moved, or deleted. Any failure copies the snapshots back
+    /// and surfaces as a post-commit error, never as success.
+    /// </remarks>
     private void SwapLiveDirectories(
         string restoreDirectory,
-        string restoreId,
         string stagingDirectory,
         List<string> preservedOriginals)
     {
@@ -1315,41 +1323,48 @@ public sealed class RestoreService(
                 Path.Combine(stagingDirectory, "config", "dp-keys")),
         ];
 
-        var movedLive = new List<(string Old, string Live)>();
-        var placed = new List<(string Live, string Staged)>();
+        // Every target that was touched, oldest first: the live directory, its
+        // pre-swap content snapshot, and whether the live directory existed.
+        var snapshots = new List<(string Live, string Snapshot, bool LiveExisted)>();
 
         try
         {
             foreach (var pair in pairs)
             {
-                if (!Directory.Exists(pair.Live))
+                var liveExisted = Directory.Exists(pair.Live);
+                var stagedExisted = Directory.Exists(pair.Staged);
+                if (!liveExisted && !stagedExisted)
                 {
                     continue;
                 }
 
-                var old = Path.Combine(restoreDirectory, $"old-{pair.Name}-{restoreId}");
-                Directory.Move(pair.Live, old);
-                movedLive.Add((old, pair.Live));
-            }
+                var snapshot = Path.Combine(restoreDirectory, $"old-{pair.Name}");
 
-            foreach (var pair in pairs)
-            {
-                if (!Directory.Exists(pair.Staged))
+                // A retried restore reuses the id: a stale snapshot must never be
+                // copied back as if it were this attempt's pre-restore state.
+                fileOperations.DeleteDirectory(snapshot);
+                Directory.CreateDirectory(snapshot);
+
+                if (liveExisted)
                 {
-                    continue;
+                    fileOperations.CopyDirectoryContents(pair.Live, snapshot);
                 }
 
-                Directory.CreateDirectory(Path.GetDirectoryName(pair.Live)!);
-                Directory.Move(pair.Staged, pair.Live);
-                placed.Add((pair.Live, pair.Staged));
+                snapshots.Add((pair.Live, snapshot, liveExisted));
+
+                fileOperations.ClearDirectoryContents(pair.Live);
+                if (stagedExisted)
+                {
+                    fileOperations.CopyDirectoryContents(pair.Staged, pair.Live);
+                }
             }
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             logger.LogError(
                 exception,
-                "The restored images/config could not be swapped into place; rolling the file swap back.");
-            RollbackSwap(placed, movedLive, preservedOriginals);
+                "The restored images/config could not be copied into place; restoring the previous files.");
+            RollbackSwap(snapshots, preservedOriginals);
 
             throw new RestoreFailureException(
                 ErrorCodes.RestoreFailed,
@@ -1357,47 +1372,42 @@ public sealed class RestoreService(
         }
     }
 
+    /// <summary>
+    /// Copies the pre-swap snapshot of every target that was already touched back
+    /// into its live directory (a copy, never a rename, for the same bind-mount
+    /// reason as <see cref="SwapLiveDirectories"/>). A snapshot that cannot be
+    /// copied back holds the only remaining copy of the previous files, so it is
+    /// preserved instead of reclaimed.
+    /// </summary>
     private void RollbackSwap(
-        List<(string Live, string Staged)> placed,
-        List<(string Old, string Live)> movedLive,
+        List<(string Live, string Snapshot, bool LiveExisted)> snapshots,
         List<string> preservedOriginals)
     {
-        for (var index = placed.Count - 1; index >= 0; index--)
+        for (var index = snapshots.Count - 1; index >= 0; index--)
         {
-            var (live, staged) = placed[index];
+            var (live, snapshot, liveExisted) = snapshots[index];
             try
             {
-                if (Directory.Exists(live))
+                if (!liveExisted)
                 {
-                    Directory.Move(live, staged);
+                    // The restore created this directory; the pre-restore state
+                    // had none.
+                    fileOperations.DeleteDirectory(live);
+                    continue;
                 }
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
-                logger.LogError(
-                    exception,
-                    "The restored directory could not be moved back to staging during rollback.");
-            }
-        }
 
-        for (var index = movedLive.Count - 1; index >= 0; index--)
-        {
-            var (old, live) = movedLive[index];
-            try
-            {
-                if (Directory.Exists(old) && !Directory.Exists(live))
-                {
-                    Directory.Move(old, live);
-                }
+                fileOperations.ClearDirectoryContents(live);
+                fileOperations.CopyDirectoryContents(snapshot, live);
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
                 logger.LogCritical(
                     exception,
-                    "The original directory {OriginalDirectory} could not be restored during rollback; " +
-                    "it is preserved next to the restore working directory.",
-                    old);
-                preservedOriginals.Add(old);
+                    "The original contents of {LiveDirectory} could not be restored during rollback; " +
+                    "the snapshot {SnapshotDirectory} is preserved next to the restore working directory.",
+                    live,
+                    snapshot);
+                preservedOriginals.Add(snapshot);
             }
         }
     }

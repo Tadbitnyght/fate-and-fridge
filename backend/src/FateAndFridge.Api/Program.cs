@@ -243,6 +243,9 @@ builder.Services.AddScoped<BackupService>();
 builder.Services.AddSingleton<IPgRestoreRunner, PgRestoreRunner>();
 builder.Services.AddSingleton<RestoreState>();
 builder.Services.AddSingleton<IRestoreRestartSignal, HostRestartSignal>();
+// The swap copies directory contents instead of renaming the live (bind-mount)
+// roots; the seam exists so a copy failure is testable (docs/API.md §18).
+builder.Services.AddSingleton<IRestoreFileOperations, SystemRestoreFileOperations>();
 builder.Services.AddSingleton<RestoreService>();
 
 // M13-09: the single outbound release-metadata GET (docs/M13_PLAN.md §1.13;
