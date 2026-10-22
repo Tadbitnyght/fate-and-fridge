@@ -12,12 +12,12 @@ import {
 const VALID_STATUSES: MilestoneStatus[] = ['complete', 'in_progress', 'planned']
 
 describe('milestone manifest', () => {
-  it('has unique ids and numbers covering M0 through M14', () => {
+  it('has unique ids and numbers covering M0 through M15', () => {
     const ids = MILESTONES.map((milestone) => milestone.id)
     expect(new Set(ids).size).toBe(ids.length)
-    expect(ids).toEqual(Array.from({ length: 15 }, (_, index) => `M${index}`))
+    expect(ids).toEqual(Array.from({ length: 16 }, (_, index) => `M${index}`))
     expect(MILESTONES.map((milestone) => milestone.number)).toEqual(
-      Array.from({ length: 15 }, (_, index) => index),
+      Array.from({ length: 16 }, (_, index) => index),
     )
   })
 
@@ -331,10 +331,10 @@ describe('milestone manifest', () => {
 
   it('computes the progress summary from the manifest', () => {
     expect(progressSummary()).toEqual({
-      total: 15,
+      total: 16,
       completed: 13,
       inProgress: 1,
-      percent: Math.round((13 / 15) * 100),
+      percent: Math.round((13 / 16) * 100),
     })
     expect(
       progressSummary([

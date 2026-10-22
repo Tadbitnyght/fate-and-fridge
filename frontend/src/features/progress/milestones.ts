@@ -443,6 +443,24 @@ export const MILESTONES: Milestone[] = [
     issuesNote:
       'Planned in docs/MILESTONES.md; GitHub issues are created when the milestone starts.',
   },
+  {
+    id: 'M15',
+    number: 15,
+    name: 'v1.0.0 Release Readiness',
+    status: 'planned',
+    summary:
+      'The release gate after the M0–M14 plan: remove development-only surfaces (the in-app roadmap, OpenAPI, the permission probe), clean up the UI, and ship v1.0.0.',
+    features: [
+      'Remove development-only surfaces (in-app roadmap, OpenAPI, permission probe, dead placeholders)',
+      'UI copy, consistency, visual polish and app metadata',
+      'Accessibility and mobile pass across product routes',
+      'Dependency, asset and runtime-image cleanup',
+      'Version 1.0.0 with CHANGELOG, release notes and the v1.0.0 release',
+      'Release gate: suites, independent review, deploy and live verification',
+    ],
+    issues: [],
+    issuesNote: 'Added 2026-10-22 after the M0–M14 plan; defined in docs/MILESTONES.md.',
+  },
 ]
 
 export interface ProgressSummary {

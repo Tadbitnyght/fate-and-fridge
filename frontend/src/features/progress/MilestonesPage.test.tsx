@@ -29,16 +29,16 @@ describe('progress page', () => {
     renderWithProviders(<App />, { route: '/progress' })
 
     expect(await screen.findByRole('heading', { level: 2, name: 'Progress' })).toBeInTheDocument()
-    expect(screen.getByText('13 of 15 milestones complete (87%).')).toBeInTheDocument()
+    expect(screen.getByText('13 of 16 milestones complete (81%).')).toBeInTheDocument()
 
     const progressbar = screen.getByRole('progressbar', { name: 'Milestones complete' })
-    expect(progressbar).toHaveAttribute('aria-valuenow', '87')
-    expect(progressbar).toHaveAttribute('aria-valuetext', '87%')
+    expect(progressbar).toHaveAttribute('aria-valuenow', '81')
+    expect(progressbar).toHaveAttribute('aria-valuetext', '81%')
 
     expect(screen.getAllByText('Complete', { exact: true })).toHaveLength(13)
     // M13 is back to in progress (its live restore round-trip found blockers) and
     // M14 remains planned; each renders its status in the chip and the dates line.
-    expect(screen.getAllByText('Planned', { exact: true })).toHaveLength(2)
+    expect(screen.getAllByText('Planned', { exact: true })).toHaveLength(4)
     expect(screen.getAllByText('In progress', { exact: true })).toHaveLength(2)
 
     const m1Card = screen
@@ -163,7 +163,7 @@ describe('progress page', () => {
     expect(milestonesTab).toHaveAttribute('tabindex', '0')
     expect(futureTab).toHaveAttribute('aria-selected', 'false')
     expect(futureTab).toHaveAttribute('tabindex', '-1')
-    expect(screen.getByText('13 of 15 milestones complete (87%).')).toBeInTheDocument()
+    expect(screen.getByText('13 of 16 milestones complete (81%).')).toBeInTheDocument()
     expect(
       screen.queryByRole('heading', { level: 4, name: 'Pantry / inventory' }),
     ).not.toBeInTheDocument()
@@ -183,7 +183,7 @@ describe('progress page', () => {
     expect(
       screen.queryByRole('heading', { level: 3, name: 'M1 — Setup and Authentication' }),
     ).not.toBeInTheDocument()
-    expect(screen.queryByText('13 of 15 milestones complete (87%).')).not.toBeInTheDocument()
+    expect(screen.queryByText('13 of 16 milestones complete (81%).')).not.toBeInTheDocument()
   })
 
   it('supports Left/Right/Home/End keyboard navigation with roving focus', async () => {
