@@ -452,6 +452,7 @@ export const MILESTONES: Milestone[] = [
       'The release gate after the M0–M14 plan: remove development-only surfaces (the in-app roadmap, OpenAPI, the permission probe), clean up the UI, and ship v1.0.0.',
     features: [
       'Remove development-only surfaces (in-app roadmap, OpenAPI, permission probe, dead placeholders)',
+      'Public-repo presentation: remove AI-development scaffolding and agent/process docs',
       'UI copy, consistency, visual polish and app metadata',
       'Accessibility and mobile pass across product routes',
       'Dependency, asset and runtime-image cleanup',

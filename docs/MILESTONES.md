@@ -336,8 +336,8 @@ Goal: a clean, product-only surface with no development scaffolding, then the
 1.0.0 release.
 
 Issues:
-1. **Development-surface removal.** Inventory and remove the planning/diagnostic
-   surfaces that exist for development viewing only:
+1. **Product development-surface removal.** Inventory and remove the planning/
+   diagnostic surfaces that exist for development viewing only:
    - the in-app **`/progress` roadmap** (the *Milestones* and *Future & ideas*
      tabs) and the dashboard "Open the milestone roadmap" link;
    - the **OpenAPI document/route** in the production build;
@@ -346,18 +346,41 @@ Issues:
    The Lead approves the removal list before anything is deleted, so no product
    feature is lost by accident. `docs/MILESTONES.md` and
    `docs/FUTURE_FEATURES.md` remain the historical/prospective record.
-2. **UI copy and consistency sweep.** Product-facing labels, empty/error states,
+2. **Public-repo presentation — remove AI-development scaffolding.** The published
+   repository must read as an ordinary product repo, not as an AI-assisted build.
+   Remove from the published tree:
+   - `AGENTS.md`, `PLAN.md` (the "V1 AI Build Blueprint"), `opencode.jsonc`,
+     `.opencode/` (agent definitions), `OPENCODE_MCP_SETUP.md`;
+   - the AI-workflow/AGENTS references in `README.md`, the MCP-configuration entry
+     in `CHANGELOG.md`, and agent-role/process language ("Lead / Implementer /
+     Reviewer / docker-admin", model or MCP references) from any docs that remain
+     public;
+   - accidentally-committable local artifacts (`.playwright-mcp/`, `home/`) via
+     `.gitignore`.
+   **Internal process docs are relocated, not destroyed**: the milestone plans,
+   test matrices, verification records, `AGENTS.md` and the agent definitions move
+   to a private maintainer repository (or an excluded `maintainer/` tree) so the
+   development workflow survives without being published. Public docs keep only
+   product, architecture, API, database, security, testing, deployment and
+   release notes.
+3. **History decision (owner).** Those files already exist in the public git
+   history, so removing them from `HEAD` does not unpublish them. At M15 start the
+   owner chooses: **(a)** accept the history, **(b)** rewrite history with
+   `git filter-repo`, force-push and re-create the tags/releases, or **(c)**
+   create the public repo fresh at v1.0.0 from a clean snapshot and archive the
+   current repo privately. This is recorded before any history rewrite.
+4. **UI copy and consistency sweep.** Product-facing labels, empty/error states,
    page titles, consistent date/number phrasing, no development jargon.
-3. **Visual polish.** Spacing/typography consistency, a real favicon and app
+5. **Visual polish.** Spacing/typography consistency, a real favicon and app
    metadata (title/description), print/loading/empty states.
-4. **Accessibility and mobile pass** across the product routes (focus order,
+6. **Accessibility and mobile pass** across the product routes (focus order,
    labels, contrast, 375–390 px layouts).
-5. **Dependency, asset and image cleanup.** Remove unused packages/files and any
+7. **Dependency, asset and image cleanup.** Remove unused packages/files and any
    development-only tooling from the shipped runtime image; confirm no dev
    routes/endpoints remain.
-6. **Version 1.0.0.** Bump the application version, CHANGELOG and README/release
+8. **Version 1.0.0.** Bump the application version, CHANGELOG and README/release
    notes, and the image tag; publish the `v1.0.0` GitHub release.
-7. **Release gate.** Full backend/frontend suites, independent review,
+9. **Release gate.** Full backend/frontend suites, independent review,
    rebuild/redeploy, live verification on the production instance, and the
    milestone-complete record.
 
@@ -370,6 +393,11 @@ process change is deliberate.
 Acceptance:
 - No development-only route, endpoint, component, or nav entry ships in the
   production build.
+- No AI-development artifact, agent role, model reference, or MCP configuration
+  remains in the published repository, and `README.md`/`CHANGELOG.md` read as a
+  normal product's documentation.
+- The internal process docs live outside the public repo and the history decision
+  in issue 3 is recorded.
 - The full test suites, lint/format/type checks, and the independent review pass.
 - The application reports version **1.0.0**, the stack is rebuilt/redeployed, and
   the live instance is verified.
