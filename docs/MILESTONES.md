@@ -324,6 +324,13 @@ Issues:
 11. dependency/security scan.
 12. documentation polish.
 
+Approved decisions (2026-10-22): see `docs/M14_PLAN.md` for the authoritative
+scope, the vulnerability gate policy, the a11y/mobile/timezone/concurrency
+matrices, the pen-test protocol, and the fixed-versus-filed rule. Blocks/majors
+found are fixed; the open security/data-integrity bugs (BUG-002/003/007/011) are
+cleared here, while UI-polish bugs move to M15. Tracking issue #173; issues
+M14-01…M14-10 are #174–#183.
+
 ---
 
 ## Milestone 15 — v1.0.0 Release Readiness

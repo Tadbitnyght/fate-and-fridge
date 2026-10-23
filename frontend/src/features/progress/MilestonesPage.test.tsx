@@ -36,10 +36,10 @@ describe('progress page', () => {
     expect(progressbar).toHaveAttribute('aria-valuetext', '88%')
 
     expect(screen.getAllByText('Complete', { exact: true })).toHaveLength(14)
-    // M14 and M15 remain planned; each renders its status in the chip and the
-    // dates line, and no milestone is in progress.
-    expect(screen.getAllByText('Planned', { exact: true })).toHaveLength(4)
-    expect(screen.queryAllByText('In progress', { exact: true })).toHaveLength(0)
+    // M15 remains planned and M14 is in progress; each renders its status in the
+    // chip and the dates line.
+    expect(screen.getAllByText('Planned', { exact: true })).toHaveLength(2)
+    expect(screen.getAllByText('In progress', { exact: true })).toHaveLength(2)
 
     const m1Card = screen
       .getByRole('heading', { level: 3, name: 'M1 — Setup and Authentication' })
