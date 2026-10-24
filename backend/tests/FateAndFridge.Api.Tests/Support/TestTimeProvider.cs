@@ -1,11 +1,23 @@
 namespace FateAndFridge.Api.Tests.Support;
 
-/// <summary>Deterministic clock for session expiry and touch-throttle tests.</summary>
+/// <summary>
+/// Deterministic clock for session expiry and touch-throttle tests. The value
+/// is always stored as a zero-offset UTC instant because
+/// <see cref="TimeProvider.GetUtcNow"/> must return UTC: Npgsql rejects a
+/// non-zero offset when the value is bound to <c>timestamp with time zone</c>.
+/// Normalising here clips only the offset; it never shifts the instant.
+/// </summary>
 public sealed class TestTimeProvider(DateTimeOffset utcNow) : TimeProvider
 {
-    public DateTimeOffset UtcNow { get; set; } = utcNow;
+    private DateTimeOffset _utcNow = utcNow.ToUniversalTime();
 
-    public override DateTimeOffset GetUtcNow() => UtcNow;
+    public DateTimeOffset UtcNow
+    {
+        get => _utcNow;
+        set => _utcNow = value.ToUniversalTime();
+    }
 
-    public void Advance(TimeSpan delta) => UtcNow += delta;
+    public override DateTimeOffset GetUtcNow() => _utcNow;
+
+    public void Advance(TimeSpan delta) => _utcNow += delta;
 }
