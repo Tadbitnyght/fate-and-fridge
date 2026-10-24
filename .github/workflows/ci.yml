@@ -112,6 +112,9 @@ jobs:
   a11y:
     name: Accessibility (axe WCAG 2.1 AA, hermetic Playwright)
     runs-on: ubuntu-latest
+    # axe over 29 routes plus the mobile audit spec: ~2 minutes, so 15 gives
+    # generous headroom while still failing a hung runner.
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: frontend
@@ -129,9 +132,16 @@ jobs:
       # Gate (M14-02): axe-core over the key routes with the WCAG 2.1 A/AA rule
       # sets. The spec mocks /api/v1/** (hermetic) and fails on any violation;
       # `best-practice` is not part of the agreed bar. Report artifacts keep the
-      # actionable list (rule id, target, help URL) attachable.
+      # actionable list (rule id, target, help URL) attachable. The project is
+      # pinned to `chromium` because the spec manages its own 375 px and dark
+      # viewports; the mobile projects run the mobile spec below.
       - name: Run the axe accessibility spec
-        run: npx playwright test e2e/a11y.spec.ts
+        run: npx playwright test e2e/a11y.spec.ts --project=chromium
+      # Gate (M14-03): the same hermetic bundle in the Pixel 7 and iPhone 13
+      # projects — no horizontal overflow, >= 44 px primary tap targets at phone
+      # widths, usable dialogs and sane focus. Any assertion fails the job.
+      - name: Run the mobile audit spec (Pixel 7 + iPhone 13)
+        run: npx playwright test e2e/mobile.spec.ts --project="Pixel 7" --project="iPhone 13"
       - name: Upload the Playwright report on failure
         if: failure()
         uses: actions/upload-artifact@v4

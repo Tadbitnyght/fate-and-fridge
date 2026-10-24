@@ -18,6 +18,20 @@ import { expect, test, type Page } from '@playwright/test'
 const WCAG_2_1_AA = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']
 
 /**
+ * The pinned calendar day shared by the fixtures and the app clock.
+ *
+ * The outside-month cells are a contrast target (their day numbers use the
+ * muted token), and the today cell carries the only entry. Deriving "today"
+ * from the real clock meant those cells could silently disappear from the
+ * audited render on another date, so the clock is fixed with
+ * `page.clock.setFixedTime` (Date only — timers keep running) and the fixtures
+ * return the same day. 2026-10-15 is a Thursday, so with `week_starts_on: 0`
+ * the October 2026 grid starts on 27 September and always renders four leading
+ * outside-month cells for the contrast rule to check.
+ */
+const TODAY = '2026-10-15'
+
+/**
  * The slice of an axe violation this report needs. Declared locally so the spec
  * does not depend on axe-core's internal type layout (it is a transitive
  * devDependency of `@axe-core/playwright`).
@@ -114,13 +128,6 @@ const updateStatus = {
 }
 
 const TIMESTAMP = '2026-10-12T00:00:00+00:00'
-
-function isoDate(date: Date): string {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
 
 /** A realistic recipe detail (the editor form's edit mode). */
 const recipeDetail = {
@@ -502,6 +509,11 @@ async function mockAppApi(page: Page, options: MockOptions = {}): Promise<void> 
   const setupCompleted = options.setupCompleted ?? true
   const session = options.session === undefined ? adminSession : options.session
 
+  // Pin the app's clock to `TODAY` so the calendar renders the same month (and
+  // therefore the same outside-month cells) on every run. `setFixedTime`
+  // changes Date only; timers, animations and network keep running.
+  await page.clock.setFixedTime('2026-10-15T12:00:00')
+
   await page.route('**/api/v1/**', async (route) => {
     const request = route.request()
     const url = new URL(request.url())
@@ -566,7 +578,7 @@ async function mockAppApi(page: Page, options: MockOptions = {}): Promise<void> 
     }
 
     if (path === '/calendar' && method === 'GET') {
-      const today = isoDate(new Date())
+      const today = TODAY
       await route.fulfill({
         json: {
           start: url.searchParams.get('start') ?? today,
@@ -616,7 +628,7 @@ async function mockAppApi(page: Page, options: MockOptions = {}): Promise<void> 
       return
     }
     if (/^\/calendar\/[^/]+$/.test(path) && method === 'GET') {
-      const today = isoDate(new Date())
+      const today = TODAY
       await route.fulfill({
         json: {
           date: today,
@@ -747,6 +759,9 @@ const ROUTES: Array<{
     ready: async (page) => {
       await expect(page.getByRole('grid')).toBeVisible()
       await expect(page.getByRole('grid').getByText('Alpha Chicken')).toBeVisible()
+      // The outside-month day numbers are a contrast target (muted token); a
+      // grid without them would quietly narrow the audit.
+      await expect(page.locator('.calendar-grid__cell--outside').first()).toBeVisible()
     },
   },
   {
@@ -809,6 +824,35 @@ const ROUTES: Array<{
     path: '/settings/users',
     ready: async (page) => {
       await expect(page.getByRole('row', { name: /root/ })).toBeVisible()
+    },
+  },
+  {
+    // Reference data carries the M14-02 label fixes: the department reorder
+    // buttons (`Move up Produce` contains the visible label) and the ingredient
+    // row editors. Auditing the tab is what proves those fixes hold.
+    name: 'settings reference data (departments)',
+    path: '/settings/reference-data',
+    ready: async (page) => {
+      await expect(page.getByRole('table', { name: 'Grocery departments' })).toBeVisible()
+      await expect(page.getByRole('rowheader', { name: 'Produce' })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Move up Bakery' })).toBeVisible()
+    },
+  },
+  {
+    name: 'settings reference data (ingredients)',
+    path: '/settings/reference-data/ingredients',
+    ready: async (page) => {
+      await expect(page.getByRole('table', { name: 'Ingredients' })).toBeVisible()
+      await expect(page.getByRole('rowheader', { name: 'Chicken' })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Edit Chicken' })).toBeVisible()
+    },
+  },
+  {
+    name: 'settings reference data (units)',
+    path: '/settings/reference-data/units',
+    ready: async (page) => {
+      await expect(page.getByRole('table', { name: 'Units of measure' })).toBeVisible()
+      await expect(page.getByRole('rowheader', { name: 'g' })).toBeVisible()
     },
   },
   {

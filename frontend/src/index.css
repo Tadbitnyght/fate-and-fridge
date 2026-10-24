@@ -4027,3 +4027,47 @@ a.recipes__import:focus-visible {
     gap: 0.15rem;
   }
 }
+
+/* ---------- touch targets (M14-03) ---------- */
+
+/*
+ * Phone-width hit areas (docs/M14_PLAN.md §1.7). The primary navigation, view
+ * toggles and action buttons were still text-sized (21–42 px tall) at
+ * 360–414 px. The component-level mobile blocks above already size the grocery,
+ * calendar-toolbar and reference-data controls; this block covers the rest of
+ * the primary surface, and desktop styling is untouched.
+ */
+@media (max-width: 40rem) {
+  .app-nav__link,
+  .settings-nav__link,
+  .reference-data__tabs .settings-nav__link,
+  .calendar-toggle button,
+  .stats-tab,
+  .progress-tab,
+  .button--primary,
+  a.button--primary,
+  a.recipes__import,
+  .recipes__view-toggle button,
+  .app-account button,
+  .calendar-toolbar__nav button,
+  .data-table__actions button,
+  .modal__actions button,
+  .audit-row__toggle,
+  .history-day__correct,
+  .skip-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.75rem;
+  }
+
+  /* Icon-only controls need the width as well as the height. */
+  .calendar-toolbar__nav button {
+    min-width: 2.75rem;
+  }
+
+  /* Selects were 39 px tall; the text inputs already reach 44 px. */
+  select {
+    min-height: 2.75rem;
+  }
+}
