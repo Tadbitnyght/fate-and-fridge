@@ -99,6 +99,29 @@ export function fullDateLabel(iso: string): string {
 
 const WEEKDAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
+const WEEKDAY_NAMES_LONG = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+]
+
+/**
+ * A spoken-friendly date for accessible names, e.g. `Thursday 1 October 2026`.
+ *
+ * The month grid renders the day-of-month as visible text, so the accessible
+ * name has to contain that number as its own word (WCAG 2.1 SC 2.5.3,
+ * label-content-name-mismatch): the numeric `MM-DD-YY` form would not. This is
+ * display-only and never parsed back into a date.
+ */
+export function longDateLabel(iso: string): string {
+  const date = parseIsoDate(iso)
+  return `${WEEKDAY_NAMES_LONG[date.getDay()]} ${date.getDate()} ${MONTH_NAMES[date.getMonth()]} ${date.getFullYear()}`
+}
+
 /** Weekday headers in household order. */
 export function weekdayHeaders(weekStartsOn: number): string[] {
   return Array.from({ length: 7 }, (_, index) => WEEKDAY_NAMES[(weekStartsOn + index) % 7])

@@ -227,7 +227,7 @@ export function DepartmentsTab() {
                         <>
                           <button
                             type="button"
-                            aria-label={`Move ${department.name} up`}
+                            aria-label={`Move up ${department.name}`}
                             disabled={reorderDisabled || index === 0}
                             onClick={() => handleMove(department, -1)}
                           >
@@ -235,7 +235,7 @@ export function DepartmentsTab() {
                           </button>
                           <button
                             type="button"
-                            aria-label={`Move ${department.name} down`}
+                            aria-label={`Move down ${department.name}`}
                             disabled={reorderDisabled || index === visible.length - 1}
                             onClick={() => handleMove(department, 1)}
                           >

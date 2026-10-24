@@ -58,7 +58,7 @@ export function InstructionFields({
                 <div className="section-card__actions">
                   <button
                     type="button"
-                    aria-label={`Move section ${sectionIndex + 1} up`}
+                    aria-label={`Move up section ${sectionIndex + 1}`}
                     disabled={sectionIndex === 0}
                     onClick={() => onChange(moveItem(sections, sectionIndex, -1))}
                   >
@@ -66,7 +66,7 @@ export function InstructionFields({
                   </button>
                   <button
                     type="button"
-                    aria-label={`Move section ${sectionIndex + 1} down`}
+                    aria-label={`Move down section ${sectionIndex + 1}`}
                     disabled={sectionIndex === sections.length - 1}
                     onClick={() => onChange(moveItem(sections, sectionIndex, 1))}
                   >

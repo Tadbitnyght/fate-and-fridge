@@ -405,6 +405,23 @@ Coverage map: `docs/M13_TEST_MATRIX.md`; independent verdicts and live evidence:
 - responsive tap targets
 - print output legibility
 
+### axe WCAG 2.1 AA gate (M14-02)
+`frontend/e2e/a11y.spec.ts` runs `@axe-core/playwright` over the key routes
+(setup, login, calendar + date detail, recipe browser + editor, groceries,
+statistics/history, every settings section, progress) against a hermetic
+`/api/v1/**` mock. It fails on any violation of `wcag2a`, `wcag2aa`, `wcag21a`
+or `wcag21aa`; `best-practice` is not part of the gate. Calendar, groceries and
+the recipe browser are also checked at 375 px and in the dark colour scheme.
+Run it with:
+
+```
+cd frontend && npx playwright test e2e/a11y.spec.ts
+```
+
+The `a11y` job in `.github/workflows/ci.yml` runs the same command on every
+push/pull request. Manual keyboard/focus/label/contrast evidence is recorded in
+`docs/M14_VERIFICATION.md` §1.4.
+
 ---
 
 ## 12. Performance Baselines

@@ -4,6 +4,7 @@ import {
   addDaysIso,
   buildMonthGrid,
   isoDate,
+  longDateLabel,
   monthEndIso,
   monthStartIso,
   parseIsoDate,
@@ -45,5 +46,14 @@ describe('calendar date helpers', () => {
     expect(weekdayHeaders(0)).toEqual(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'])
     expect(weekdayHeaders(1)).toEqual(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'])
     expect(weekdayHeaders(6)).toEqual(['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'])
+  })
+
+  it('spells an accessible date with the day number as its own word', () => {
+    // The month grid renders the day number as visible text; the spoken date
+    // must contain it so the accessible name includes the visible label
+    // (WCAG 2.1 SC 2.5.3).
+    expect(longDateLabel('2026-10-01')).toBe('Thursday 1 October 2026')
+    expect(longDateLabel('2026-09-27')).toBe('Sunday 27 September 2026')
+    expect(longDateLabel('2028-02-29')).toBe('Tuesday 29 February 2028')
   })
 })

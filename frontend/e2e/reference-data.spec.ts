@@ -341,7 +341,7 @@ test('departments: create and reorder smoke', async ({ page }) => {
   const table = page.getByRole('table', { name: 'Grocery departments' })
   await expect(table.getByRole('rowheader', { name: 'Bakery' })).toBeVisible()
 
-  await page.getByRole('button', { name: 'Move Bakery up' }).click()
+  await page.getByRole('button', { name: 'Move up Bakery' }).click()
   await expect(table.getByRole('rowheader').nth(1)).toHaveText('Bakery')
 
   expect(requests).toContainEqual({

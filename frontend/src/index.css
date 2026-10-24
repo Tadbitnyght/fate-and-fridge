@@ -2317,7 +2317,10 @@ a.recipes__import:focus-visible {
 }
 
 .calendar-grid__cell--outside {
-  opacity: 0.5;
+  /* No opacity dimming: blended text drops below the 4.5:1 contrast floor.
+     The muted token is accessible on the cell surface and still reads as
+     "outside this month". */
+  color: var(--muted);
 }
 
 .calendar-grid__cell--today {
@@ -2848,7 +2851,9 @@ a.recipes__import:focus-visible {
 }
 
 .grocery-item--checked {
-  opacity: 0.55;
+  /* No opacity dimming: the checked name must still meet 4.5:1 (WCAG 2.1 AA)
+     while the strike-through carries the "done" meaning. */
+  color: var(--muted);
 }
 
 .grocery-item--checked .grocery-item__name {

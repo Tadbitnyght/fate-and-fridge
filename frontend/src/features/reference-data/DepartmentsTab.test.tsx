@@ -98,12 +98,12 @@ describe('departments tab', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Search' }))
 
     expect(await screen.findByText('Clear the search to reorder departments.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Move Pantry up' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Move up Pantry' })).toBeDisabled()
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
 
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Move Pantry up' })).toBeEnabled(),
+      expect(screen.getByRole('button', { name: 'Move up Pantry' })).toBeEnabled(),
     )
   })
 
@@ -302,7 +302,7 @@ describe('departments tab', () => {
 
     renderWithProviders(<App />, { route: '/settings/reference-data' })
 
-    const movePantryUp = await screen.findByRole('button', { name: 'Move Pantry up' })
+    const movePantryUp = await screen.findByRole('button', { name: 'Move up Pantry' })
 
     // Defer the first PUT so the pending state is observable; the list has
     // loaded, so the next request is the reorder.
@@ -316,17 +316,17 @@ describe('departments tab', () => {
 
     fireEvent.click(movePantryUp)
     await waitFor(() => expect(reorderBodies(mock)).toEqual([{ ids: [12, 11, 10, 13] }]))
-    expect(screen.getByRole('button', { name: 'Move Pantry up' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Move Freezer up' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Move up Pantry' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Move up Freezer' })).toBeDisabled()
 
     await act(async () => {
       orderGate.resolve?.(createResponse(200, afterFirstMove))
     })
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Move Produce up' })).toBeEnabled(),
+      expect(screen.getByRole('button', { name: 'Move up Produce' })).toBeEnabled(),
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Move Produce down' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Move down Produce' }))
 
     await waitFor(() =>
       expect(reorderBodies(mock)).toEqual([{ ids: [12, 11, 10, 13] }, { ids: [12, 11, 13, 10] }]),

@@ -1,7 +1,7 @@
 import { useRef, useState, type KeyboardEvent } from 'react'
 
 import type { CalendarDay, CalendarEntry } from '../../api/calendar'
-import { fullDateLabel, weekdayHeaders, type MonthGridDay } from './calendarDates'
+import { fullDateLabel, longDateLabel, weekdayHeaders, type MonthGridDay } from './calendarDates'
 import { DayActionMenu } from './DayActionMenu'
 import { EventIcon } from './icons'
 import { rerollAvailability } from './rerollAvailability'
@@ -148,7 +148,7 @@ export function MonthGrid({
                   openMenu(day.iso)
                 }}
               >
-                <span className="calendar-grid__daynumber">{day.dayOfMonth}</span>
+                <span className="calendar-grid__daynumber">{day.dayOfMonth}</span>{' '}
                 {entry && (
                   <span className="calendar-grid__entry">
                     {entry.icon_key && (
@@ -201,17 +201,20 @@ function cellClassName(day: MonthGridDay, entry: CalendarEntry | null, today: st
 }
 
 function cellLabel(day: MonthGridDay, entry: CalendarEntry | null, today: string): string {
-  const parts = [fullDateLabel(day.iso)]
+  // The visible text of a cell begins with the day number (and the entry text),
+  // so the accessible name repeats that exact sequence first, then the spoken
+  // date and state. WCAG 2.1 SC 2.5.3 (label-content-name-mismatch) requires
+  // the visible text to appear in the accessible name.
+  const parts = [entry ? `${day.dayOfMonth} ${entry.display_text}` : String(day.dayOfMonth)]
   if (day.iso === today) {
     parts.push('today')
   }
-  if (entry) {
-    parts.push(entry.display_text)
-    if (entry.is_locked) {
-      parts.push('locked')
-    }
-  } else {
+  parts.push(longDateLabel(day.iso))
+  if (!entry) {
     parts.push('no entry')
+  }
+  if (entry?.is_locked) {
+    parts.push('locked')
   }
   return parts.join(', ')
 }

@@ -614,7 +614,7 @@ function IngredientRowEditor({
         <div className="ingredient-row__actions">
           <button
             type="button"
-            aria-label={`Move ${ariaLabel} up`}
+            aria-label={`Move up ${ariaLabel}`}
             disabled={!canMoveUp}
             onClick={() => onMove(-1)}
           >
@@ -622,7 +622,7 @@ function IngredientRowEditor({
           </button>
           <button
             type="button"
-            aria-label={`Move ${ariaLabel} down`}
+            aria-label={`Move down ${ariaLabel}`}
             disabled={!canMoveDown}
             onClick={() => onMove(1)}
           >
@@ -767,7 +767,7 @@ export function IngredientFields({
                   <div className="group-card__actions">
                     <button
                       type="button"
-                      aria-label={`Move group ${groupIndex + 1} up`}
+                      aria-label={`Move up group ${groupIndex + 1}`}
                       disabled={groupIndex === 0}
                       onClick={() => onGroupsChange(moveItem(groups, groupIndex, -1))}
                     >
@@ -775,7 +775,7 @@ export function IngredientFields({
                     </button>
                     <button
                       type="button"
-                      aria-label={`Move group ${groupIndex + 1} down`}
+                      aria-label={`Move down group ${groupIndex + 1}`}
                       disabled={groupIndex === groups.length - 1}
                       onClick={() => onGroupsChange(moveItem(groups, groupIndex, 1))}
                     >

@@ -109,6 +109,39 @@ jobs:
       - name: Build
         run: npm run build
 
+  a11y:
+    name: Accessibility (axe WCAG 2.1 AA, hermetic Playwright)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      # Gate (M14-02): axe-core over the key routes with the WCAG 2.1 A/AA rule
+      # sets. The spec mocks /api/v1/** (hermetic) and fails on any violation;
+      # `best-practice` is not part of the agreed bar. Report artifacts keep the
+      # actionable list (rule id, target, help URL) attachable.
+      - name: Run the axe accessibility spec
+        run: npx playwright test e2e/a11y.spec.ts
+      - name: Upload the Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-a11y-report
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          if-no-files-found: warn
+
   compose:
     name: Compose configuration
     runs-on: ubuntu-latest
