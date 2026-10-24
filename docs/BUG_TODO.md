@@ -22,6 +22,7 @@ Status legend: `open` (confirmed, not started) · `fixing` · `verifying` ·
 | BUG-009 | closed | CI / Dependencies | CI red on `main` since the M9 completion commits because the M9 test-only `Microsoft.AspNetCore.SignalR.Client 10.0.12` pulled the vulnerable `Microsoft.AspNetCore.SignalR.Common 10.0.12` (CVE-2026-70159) | [#139](https://github.com/Tadbitnyght/fate-and-fridge/issues/139) |
 | BUG-010 | closed | CI / E2E | Stack acceptance job red since the M9 completion commits: the M9-08 real-stack live-sync spec ran before the acceptance spec and consumed the single-shot first-run setup | [#139](https://github.com/Tadbitnyght/fate-and-fridge/issues/139) |
 | BUG-011 | open | Recipes / Calendar / Concurrency | A randomizer or batch-reroll apply that loaded a recipe as a candidate immediately before an Admin hard-deletes it can hit the recipe FK and return 500 (rare race; the transaction rolls back, so nothing is corrupted or half-deleted) | [#161](https://github.com/Tadbitnyght/fate-and-fridge/issues/161) |
+| BUG-012 | closed | Import / SSRF | The import URL policy classified `Uri.DnsSafeHost` while the transport resolves `Uri.IdnHost`, so a Unicode/IDN host spelling (`127。0。0。1`, U+3002 dots) could validate a name the socket never connects to | — |
 
 ---
 
@@ -358,3 +359,46 @@ Status legend: `open` (confirmed, not started) · `fixing` · `verifying` ·
   BUG-009, **CI must be green before a milestone is marked complete** — the
   completion gate must include a green CI run on the completion commit.
 
+
+---
+
+## BUG-012 — IDN host spelling could validate a name the transport never connects to
+
+- **Area:** Import / SSRF
+  (`backend/src/FateAndFridge.Api/Imports/ImportUrlPolicy.cs`,
+  `backend/src/FateAndFridge.Api/Imports/SafeUrlFetcher.cs`)
+- **Severity:** High — the shared SSRF policy (docs/SECURITY.md §6) is the
+  documented pre-connect gate, and it approved a URL whose real connection target
+  is a blocked literal. Production is contained by the pinned
+  `ConnectCallback`, which re-validates the address it actually dials, so no
+  request reached loopback; the *policy* guarantee was still wrong.
+- **Reported:** 2026-10-24 (M14-06 adversarial battery, issue #179)
+- **Status:** closed (2026-10-24)
+- **Provenance:** M14-06
+- **Fix commit:** the M14-06 delivery commit on `main`
+  (`test(security): M14-06 SSRF, upload and archive battery (#179)`)
+- **GitHub:** —
+- **Reproduction:** `ImportUrlPolicy.Evaluate("http://127。0。0。1/")` (U+3002
+  ideographic full stops) returned `IsAllowed = true`, `Reason = None`. For the
+  same URL, `Uri.IdnHost` is `127.0.0.1`, and `SocketsHttpHandler` builds its
+  connection key (and therefore the `ConnectCallback`'s `DnsEndPoint`) from
+  `IdnHost`: `CONNECT DnsEndPoint.Host='127.0.0.1'`. `http://localhost。/` and
+  `http://169。254。169。254/` behaved the same way.
+- **Root cause:** `ImportUrlPolicy.Evaluate` classified only `uri.DnsSafeHost`.
+  `DnsSafeHost` keeps the Unicode spelling, so `Uri.HostNameType` reports `Dns`
+  and the literal/address checks never run, while the transport resolves the
+  IDN-mapped ASCII form (`IdnHost`). `SafeUrlFetcher.ValidateResolutionAsync`
+  also asked the resolver for `DnsSafeHost`, so the pre-check, the resolver and
+  the socket could each name a different host.
+- **Fix:** `Evaluate` now also classifies `uri.IdnHost` (obfuscated-IPv4,
+  blocked-address and blocked-host checks) whenever it differs from
+  `DnsSafeHost`, and `ValidateResolutionAsync` resolves `uri.IdnHost` so the
+  pre-check and the pinned connect callback name the same host. No error-code
+  change: blocked hosts still map to `IMPORT_URL_BLOCKED` / `422` and the
+  unicode literal to `ADDRESS_BLOCKED`.
+- **Verification:** new `M14ImportSsrfBatteryTests` cases cover
+  `http://127。0。0。1/`, `http://localhost。/`, `http://169。254。169。254/`, the
+  IDN resolver-name assertion (`xn--bcher-kva.example`) and the IDN redirect
+  target. With the two `src/Imports` edits reverted, 7 of the new battery's cases
+  fail; with them the battery (179 cases) passes, as do
+  `*SafeUrlFetcher*`, `*ImportUrlPolicy*` and the affected regression suites.

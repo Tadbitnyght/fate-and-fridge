@@ -181,6 +181,31 @@ public static class ImportUrlPolicy
             return ImportUrlPolicyResult.Block(ImportUrlBlockReason.HostBlocked);
         }
 
+        // The transport resolves Uri.IdnHost (SocketsHttpHandler keys its
+        // connection on it), while DnsSafeHost keeps the Unicode spelling. A
+        // host such as "127。0。0。1" (U+3002 dots) is a DNS name to DnsSafeHost
+        // but IDN-maps to the blocked literal 127.0.0.1, so the IDN spelling
+        // must pass the same literal/name checks.
+        var idnHost = uri.IdnHost;
+        if (!string.Equals(idnHost, host, StringComparison.Ordinal))
+        {
+            var trimmedIdnHost = idnHost.TrimEnd('.');
+            if (IsObfuscatedIpv4Literal(trimmedIdnHost))
+            {
+                return ImportUrlPolicyResult.Block(ImportUrlBlockReason.HostBlocked);
+            }
+
+            if (IPAddress.TryParse(trimmedIdnHost, out var idnLiteral) && IsBlockedAddress(idnLiteral))
+            {
+                return ImportUrlPolicyResult.Block(ImportUrlBlockReason.AddressBlocked);
+            }
+
+            if (IsBlockedHostName(idnHost))
+            {
+                return ImportUrlPolicyResult.Block(ImportUrlBlockReason.HostBlocked);
+            }
+        }
+
         return ImportUrlPolicyResult.Allow(uri);
     }
 

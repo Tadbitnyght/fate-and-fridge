@@ -224,12 +224,17 @@ public sealed class SafeUrlFetcher : IImportFetcher, IDisposable
     /// Resolves the host and rejects DNS failures or any blocked address
     /// (fail closed when the resolver returns a mix).
     /// </summary>
+    /// <remarks>
+    /// The name resolved here is <see cref="Uri.IdnHost"/>, the same form the
+    /// pinned transport keys its connection on, so the pre-check and the socket
+    /// can never target different names (a Unicode host IDN-maps to ASCII).
+    /// </remarks>
     private async Task<ImportFetchResult?> ValidateResolutionAsync(Uri uri, CancellationToken cancellationToken)
     {
         IPAddress[] addresses;
         try
         {
-            addresses = await ResolveHostAsync(uri.DnsSafeHost, cancellationToken).ConfigureAwait(false);
+            addresses = await ResolveHostAsync(uri.IdnHost, cancellationToken).ConfigureAwait(false);
         }
         catch (SocketException)
         {

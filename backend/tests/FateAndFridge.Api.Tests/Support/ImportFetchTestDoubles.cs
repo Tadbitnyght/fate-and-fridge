@@ -57,7 +57,8 @@ internal static class ImportTestResponses
         string? contentType,
         byte[] body,
         string? location = null,
-        long? declaredLength = null)
+        long? declaredLength = null,
+        string? contentEncoding = null)
     {
         var response = new HttpResponseMessage(status)
         {
@@ -71,6 +72,11 @@ internal static class ImportTestResponses
         else
         {
             response.Content.Headers.ContentType = MediaTypeHeaderValue.Parse(contentType);
+        }
+
+        if (contentEncoding is not null)
+        {
+            response.Content.Headers.ContentEncoding.Add(contentEncoding);
         }
 
         if (declaredLength is not null)
