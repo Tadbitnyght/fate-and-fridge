@@ -314,23 +314,32 @@ pull request. Details and the live results are recorded in
 | Gate | Mechanism | Fails when |
 |------|-----------|------------|
 | NuGet | `dotnet restore` with `TreatWarningsAsErrors=true`; plus a `dotnet list package --vulnerable --include-transitive --format json` report artifact | any NuGet audit warning becomes an error (`NU1901`–`NU1905`): Low/Moderate/High/Critical, direct and transitive |
-| npm | `npm audit --audit-level=high`; plus a JSON report artifact | a High/Critical advisory with a fix |
-| Container image | pinned Trivy (`aquasec/trivy:0.76.1`, never `latest`) over the built runtime image, `--severity HIGH,CRITICAL --ignore-unfixed --exit-code 1`; report artifact | a High/Critical advisory in the shipped image that has a fix |
+| npm | `npm audit --audit-level=high`; plus a JSON report artifact containing every severity | **any** High/Critical advisory, whether or not a fix exists (npm has no per-advisory ignore; clear it by upgrading) |
+| Container image | pinned Trivy (tag **and** digest: `aquasec/trivy:0.76.1@sha256:790fd66d…`) over the built runtime image: a gate run `--severity HIGH,CRITICAL --ignore-unfixed --exit-code 1`, plus an **unfiltered all-severity** JSON report artifact | a High/Critical advisory in the shipped image that has a fix |
 
 Policy:
 
-- **High/Critical with a fix fails the build.** Fix the dependency, the base
-  image or the package; do not add suppression to make CI green.
-- **Medium/Low (npm and image)** are reported and tracked; they do not fail
-  those gates. The NuGet gate is stricter than the minimum policy: because the
-  repo builds with `TreatWarningsAsErrors=true`, any audit warning — including
-  Moderate/Low — fails `dotnet restore`.
+- **High/Critical fails the build.** NuGet and npm fail on severity alone (fix
+  or no fix; the NuGet gate is stricter still, see below), and the image gate
+  fails on every High/Critical advisory that has a fix. Fix the dependency, the
+  base image or the package; do not add suppression to make CI green.
+- **Medium/Low are reported and tracked, never ignored.** The npm JSON artifact
+  contains every severity, and the image job records an unfiltered all-severity
+  report alongside the gated run; neither fails. The NuGet gate is stricter than
+  the minimum policy: because the repo builds with
+  `TreatWarningsAsErrors=true`, any audit warning — including Moderate/Low —
+  fails `dotnet restore`.
 - **High/Critical without a fix** may be accepted only with a row in the
   "Vulnerability exceptions" table of `docs/M14_SECURITY_REPORT.md` (package or
   image, advisory id, severity, why there is no fix, review date). The
   acceptance must be explicit:
   - NuGet: a `NuGetAuditSuppress` item on the advisory URL in the affected
     project (never a blanket `NoWarn`).
+  - npm: there is **no advisory-ignore mechanism**. Upgrade the package or pin a
+    patched transitive through a root `overrides` entry. If no patched version
+    exists, the gate cannot pass: the Lead must explicitly change the audit
+    level in the same commit as the exception row, and that decision is
+    re-reviewed when a fix ships.
   - Image: `--ignore-unfixed` keeps no-fix advisories out of the gate, so the
     exception row is the only record — it is mandatory.
   - Exceptions are re-reviewed when a fix ships and at every milestone gate.

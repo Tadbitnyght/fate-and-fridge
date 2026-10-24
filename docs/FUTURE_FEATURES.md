@@ -399,6 +399,10 @@ Status: **Research**
 - Caching infrastructure such as Redis only with a demonstrated need
   (`docs/AGENTS.md` Tech Stack).
 - Performance baselines and load testing (`docs/TESTING.md §12`).
+- Container-image scanning of the **PostgreSQL** service image (`postgres:17-alpine`)
+  in addition to the application runtime image. M14-01 scans only the app image,
+  which is what the approved M14 scope names (`docs/M14_PLAN.md §1.4`; raised
+  during the M14-01 review, 2026-10-23).
 
 ## Explicitly never in V1
 Status: **Never-V1**

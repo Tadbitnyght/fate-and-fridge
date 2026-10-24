@@ -17,18 +17,21 @@ This file is the single record for:
 ## 1. Dependency and image gate
 
 Policy (M14 decision, `docs/M14_PLAN.md` §1.3): CI **fails** on any
-**High/Critical** advisory **that has a fix** — NuGet, npm and the container
-image. Medium/Low are reported and tracked. An advisory with **no available
-fix** may be accepted only with a documented exception row in §2. (The NuGet
-gate is stricter than that minimum — see the note below.)
+**High/Critical** advisory. The image gate applies the "that has a fix" filter
+(`--ignore-unfixed`); NuGet and npm fail on severity alone because neither
+toolchain can express a per-advisory ignore (the NuGet gate is stricter still —
+see the note below). Medium/Low are reported and tracked through the artifacts.
+An advisory with **no available fix** may be accepted only with a documented
+exception row in §2.
 
 | Gate | Where | Command | Fails on |
 |------|-------|---------|----------|
 | NuGet | `.github/workflows/ci.yml` → `backend` job | `dotnet restore` (with `TreatWarningsAsErrors=true`) | any NuGet audit warning promoted to an error (`NU1901`–`NU1905`), i.e. Low/Moderate/High/Critical, direct and transitive |
 | NuGet report | same job, `if: always()` | `dotnet list <project> package --vulnerable --include-transitive --no-restore --format json` | nothing (record only; uploaded as the `nuget-vulnerability-report` artifact) |
-| npm | `ci.yml` → `frontend` job | `npm audit --audit-level=high` | High/Critical advisories with a fix |
-| npm report | same job, `if: always()` | `npm audit --json` → `npm-audit-report` artifact | nothing (record only) |
-| Image | `ci.yml` → `image-scan` job | `aquasec/trivy:0.76.1 image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1` (pinned scanner; report uploaded as `trivy-runtime-image-report`) | High/Critical advisories that have a fix, in the built runtime image |
+| npm | `ci.yml` → `frontend` job | `npm audit --audit-level=high` | **any** High/Critical advisory, fix or no fix (npm has no advisory ignore) |
+| npm report | same job, `if: always()` | `npm audit --json` → `npm-audit-report` artifact (all severities) | nothing (record only) |
+| Image | `ci.yml` → `image-scan` job | `aquasec/trivy:0.76.1@sha256:790fd66d… image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1` (tag **and** digest pinned; reports uploaded as `trivy-runtime-image-report`, missing reports fail the step) | High/Critical advisories that have a fix, in the built runtime image |
+| Image report | same job, `if: always()` | unfiltered `trivy image --format json` → `trivy-runtime-image-all.json` | nothing (Medium/Low record only) |
 
 Notes:
 
@@ -50,9 +53,11 @@ There is no silent suppression path:
 - **NuGet** — an accepted no-fix advisory must be suppressed explicitly with a
   `NuGetAuditSuppress` item on the advisory URL (in the affected `.csproj`) and
   a matching row in §2. The suppression is visible in review.
-- **npm** — an accepted no-fix advisory must be recorded in §2 and, if the
-  gate cannot pass otherwise, excluded with a documented `npm audit` override;
-  any change to the audit invocation belongs in the same commit as its row.
+- **npm** — there is no per-advisory ignore. A no-fix advisory is cleared by
+  upgrading or by a root `overrides` pin to a patched transitive. If no patched
+  version exists, the gate cannot pass; the Lead must change `--audit-level` in
+  the same commit as the §2 row, and that decision is re-reviewed when a fix
+  ships.
 - **Image** — `--ignore-unfixed` already excludes no-fix advisories from the
   gate; every such High/Critical advisory observed in a scan is a row in §2.
 
@@ -74,8 +79,9 @@ must then be fixed or re-reviewed.
 | `dotnet list package --vulnerable --include-transitive` (Api) | `The given project has no vulnerable packages` |
 | `dotnet list package --vulnerable --include-transitive` (Tests) | `The given project has no vulnerable packages` |
 | `npm audit --audit-level=high` | **4 findings before the bump** (2 high, 2 moderate) → **0 after** |
-| Trivy scan of the built runtime image | **not yet executed locally** (no Docker access in the implementing session) — the CI `image-scan` job and `docker-admin` run it; results to be appended here |
+| Trivy scan of the built runtime image (`fate-and-fridge:ci-scan`, `sha256:faf425f4…`) | **0** HIGH/CRITICAL advisories — with **and** without the fix filter; gate exit 0 (see §3.2) |
 | Trivy scan of the runtime **base** image (`mcr.microsoft.com/dotnet/aspnet:10.0`, ubuntu 24.04, .NET 10.0.13) | **0** HIGH/CRITICAL advisories with a fix (97 OS packages + both .NET dependency manifests scanned) |
+| npm advisory drift (2026-10-24 re-check) | 2 new High advisories appeared after the first bump: `undici` 8.11.2 → 8.12.3, `zod` 4.6.5 → 4.6.7 (lockfile-only); `npm audit --audit-level=high` → 0 again |
 
 npm findings fixed by the dev-dependency bump in `frontend/package.json`
 (`vite` 8.3.1 → 8.3.5, `vitest` 5.0.2 → 5.0.5, and the lockfile refresh that
@@ -115,6 +121,35 @@ usr/share/dotnet/shared/Microsoft.NETCore.App/10.0.13/...deps.json     dotnet-co
 The remaining runtime layer the base-image scan cannot see is the Dockerfile's
 own additions (`ca-certificates`, `curl`, `postgresql-client-17` from PGDG);
 the CI `image-scan` job scans those because it scans the built image.
+
+### 3.2 Evidence — Trivy on the built runtime image
+
+Executed by `docker-admin` on the local Docker context (`default`; the
+`truenas` context was never selected) from commit `8a4e6dc`, replicating the CI
+job exactly:
+
+```
+APP_VERSION=ci-scan docker compose build app
+docker save fate-and-fridge:ci-scan -o /tmp/scan/runtime-image.tar
+docker run --rm -v /tmp/scan:/scan \
+  aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c \
+  image --input /scan/runtime-image.tar --scanners vuln \
+  --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --timeout 10m
+```
+
+| Item | Result |
+|------|--------|
+| Image | `fate-and-fridge:ci-scan`, ID `sha256:faf425f40d9db58d2c5ea00b373843962e1b058b1fc84d72aad0b453928598d9`, `linux/amd64`, ~315 MiB |
+| Base build | `mcr.microsoft.com/dotnet/aspnet:10.0` (ubuntu 24.04, .NET 10.0.13) + `ca-certificates`, `curl`, `postgresql-client-17` |
+| Gate scan (`--ignore-unfixed`, `--exit-code 1`) | **exit 0** — CRITICAL 0, HIGH 0 across all four targets (OS layer, app deps, ASP.NET Core deps, .NET runtime deps) |
+| Unfiltered scan (no `--ignore-unfixed`) | **0** HIGH/CRITICAL at all, so the no-fix set is empty; no §2 row is needed for this image |
+| Runtime surface | `/app` holds 11 managed assemblies (the app, AngleSharp, Geralt, EF Core + Abstractions + Relational, EFCore.NamingConventions, Npgsql + Npgsql.EntityFrameworkCore.PostgreSQL, Microsoft.AspNetCore.OpenApi, Microsoft.OpenApi) and **no** xunit/FluentAssertions/Testcontainers/EFCore.Design/test assembly; `FateAndFridge.Api.deps.json` references none of them |
+| Cleanup | the disposable `fate-and-fridge:ci-scan` tag and the scan directory were removed; no volume, dataset, production container or the `truenas` context was touched |
+
+Caveat: the Trivy vulnerability DB is downloaded at scan time and is not pinned,
+so the exact advisory set is date-dependent. The gate (and this record) is
+therefore refreshed on each CI run; a newly published fixable advisory fails the
+job rather than passing silently.
 
 ## 4. Runtime image surface
 

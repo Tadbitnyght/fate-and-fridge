@@ -462,18 +462,21 @@ Three permanent CI gates run on every push/pull request
   --format json` step publishes the `nuget-vulnerability-report` artifact for
   the record; it is not the gate.
 - **npm audit** — `npm audit --audit-level=high` in the `frontend` job fails on
-  High/Critical advisories with a fix; the JSON report is uploaded as
-  `npm-audit-report`.
+  **any** High/Critical advisory (fix or no fix; npm has no per-advisory
+  ignore); the all-severity JSON report is uploaded as `npm-audit-report`.
 - **Image scan** — the `image-scan` job builds the compose `app` image (the
   `Dockerfile` runtime stage) on a GitHub-hosted runner and scans it with a
-  **pinned** Trivy (`aquasec/trivy:0.76.1`): `--severity HIGH,CRITICAL
-  --ignore-unfixed --exit-code 1`. The JSON and table reports are uploaded as
-  `trivy-runtime-image-report`.
+  **pinned-by-tag-and-digest** Trivy (`aquasec/trivy:0.76.1@sha256:790fd66d…`):
+  `--severity HIGH,CRITICAL --ignore-unfixed --exit-code 1`. An unfiltered
+  all-severity JSON report is collected too. Reports are uploaded as
+  `trivy-runtime-image-report` (missing reports fail the step).
 
 Any High/Critical advisory **without** a fix needs an exception row in
-`docs/M14_SECURITY_REPORT.md`. For npm and the image scan a Medium/Low advisory
-is reported and tracked but does not fail the gate; the NuGet gate is stricter
-and fails on Moderate/Low audit warnings too (see the first bullet).
+`docs/M14_SECURITY_REPORT.md` (the image gate excludes unfixed findings via
+`--ignore-unfixed`; npm has no advisory-ignore mechanism, so it must be upgraded
+or the gate decision recorded). Medium/Low advisories are reported and tracked
+by the npm/image artifacts but do not fail those gates; the NuGet gate is
+stricter and fails on Moderate/Low audit warnings too (see the first bullet).
 
 Run the dependency gates locally with:
 

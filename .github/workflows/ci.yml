@@ -153,12 +153,15 @@ jobs:
   image-scan:
     name: Runtime image scan (Trivy)
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     needs: [backend, frontend]
     env:
       # Pinned on purpose (M14-01): the scanner is a gate, so its version must
       # be reproducible. Never use `latest` here; bump deliberately and record
-      # the change in docs/M14_SECURITY_REPORT.md.
+      # the change in docs/M14_SECURITY_REPORT.md. The digest pins the exact
+      # scanner image in addition to the tag.
       TRIVY_VERSION: 0.76.1
+      TRIVY_IMAGE: aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
       # Build the same image the stack runs (`compose.yaml` → Dockerfile runtime
       # stage) so the scan covers exactly the shipped layers.
       APP_VERSION: ci-scan
@@ -182,7 +185,7 @@ jobs:
           docker run --rm \
             -v "$PWD/scan:/scan" \
             -v "$PWD/.trivy-cache:/root/.cache/trivy" \
-            "aquasec/trivy:${TRIVY_VERSION}" image \
+            "${TRIVY_IMAGE}" image \
               --input /scan/runtime-image.tar \
               --scanners vuln \
               --severity HIGH,CRITICAL \
@@ -198,7 +201,7 @@ jobs:
           docker run --rm \
             -v "$PWD/scan:/scan" \
             -v "$PWD/.trivy-cache:/root/.cache/trivy" \
-            "aquasec/trivy:${TRIVY_VERSION}" image \
+            "${TRIVY_IMAGE}" image \
               --input /scan/runtime-image.tar \
               --scanners vuln \
               --severity HIGH,CRITICAL \
@@ -206,6 +209,23 @@ jobs:
               --exit-code 0 \
               --timeout 10m \
               --format table | tee scan/trivy-runtime-image.txt
+      # Medium/Low advisories are reported and tracked (policy in
+      # docs/SECURITY.md §20), so record an unfiltered report as well. This step
+      # never fails the job.
+      - name: Record all severities (Medium/Low included)
+        if: always() && hashFiles('scan/runtime-image.tar') != ''
+        run: |
+          mkdir -p scan
+          docker run --rm \
+            -v "$PWD/scan:/scan" \
+            -v "$PWD/.trivy-cache:/root/.cache/trivy" \
+            "${TRIVY_IMAGE}" image \
+              --input /scan/runtime-image.tar \
+              --scanners vuln \
+              --exit-code 0 \
+              --timeout 10m \
+              --format json \
+              --output /scan/trivy-runtime-image-all.json || true
       - name: Upload the image scan report
         if: always()
         uses: actions/upload-artifact@v4
@@ -214,7 +234,8 @@ jobs:
           path: |
             scan/trivy-runtime-image.json
             scan/trivy-runtime-image.txt
-          if-no-files-found: warn
+            scan/trivy-runtime-image-all.json
+          if-no-files-found: error
 
   stack:
     name: Docker stack acceptance + Playwright
