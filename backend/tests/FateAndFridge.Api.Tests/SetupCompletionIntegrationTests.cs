@@ -351,6 +351,73 @@ public sealed class SetupCompletionIntegrationTests(M1SetupFixture fixture) : IA
     }
 
     [Fact]
+    public async Task Concurrent_multiuser_completions_create_one_household_admin_permission_set_and_key()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var dataDir = CreateTempDataDir();
+        using var factory = fixture.CreateFactory(dataDir);
+        using var client = factory.CreateClient();
+
+        // Two real parallel requests, each proposing a different first Admin.
+        var responses = await Task.WhenAll(
+            CompleteSetupAsync(client, MultiuserBody(adminUsername: "smith"), cancellationToken),
+            CompleteSetupAsync(client, MultiuserBody(adminUsername: "jones"), cancellationToken));
+
+        try
+        {
+            responses.Count(response => response.StatusCode == HttpStatusCode.Created).Should().Be(1);
+            var winner = responses.Single(response => response.StatusCode == HttpStatusCode.Created);
+            var loser = responses.Single(response => response.StatusCode != HttpStatusCode.Created);
+            loser.StatusCode.Should().Be(HttpStatusCode.Conflict);
+            (await ReadErrorCodeAsync(loser, cancellationToken)).Should()
+                .Be(ErrorCodes.SetupAlreadyCompleted);
+
+            var winnerRoot = await ReadJsonAsync(winner, cancellationToken);
+            var winnerKey = winnerRoot.GetProperty("recovery_key").GetString()!;
+            winnerRoot.GetProperty("session").GetProperty("permissions").EnumerateArray()
+                .Select(element => element.GetString()!)
+                .Should().Equal(PermissionKeys.All, "the first Admin effectively holds all seven keys");
+
+            await using (var context = fixture.CreateContext())
+            {
+                (await context.HouseholdSettings.CountAsync(cancellationToken)).Should().Be(1);
+                var admin = await context.Users.AsNoTracking().SingleAsync(cancellationToken);
+                admin.Role.Should().Be(UserRole.Admin);
+                admin.Username.Should().BeOneOf("smith", "jones");
+                admin.IsActive.Should().BeTrue();
+                (await context.UserSessions.CountAsync(cancellationToken)).Should().Be(1);
+
+                // Admins hold every key by role; setup writes no explicit grant
+                // rows, so the seven-key effective set has no eighth row.
+                (await context.UserPermissions.CountAsync(cancellationToken)).Should().Be(0);
+            }
+
+            var keyPath = Path.Combine(dataDir, "config", RecoveryKeyStore.FileName);
+            File.Exists(keyPath).Should().BeTrue();
+            (await File.ReadAllTextAsync(keyPath, cancellationToken)).Trim().Should().Be(winnerKey);
+
+            // The clean-install restore route shares the setup-state gate and
+            // must refuse once setup completed (before parsing a body). Probe
+            // it without the session cookie the winner received: a real clean
+            // install has no session, and a cookie-authenticated POST would be
+            // stopped by CSRF first (the route is not a CSRF exemption).
+            using var restoreClient = factory.CreateClient();
+            using var restore = new HttpRequestMessage(HttpMethod.Post, "/api/v1/setup/restore");
+            using var restoreResponse = await restoreClient.SendAsync(restore, cancellationToken);
+            restoreResponse.StatusCode.Should().Be(HttpStatusCode.Conflict);
+            (await ReadErrorCodeAsync(restoreResponse, cancellationToken)).Should()
+                .Be(ErrorCodes.SetupAlreadyCompleted);
+        }
+        finally
+        {
+            foreach (var response in responses)
+            {
+                response.Dispose();
+            }
+        }
+    }
+
+    [Fact]
     public async Task Completion_fails_gracefully_when_the_config_path_is_a_file()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -604,7 +671,8 @@ public sealed class SetupCompletionIntegrationTests(M1SetupFixture fixture) : IA
     private static string MultiuserBody(
         bool includeAdmin = true,
         bool ipAllowlistEnabled = false,
-        string ipAllowlistRange = "")
+        string ipAllowlistRange = "",
+        string adminUsername = "smith")
     {
         var body = new Dictionary<string, object?>(StringComparer.Ordinal)
         {
@@ -624,7 +692,7 @@ public sealed class SetupCompletionIntegrationTests(M1SetupFixture fixture) : IA
 
         if (includeAdmin)
         {
-            body["admin"] = new { username = "smith", password = AdminPassword };
+            body["admin"] = new { username = adminUsername, password = AdminPassword };
         }
 
         return JsonSerializer.Serialize(body);

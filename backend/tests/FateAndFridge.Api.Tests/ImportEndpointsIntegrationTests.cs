@@ -340,6 +340,12 @@ public sealed class ImportEndpointsIntegrationTests(M1SetupFixture fixture) : IA
             session.CsrfToken, cancellationToken);
         limited.StatusCode.Should().Be(HttpStatusCode.TooManyRequests);
         limited.Headers.RetryAfter.Should().NotBeNull();
+        limited.Headers.RetryAfter!.Delta.Should().BeGreaterThan(TimeSpan.Zero);
+        var retryAfterSeconds = (int)limited.Headers.RetryAfter.Delta!.Value.TotalSeconds;
+        retryAfterSeconds.Should().BeInRange(1, 3600);
+        limited.Headers.TryGetValues("Retry-After", out var retryAfterValues).Should().BeTrue();
+        int.Parse(retryAfterValues!.Single(), System.Globalization.CultureInfo.InvariantCulture)
+            .Should().BeInRange(1, 3600);
         (await ReadErrorAsync(limited, cancellationToken)).GetProperty("code").GetString()
             .Should().Be(ErrorCodes.ImportRateLimited);
         fetcher.PageCallCount.Should().Be(
@@ -375,6 +381,9 @@ public sealed class ImportEndpointsIntegrationTests(M1SetupFixture fixture) : IA
             client, HttpMethod.Post, ImportPath, """{"url":"https://example.com/recipes/lasagna"}""",
             csrfToken: null, cancellationToken);
         limited.StatusCode.Should().Be(HttpStatusCode.TooManyRequests);
+        limited.Headers.TryGetValues("Retry-After", out var retryAfterValues).Should().BeTrue();
+        int.Parse(retryAfterValues!.Single(), System.Globalization.CultureInfo.InvariantCulture)
+            .Should().BeInRange(1, 3600);
         (await ReadErrorAsync(limited, cancellationToken)).GetProperty("code").GetString()
             .Should().Be(ErrorCodes.ImportRateLimited);
         fetcher.PageCallCount.Should().Be(callsBeforeBlocked);

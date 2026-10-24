@@ -200,6 +200,55 @@ public sealed class IpAllowlistIntegrationTests(M1SetupFixture fixture) : IAsync
     }
 
     [Fact]
+    public async Task Forwarded_headers_are_ignored_when_no_trusted_proxies_are_configured()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedSecuritySettingsAsync(true, ["203.0.113.0/24"], [], cancellationToken);
+        using var factory = CreateFactory();
+        using var client = factory.CreateClient();
+
+        // A covered peer cannot use XFF to pretend to be blocked (or anything else).
+        var coveredWithSpoofedHeader = await GetAsync(
+            client,
+            "/api/v1/setup/status",
+            AllowedIp,
+            cancellationToken,
+            forwardedFor: BlockedIp);
+        coveredWithSpoofedHeader.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // An uncovered peer cannot use XFF to enter the allowlist.
+        var blockedWithSpoofedHeader = await GetAsync(
+            client,
+            "/api/v1/setup/status",
+            BlockedIp,
+            cancellationToken,
+            forwardedFor: AllowedIp);
+        blockedWithSpoofedHeader.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await ReadErrorCodeAsync(blockedWithSpoofedHeader, cancellationToken)).Should()
+            .Be(ErrorCodes.IpNotAllowed);
+    }
+
+    [Fact]
+    public async Task Health_stays_exempt_even_with_a_spoofed_forwarded_header()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedSecuritySettingsAsync(true, ["10.0.0.0/8"], [], cancellationToken);
+        using var factory = CreateFactory();
+        using var client = factory.CreateClient();
+
+        foreach (var path in new[] { "/api/v1/health", "/api/v1/health/db" })
+        {
+            var response = await GetAsync(
+                client,
+                path,
+                BlockedIp,
+                cancellationToken,
+                forwardedFor: AllowedIp);
+            response.StatusCode.Should().Be(HttpStatusCode.OK, "{0} is always exempt", path);
+        }
+    }
+
+    [Fact]
     public async Task Forwarded_https_from_a_trusted_proxy_makes_the_session_cookie_secure()
     {
         var cancellationToken = TestContext.Current.CancellationToken;

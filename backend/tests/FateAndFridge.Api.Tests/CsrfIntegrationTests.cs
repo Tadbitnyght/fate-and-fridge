@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using FateAndFridge.Api.Auth;
 using FateAndFridge.Api.Domain;
 using FateAndFridge.Api.Errors;
@@ -78,6 +79,111 @@ public sealed class CsrfIntegrationTests(M1SetupFixture fixture) : IAsyncLifetim
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
         await AssertErrorCodeAsync(response, ErrorCodes.CsrfValidationFailed, cancellationToken);
         await AssertHouseholdNameAsync("Test Household", cancellationToken);
+    }
+
+    /// <summary>
+    /// M14-05: every cookie-authenticated unsafe route in the API must reject a
+    /// missing or invalid <c>X-CSRF-TOKEN</c> with <c>403 CSRF_VALIDATION_FAILED</c>.
+    /// The route list is read from the running host, so a newly added unsafe
+    /// route is covered automatically. The two documented exemptions are the
+    /// unauthenticated login route and the public setup-completion route.
+    /// </summary>
+    [Fact]
+    public async Task Every_cookie_authenticated_unsafe_route_requires_a_valid_csrf_token()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
+        await MarkSetupCompletedAsync(cancellationToken);
+
+        using var factory = fixture.CreateFactory();
+        var session = await CreateAuthenticatedClientAsync(factory, "admin", cancellationToken);
+
+        var unsafeRoutes = factory.Services
+            .GetServices<Microsoft.AspNetCore.Routing.EndpointDataSource>()
+            .SelectMany(source => source.Endpoints)
+            .OfType<Microsoft.AspNetCore.Routing.RouteEndpoint>()
+            .Where(endpoint => endpoint.RoutePattern.RawText!.StartsWith("/api/v1", StringComparison.Ordinal))
+            .SelectMany(endpoint => (endpoint.Metadata
+                    .GetMetadata<Microsoft.AspNetCore.Routing.HttpMethodMetadata>()?.HttpMethods ?? [])
+                .Where(method => method is not ("GET" or "HEAD" or "OPTIONS"))
+                .Select(method => (Method: method, Pattern: endpoint.RoutePattern.RawText!)))
+            .Where(route => route is not
+                ("POST", "/api/v1/auth/login") and not
+                ("POST", "/api/v1/setup/complete"))
+            .Select(route => (route.Method, Path: ConcretePath(route.Pattern)))
+            .ToArray();
+
+        unsafeRoutes.Should().NotBeEmpty("the host must expose unsafe API routes");
+
+        foreach (var (method, path) in unsafeRoutes)
+        {
+            var missing = await SendUnsafeAsync(session.Client, method, path, token: null, cancellationToken);
+            try
+            {
+                missing.StatusCode.Should().Be(
+                    HttpStatusCode.Forbidden,
+                    "{0} {1} must reject a missing CSRF token",
+                    method,
+                    path);
+                await AssertErrorCodeAsync(missing, ErrorCodes.CsrfValidationFailed, cancellationToken);
+            }
+            finally
+            {
+                missing.Dispose();
+            }
+
+            var invalid = await SendUnsafeAsync(
+                session.Client,
+                method,
+                path,
+                token: "not-a-real-token",
+                cancellationToken);
+            try
+            {
+                invalid.StatusCode.Should().Be(
+                    HttpStatusCode.Forbidden,
+                    "{0} {1} must reject an invalid CSRF token",
+                    method,
+                    path);
+                await AssertErrorCodeAsync(invalid, ErrorCodes.CsrfValidationFailed, cancellationToken);
+            }
+            finally
+            {
+                invalid.Dispose();
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Unsafe_requests_are_csrf_exempt_in_single_user_mode()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await SeedHouseholdAsync(AuthMode.SingleUser, cancellationToken);
+        await MarkSetupCompletedAsync(cancellationToken);
+
+        using var factory = fixture.CreateFactory();
+        using var client = factory.CreateClient();
+
+        // A mutating route, a destructive route, and a dangerous-action route:
+        // none may be stopped by the antiforgery gate when no session exists.
+        foreach (var (method, path) in new[]
+        {
+            ("PATCH", "/api/v1/settings/household"),
+            ("DELETE", "/api/v1/calendar/2999-01-01"),
+            ("POST", "/api/v1/admin/audit/prune"),
+        })
+        {
+            var response = await SendUnsafeAsync(client, method, path, token: null, cancellationToken);
+            using (response)
+            {
+                var body = await response.Content.ReadAsStringAsync(cancellationToken);
+                body.Should().NotContain(
+                    ErrorCodes.CsrfValidationFailed,
+                    "single-user mode carries no session and is exempt ({0} {1})",
+                    method,
+                    path);
+            }
+        }
     }
 
     [Fact]
@@ -467,6 +573,34 @@ public sealed class CsrfIntegrationTests(M1SetupFixture fixture) : IAsyncLifetim
             .Select(settings => settings.HouseholdName)
             .SingleAsync(cancellationToken);
         householdName.Should().Be(expected);
+    }
+
+    /// <summary>
+    /// Turns a route pattern into a concrete path. Values are intentionally
+    /// meaningless: the CSRF middleware rejects before any parameter binding,
+    /// so only the route shape matters.
+    /// </summary>
+    private static string ConcretePath(string pattern) =>
+        Regex.Replace(pattern, "\\{[^}]+\\}", "1");
+
+    private static async Task<HttpResponseMessage> SendUnsafeAsync(
+        HttpClient client,
+        string method,
+        string path,
+        string? token,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(new HttpMethod(method), path)
+        {
+            Content = new StringContent("{}", Encoding.UTF8, "application/json"),
+        };
+
+        if (token is not null)
+        {
+            request.Headers.TryAddWithoutValidation(CsrfMiddleware.HeaderName, token);
+        }
+
+        return await client.SendAsync(request, cancellationToken);
     }
 
     private static async Task<HttpResponseMessage> PatchAsync(
