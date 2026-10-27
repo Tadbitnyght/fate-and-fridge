@@ -1,0 +1,3962 @@
+:root {
+  color-scheme: light dark;
+
+  --bg: #f6f5f2;
+  --surface: #ffffff;
+  --text: #1f2421;
+  --muted: #5c6660;
+  --border: #d9ddd8;
+  --ok-bg: #e3f2e6;
+  --ok-text: #1c5a2c;
+  --bad-bg: #fbe7e4;
+  --bad-text: #8a2a1d;
+
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    sans-serif;
+  line-height: 1.5;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14181a;
+    --surface: #1e2427;
+    --text: #edf0ee;
+    --muted: #a3ada8;
+    --border: #333c40;
+    --ok-bg: #17391f;
+    --ok-text: #9fdcae;
+    --bad-bg: #40201b;
+    --bad-text: #f0a79b;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/*
+ * Base control surface (M15-04). A <button> with no component rule used to fall
+ * back to the browser default (13 px Arial, a 2 px radius), so "Sign out", the
+ * audit export row and "Check now" looked like a different application. This is
+ * one geometry for every unstyled button, using the existing tokens. The zero
+ * specificity of `:where()` keeps every component rule in charge of its own
+ * controls.
+ */
+:where(button) {
+  padding: 0.4rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+:where(button):hover:not(:disabled) {
+  border-color: var(--muted);
+}
+
+:where(button):disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem;
+  gap: 1.5rem;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.9rem;
+  letter-spacing: -0.01em;
+}
+
+.app-subtitle {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+}
+
+.app-main {
+  flex: 1;
+}
+
+/* ---------- update notice (M13-09) ---------- */
+
+/*
+ * A single block in the shell's flex column above <main>. It wraps on narrow
+ * screens and keeps the meaning in the text, never in colour alone.
+ */
+.update-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-left: 0.35rem solid var(--text);
+  border-radius: 0.6rem;
+  background: var(--surface);
+}
+
+.update-banner__body {
+  flex: 1 1 18rem;
+  min-width: 12rem;
+}
+
+.update-banner__title {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+}
+
+.update-banner p {
+  margin: 0.25rem 0 0;
+}
+
+.update-banner__dismiss {
+  flex: 0 0 auto;
+}
+
+@media print {
+  .update-banner {
+    display: none !important;
+  }
+}
+
+.status-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+}
+
+.status-panel h2 {
+  margin: 0 0 1rem;
+  font-size: 1.15rem;
+}
+
+.status-grid {
+  margin: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.status-grid .status-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 1rem;
+}
+
+.status-grid dt {
+  min-width: 8rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.status-grid dd {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.status-badge--ok {
+  background: var(--ok-bg);
+  color: var(--ok-text);
+}
+
+.status-badge--bad {
+  background: var(--bad-bg);
+  color: var(--bad-text);
+}
+
+.status-detail {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.status-note {
+  margin: 1.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.app-footer p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+@media (max-width: 30rem) {
+  .status-grid dt {
+    min-width: 100%;
+  }
+}
+
+/* ---------- app shell: header, navigation, account ---------- */
+
+.app-header {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.app-header__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.app-account {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.app-account__name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.app-account__role {
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  background: var(--ok-bg);
+  color: var(--ok-text);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.app-account__error {
+  margin: 0;
+  color: var(--bad-text);
+  font-size: 0.9rem;
+}
+
+/* Live-sync indicator (docs/M9_PLAN.md §1.9): non-blocking, colour-independent
+   because the glyph and label carry the state. */
+.live-sync-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.live-sync-status__icon {
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
+.live-sync-status--connected {
+  background: var(--ok-bg);
+  color: var(--ok-text);
+}
+
+.live-sync-status--disconnected {
+  background: var(--bad-bg);
+  color: var(--bad-text);
+}
+
+.app-nav__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.app-nav__link {
+  display: inline-block;
+  padding: 0.35rem 0.7rem;
+  border-radius: 0.5rem;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.app-nav__link:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.app-nav__link--active {
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.app-nav__link:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+/* ---------- pages ---------- */
+
+.page h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.4rem;
+}
+
+.page-note {
+  color: var(--muted);
+}
+
+.page .status-panel {
+  margin-top: 1.25rem;
+}
+
+/* ---------- standalone screens (setup, login, change password) ---------- */
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 2.5rem 1rem;
+}
+
+.screen--narrow {
+  max-width: 28rem;
+}
+
+.screen h1 {
+  margin: 0;
+  font-size: 1.8rem;
+}
+
+/*
+ * Loading and error states that render inside the app shell sit where page
+ * content sits: the standalone screen padding indented them by 1rem and pushed
+ * them 2.5rem down, and its full-width button looked like a page-wide control
+ * (M15-04).
+ */
+.app-main .screen {
+  max-width: none;
+  padding: 0;
+}
+
+.app-main .screen h1 {
+  font-size: 1.4rem;
+}
+
+.app-main .screen > button {
+  align-self: flex-start;
+}
+
+.setup-facts {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.setup-facts dt {
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.setup-facts dd {
+  margin: 0;
+}
+
+/* ---------- forms ---------- */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.form__field label {
+  font-weight: 600;
+}
+
+.form__field input {
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.form__field input:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+
+.form__hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.form__error {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.5rem;
+  background: var(--bad-bg);
+  color: var(--bad-text);
+}
+
+.form__notice {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.5rem;
+  background: var(--ok-bg);
+  color: var(--ok-text);
+}
+
+.form button {
+  align-self: flex-start;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.form button:hover:not(:disabled) {
+  border-color: var(--muted);
+}
+
+.form button:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.form button:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+/* ---------- setup wizard ---------- */
+
+.wizard {
+  gap: 0.75rem;
+}
+
+.wizard__progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.wizard__progress li[aria-current='step'] {
+  color: var(--text);
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.wizard__position {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.wizard__title {
+  margin: 0;
+  font-size: 1.6rem;
+}
+
+.wizard__title:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 4px;
+}
+
+.wizard__errors {
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--bad-text);
+  border-radius: 0.5rem;
+  background: var(--bad-bg);
+  color: var(--bad-text);
+}
+
+.wizard__errors:focus-visible {
+  outline: 2px solid var(--bad-text);
+  outline-offset: 2px;
+}
+
+.wizard__errors h2 {
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
+}
+
+.wizard__errors ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.wizard__form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.wizard__step {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.wizard__step > p {
+  margin: 0;
+}
+
+.wizard__footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: space-between;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.wizard__footer button,
+.wizard__step > button {
+  padding: 0.5rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.wizard__footer button:disabled,
+.wizard__step > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.wizard__footer button:focus-visible,
+.wizard__step > button:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.wizard__footer a {
+  align-self: center;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.form__field input[type='file'] {
+  padding: 0.4rem;
+}
+
+.form__fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+}
+
+.form__fieldset legend {
+  padding: 0 0.35rem;
+  font-weight: 600;
+}
+
+.form__choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.form__choice input {
+  margin-top: 0.3rem;
+}
+
+.form__error-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--bad-text);
+}
+
+.notice {
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+}
+
+.notice h3 {
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
+}
+
+.notice ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.notice--warning {
+  border-color: var(--bad-text);
+  background: var(--bad-bg);
+  color: var(--bad-text);
+}
+
+.review {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.review div {
+  display: grid;
+  grid-template-columns: minmax(9rem, 12rem) 1fr;
+  gap: 0.5rem;
+}
+
+.review dt {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.review dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.recovery-key {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.recovery-key label {
+  font-weight: 600;
+}
+
+.recovery-key__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.recovery-key__row input {
+  flex: 1 1 16rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.recovery-key__row button {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+@media (max-width: 30rem) {
+  .review div {
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
+  }
+
+  .wizard__footer button,
+  .wizard__step > button {
+    flex: 1 1 auto;
+  }
+}
+
+/* ---------- settings area (M1-14) ---------- */
+
+.settings-nav {
+  margin: 0.75rem 0 1.25rem;
+}
+
+.settings-nav__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0.25rem;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  background: var(--surface);
+}
+
+.settings-nav__link {
+  display: inline-block;
+  padding: 0.35rem 0.8rem;
+  border-radius: 0.45rem;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.settings-nav__link:hover {
+  color: var(--text);
+}
+
+.settings-nav__link--active {
+  background: var(--bg);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.settings-nav__link:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.settings-section h3 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.settings-section h4 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.settings-subsection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+/* Update status / About panel (M13-09). */
+.about-updates {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  background: var(--surface);
+}
+
+.about-updates h4 {
+  margin: 0;
+}
+
+.settings-section__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.form__status {
+  margin: 0;
+  color: var(--ok-text);
+  font-weight: 600;
+}
+
+.settings-section fieldset.form__fieldset {
+  gap: 0.75rem;
+}
+
+.settings-section textarea {
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  resize: vertical;
+}
+
+.settings-section select {
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.data-table caption {
+  text-align: left;
+}
+
+.data-table th,
+.data-table td {
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.data-table thead th {
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.data-table__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.data-table__actions button,
+.modal__actions button {
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 0.45rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.data-table__actions button:focus-visible,
+.modal__actions button:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.modal__actions button.button--primary,
+.wizard__footer button.button--primary,
+.settings-actions button.button--primary,
+.wizard__step > button.button--primary {
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--bg);
+}
+
+.modal__actions button:disabled,
+.data-table__actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.tag {
+  display: inline-block;
+  margin-right: 0.35rem;
+  padding: 0.05rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.tag--ok {
+  background: var(--ok-bg);
+  color: var(--ok-text);
+  border-color: transparent;
+}
+
+.tag--bad {
+  background: var(--bad-bg);
+  color: var(--bad-text);
+  border-color: transparent;
+}
+
+/* ---------- modal dialogs ---------- */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 1.5rem 1rem;
+  background: rgb(0 0 0 / 55%);
+  overflow-y: auto;
+}
+
+.modal {
+  width: min(32rem, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.modal:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.modal__title {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.modal__body p {
+  margin: 0 0 0.5rem;
+}
+
+.modal__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+/* ---------- one-time temporary password ---------- */
+
+.one-time {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.9rem 1rem;
+  border: 2px solid var(--ok-text);
+  border-radius: 0.6rem;
+  background: var(--ok-bg);
+  color: var(--ok-text);
+}
+
+.one-time h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.one-time h4:focus-visible {
+  outline: 2px solid var(--ok-text);
+  outline-offset: 3px;
+}
+
+.one-time .form__hint {
+  color: inherit;
+}
+
+.permission-list {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 40rem) {
+  .data-table thead {
+    display: none;
+  }
+
+  .data-table tr {
+    display: block;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .data-table th,
+  .data-table td {
+    display: block;
+    border-bottom: none;
+    padding: 0.15rem 0.2rem;
+  }
+
+  .data-table__actions {
+    padding-top: 0.35rem;
+  }
+}
+
+/* ---------- reference data (M2-11, #24) ---------- */
+
+.reference-data__tabs .settings-nav__list {
+  flex-wrap: wrap;
+}
+
+.reference-data__tabs .settings-nav__link {
+  display: inline-block;
+  padding: 0.4rem 0.75rem;
+  white-space: nowrap;
+}
+
+.reference-data__tabs .settings-nav__link--active {
+  background: var(--bg);
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-thickness: 0.12em;
+  text-underline-offset: 0.2em;
+}
+
+.reference-data__tabs .settings-nav__link:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.reference-data__tab {
+  min-width: 0;
+}
+
+.reference-data__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.reference-data__toolbar .reference-data__search {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.reference-data__toolbar button {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.reference-data__toolbar button:hover:not(:disabled) {
+  border-color: var(--muted);
+}
+
+.reference-data__toolbar button:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.reference-data__toolbar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.reference-data__checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+}
+
+.reference-data__checkbox input {
+  margin: 0;
+}
+
+.reference-data__header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.reference-data__header-actions button {
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 0.45rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.reference-data__header-actions button:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.reference-data__header-actions button.button--primary {
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--bg);
+}
+
+.reference-data__header-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.reference-data__actions {
+  align-items: center;
+}
+
+.reference-data__aliases {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.reference-data__alias-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reference-data__alias-list li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 100%;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 0.85rem;
+}
+
+.reference-data__alias-list li span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.reference-data__alias-list li button {
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 0.45rem;
+  background: var(--bg);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.reference-data__alias-list li button:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.reference-data__alias-empty {
+  color: var(--muted);
+}
+
+.reference-data__alias-form {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.reference-data__alias-form input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.reference-data__alias-form button {
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.reference-data__alias-form button:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.reference-data__alias-form button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+@media (max-width: 40rem) {
+  .reference-data__toolbar .reference-data__search {
+    flex-basis: 100%;
+  }
+
+  .reference-data__toolbar button,
+  .reference-data__toolbar input,
+  .reference-data__checkbox,
+  .reference-data__alias-form input,
+  .reference-data__alias-form button {
+    min-height: 2.75rem;
+  }
+
+  .reference-data__alias-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* ---------- accessibility (M1-15 part B) ---------- */
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 50;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.skip-link:focus,
+.skip-link:focus-visible {
+  left: 0.75rem;
+  top: 0.75rem;
+}
+
+/* Safety net: every interactive element keeps a visible focus indicator. */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+[role='button']:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+/* Programmatic route focus targets (main container) need no ring. */
+main:focus {
+  outline: none;
+}
+
+main:focus-visible {
+  outline: none;
+}
+
+/*
+ * The route change moves focus to the page heading so a screen reader announces
+ * where it landed. A heading is not an interactive control, so it must not paint
+ * the interactive focus ring: the browser default drew a hard rectangle around
+ * the page title on every route (M15-04).
+ */
+h1[tabindex='-1']:focus,
+h2[tabindex='-1']:focus {
+  outline: none;
+}
+
+/* ---------- cards ---------- */
+
+.card {
+  margin-top: 1rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface);
+}
+
+.card h3 {
+  margin: 0 0 0.4rem;
+  font-size: 1.05rem;
+}
+
+/*
+ * Dashboard quick links (M15-06). The action line is the only control on each
+ * dashboard card; as a plain inline link it was a ~19 px tall tap target. It
+ * now uses the same geometry as the base button (44 px minimum height) while
+ * staying a link for keyboard and screen-reader users.
+ */
+.dashboard-quick-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0.4rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.dashboard-quick-link:hover {
+  border-color: var(--muted);
+}
+
+.dashboard-quick-link:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.status-chip {
+  padding: 0.1rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* ---------- statistics tabs (#117) ---------- */
+
+/* The statistics page (M11-05) uses the same accessible tab pattern. */
+.stats-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin: 1rem 0 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.stats-tab {
+  margin-bottom: -1px;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 0.5rem 0.5rem 0 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.stats-tab:hover {
+  color: var(--text);
+}
+
+.stats-tab--active {
+  border-color: var(--border);
+  border-bottom-color: var(--surface);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.stats-tab:focus-visible,
+.stats-tabpanel:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.stats-tabpanel {
+  outline: none;
+}
+
+.app-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.25rem 1rem;
+}
+
+.app-footer__version a {
+  color: var(--muted);
+}
+
+.app-footer__version a:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+/* ---------- recipes (M3-10 / M3-11) ---------- */
+
+.button--primary,
+a.button--primary,
+.recipes__new.button--primary {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--text);
+  border-radius: 0.5rem;
+  background: var(--text);
+  color: var(--bg);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.button--primary:hover {
+  filter: brightness(1.1);
+}
+
+.button--primary:focus-visible,
+a.button--primary:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.recipe-muted {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.recipes__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.recipes__header h2 {
+  margin: 0;
+}
+
+.recipes__filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.75rem;
+  align-items: end;
+  padding: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+  background: var(--surface);
+}
+
+.recipes__search {
+  grid-column: 1 / -1;
+}
+
+.recipes__filters input,
+.recipes__filters select,
+.recipe-form select,
+.recipe-form textarea {
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.recipes__filters input:focus-visible,
+.recipes__filters select:focus-visible,
+.recipe-form select:focus-visible,
+.recipe-form textarea:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+
+.recipes__flag-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+
+/*
+ * Both filter rows span the grid: the flag row used to be squeezed into one
+ * ~11rem column (so its three checkboxes stacked on desktop) while the actions
+ * row sat beside it, half-height and out of line with the fields above
+ * (M15-04).
+ */
+.recipes__flag-filters,
+.recipes__filter-actions {
+  grid-column: 1 / -1;
+}
+
+.recipes__checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.25rem;
+  font-weight: 500;
+}
+
+.recipes__checkbox input {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.recipes__filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.recipes__view-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0.9rem 0;
+}
+
+.recipes__view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.recipes__view-toggle button {
+  padding: 0.4rem 0.85rem;
+  border: 0;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.recipes__view-toggle button[aria-pressed='true'] {
+  background: var(--text);
+  color: var(--bg);
+  font-weight: 600;
+}
+
+.recipes__view-toggle button:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: -2px;
+}
+
+.recipes__count {
+  margin: 0;
+  color: var(--muted);
+}
+
+.recipe-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recipe-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* Anchors the name link's stretched overlay (BUG-006). */
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+  background: var(--surface);
+}
+
+.recipe-thumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: var(--bg);
+}
+
+.recipe-thumb--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.data-table .recipe-thumb {
+  width: 4rem;
+  aspect-ratio: 1;
+  border-radius: 0.4rem;
+}
+
+.recipe-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+}
+
+.recipe-card__name {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.recipe-card__name-link,
+.recipe-card__name-text {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.recipe-card__name-link:hover {
+  text-decoration: underline;
+}
+
+.recipe-card__name-link:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+/* Stretched link: the name stays the only link (and the only tab stop), while
+   its overlay makes the whole card activate the editor (BUG-006). */
+.recipe-card__name-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.recipe-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recipe-card__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.recipe-card__stats dt {
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.recipe-card__stats dd {
+  margin: 0;
+}
+
+.recipes__empty,
+.recipes__error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 1.25rem;
+  border: 1px dashed var(--border);
+  border-radius: 0.65rem;
+}
+
+.recipes__paging {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.recipes__paging p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.recipe-form__form {
+  max-width: 52rem;
+}
+
+.recipe-form__errors {
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  background: var(--bad-bg);
+  color: var(--bad-text);
+}
+
+.recipe-form__errors h3 {
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
+}
+
+.recipe-form__errors ul {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.recipe-form__flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+}
+
+.recipe-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* M12-09 hard-delete danger zone: visually separated from the save actions. */
+.recipe-form__danger {
+  margin-top: 2rem;
+  padding: 1rem;
+  border: 1px solid var(--bad-text);
+  border-radius: 0.5rem;
+  background: var(--bad-bg);
+  color: var(--bad-text);
+}
+
+.recipe-form__danger h3 {
+  margin: 0 0 0.4rem;
+  font-size: 1.05rem;
+}
+
+.recipe-form__danger p {
+  margin: 0 0 0.75rem;
+}
+
+.button--danger {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--bad-text);
+  border-radius: 0.5rem;
+  background: var(--bad-text);
+  color: var(--bg);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.button--danger:hover {
+  filter: brightness(1.1);
+}
+
+.button--danger:focus-visible {
+  outline: 2px solid var(--bad-text);
+  outline-offset: 2px;
+}
+
+.button--danger:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.recipe-photo-preview {
+  max-width: 22rem;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+}
+
+.recipe-photo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.ingredient-list,
+.group-list,
+.section-list,
+.step-list,
+.reference-checkboxes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reference-checkboxes {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+}
+
+.group-card,
+.section-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+}
+
+.group-card__head,
+.section-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.group-card__actions,
+.section-card__actions,
+.ingredient-row__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.ingredient-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+}
+
+.ingredient-row__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.5rem;
+}
+
+.ingredient-row__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+/* ---------- unknown ingredient resolution (M4-09) ---------- */
+
+.ingredient-row--unknown {
+  border-color: var(--bad-text);
+  border-left-width: 4px;
+}
+
+.ingredient-row__unknown-note {
+  margin: 0.35rem 0 0;
+  color: var(--bad-text);
+  font-weight: 600;
+}
+
+.ingredient-row__unknown {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.5rem;
+  background: var(--bad-bg);
+  color: var(--bad-text);
+}
+
+.ingredient-row__unknown-raw {
+  margin: 0;
+}
+
+.ingredient-row__suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.ingredient-row__suggestions-label {
+  font-weight: 600;
+}
+
+.ingredient-row__create {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  color: var(--text);
+}
+
+.ingredient-row__create-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.5rem;
+}
+
+/* Unrecognized unit block (M4-10): nested inside the shared unknown block. */
+.ingredient-row__unknown-unit {
+  border-top: 1px solid var(--bad-text);
+  padding-top: 0.5rem;
+}
+
+.step-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+@media (max-width: 40rem) {
+  .recipes__filters {
+    grid-template-columns: 1fr;
+  }
+
+  .recipe-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .group-card__actions button,
+  .section-card__actions button,
+  .ingredient-row__actions button,
+  .ingredient-row__suggestions button,
+  .ingredient-row__create button {
+    min-height: 2.25rem;
+  }
+
+  .ingredient-row__create button {
+    align-self: stretch;
+  }
+}
+
+/* ---------- import review (M4-08) ---------- */
+
+.recipes__header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+a.recipes__import {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.5rem;
+  padding: 0.5rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+a.recipes__import:hover {
+  border-color: var(--text);
+}
+
+a.recipes__import:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.import-page__form {
+  max-width: 42rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.import-page__actions,
+.import-review .recipe-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.import-review__candidates {
+  margin-bottom: 1rem;
+}
+
+.import-review__candidate-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.import-review__warning {
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  margin-bottom: 1rem;
+}
+
+.import-review__warning p {
+  margin: 0 0 0.35rem;
+}
+
+.import-review__warning ul {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+@media (max-width: 40rem) {
+  .recipes__header-actions {
+    width: 100%;
+  }
+
+  .recipes__header-actions a {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .import-page__actions button,
+  .import-review .recipe-form__actions button,
+  .import-review .recipe-form__actions a {
+    min-height: 2.75rem;
+  }
+
+  /* The M4-11 duplicate warning uses the shared Modal; keep its actions at a
+     comfortable touch-target height on phones. */
+  .modal__actions button,
+  .modal__actions a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+  }
+}
+
+/* ---------- calendar (M5) ---------- */
+
+.calendar-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.calendar-toolbar__nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.calendar-toolbar__nav button {
+  min-width: 2.25rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 0.45rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.calendar-toolbar__month {
+  min-width: 9rem;
+  text-align: center;
+  font-weight: 600;
+}
+
+.calendar-toggle {
+  display: inline-flex;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+  padding: 0.2rem;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  background: var(--surface);
+}
+
+.calendar-toggle button {
+  padding: 0.35rem 0.8rem;
+  border: 0;
+  border-radius: 0.45rem;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.calendar-toggle__active {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.calendar-views__agenda {
+  display: none;
+}
+
+.calendar-views--agenda .calendar-views__month {
+  display: none;
+}
+
+.calendar-views--agenda .calendar-views__agenda {
+  display: block;
+}
+
+.calendar-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.calendar-grid__row {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.calendar-grid__weekday {
+  padding: 0.3rem;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.calendar-grid__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-height: 4.5rem;
+  padding: 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.calendar-grid__cell--outside {
+  /* No opacity dimming: blended text drops below the 4.5:1 contrast floor.
+     The muted token is accessible on the cell surface and still reads as
+     "outside this month". */
+  color: var(--muted);
+}
+
+.calendar-grid__cell--today {
+  border-color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--text);
+}
+
+.calendar-grid__cell--vacation {
+  background: var(--bg);
+}
+
+.calendar-grid__cell:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+
+.calendar-grid__daynumber {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.calendar-grid__entry {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  align-items: baseline;
+  font-size: 0.8rem;
+}
+
+.calendar-grid__text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.calendar-grid__icon {
+  color: var(--muted);
+}
+
+.calendar-agenda {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.calendar-agenda__item {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.calendar-agenda__date {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 2.5rem;
+}
+
+.calendar-agenda__weekday {
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+}
+
+.calendar-agenda__day {
+  font-weight: 700;
+}
+
+.calendar-agenda__content {
+  display: flex;
+  gap: 0.4rem;
+  align-items: baseline;
+}
+
+.calendar-agenda__empty {
+  color: var(--muted);
+}
+
+.calendar-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.calendar-detail__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.calendar-detail__field input,
+.calendar-detail__field select,
+.calendar-detail__field textarea {
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 0.45rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.calendar-detail__results {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.calendar-detail__results button {
+  width: 100%;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.calendar-detail__actions {
+  justify-content: flex-end;
+}
+
+.calendar-reroll {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+}
+
+.calendar-reroll button {
+  align-self: flex-start;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.calendar-reroll button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.undo-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0.5rem 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--ok-bg);
+  color: var(--ok-text);
+}
+
+.undo-banner__message {
+  margin: 0;
+  font-weight: 600;
+}
+
+.undo-banner__actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.undo-banner__actions button {
+  padding: 0.4rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 0.45rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.undo-banner__actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.day-action-menu {
+  z-index: 40;
+  min-width: 12rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 25%);
+}
+
+.day-action-menu button {
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 0.45rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.day-action-menu button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.day-action-menu__reason {
+  margin: 0;
+  padding: 0 0.6rem 0.2rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.reroll-menu {
+  position: relative;
+}
+
+.reroll-menu__trigger {
+  min-width: 2.25rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 0.45rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.reroll-menu__popover {
+  z-index: 40;
+  min-width: 12rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 25%);
+}
+
+.reroll-menu__heading {
+  margin: 0 0 0.15rem;
+  padding: 0 0.6rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.reroll-menu__popover button {
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 0.45rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.batch-preview__days {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 20rem;
+  margin: 0.5rem 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.batch-preview__day {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 0.45rem;
+}
+
+.batch-preview__day--changed {
+  border-left: 4px solid var(--ok-text);
+  background: var(--ok-bg);
+}
+
+.batch-preview__day--unchanged {
+  color: var(--muted);
+  opacity: 0.85;
+}
+
+.batch-preview__date {
+  font-weight: 600;
+}
+
+.batch-preview__badge {
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+@media print {
+  .undo-banner,
+  .day-action-menu,
+  .reroll-menu__popover {
+    display: none !important;
+  }
+}
+
+.calendar-detail__summary {
+  font-size: 1.1rem;
+}
+
+@media (min-width: 48rem) {
+  .calendar-toggle {
+    display: none;
+  }
+
+  .calendar-views__month {
+    display: block;
+  }
+
+  .calendar-views__agenda {
+    display: none;
+  }
+}
+
+@media (max-width: 40rem) {
+  .calendar-toolbar__nav button {
+    min-height: 2.75rem;
+  }
+
+  .reroll-menu__popover button {
+    min-height: 2.75rem;
+  }
+
+  .calendar-grid__cell {
+    min-height: 3.5rem;
+  }
+}
+
+@media print {
+  .app-header,
+  .app-footer,
+  .calendar-toolbar,
+  .calendar-toggle,
+  .modal-backdrop {
+    display: none !important;
+  }
+
+  .calendar-views__month {
+    display: block !important;
+  }
+
+  .calendar-grid__cell {
+    break-inside: avoid;
+    min-height: 3rem;
+  }
+}
+
+.calendar-detail__results button {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  gap: 0 0.5rem;
+  align-items: center;
+}
+
+.calendar-detail__thumb {
+  grid-row: span 2;
+  width: 2.5rem;
+  height: 2.5rem;
+  object-fit: cover;
+  border-radius: 0.35rem;
+}
+
+.calendar-detail__result-name {
+  font-weight: 600;
+}
+
+.calendar-detail__result-meta {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+/* ---------- groceries (M8-07) ---------- */
+
+.grocery-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.grocery-range {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.grocery-range__presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.grocery-range__preset {
+  min-height: 2.75rem;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.grocery-range__preset[aria-pressed='true'] {
+  border-color: var(--text);
+  font-weight: 600;
+}
+
+.grocery-range__preset:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+
+.grocery-range__custom {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+.grocery-range__summary {
+  margin: 0;
+  color: var(--muted);
+}
+
+.grocery-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.grocery-controls__staples {
+  min-height: 2.75rem;
+}
+
+.grocery-departments,
+.grocery-items,
+.grocery-staples__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.grocery-department {
+  margin-bottom: 1.25rem;
+}
+
+.grocery-department__header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0 0 0.5rem;
+  padding: 0.35rem 0;
+  background: var(--bg);
+  border-bottom: 2px solid var(--border);
+  font-size: 1.05rem;
+}
+
+.grocery-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.grocery-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.grocery-item--checked {
+  /* No opacity dimming: the checked name must still meet 4.5:1 (WCAG 2.1 AA)
+     while the strike-through carries the "done" meaning. */
+  color: var(--muted);
+}
+
+.grocery-item--checked .grocery-item__name {
+  text-decoration: line-through;
+}
+
+.grocery-item__label {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 2.75rem;
+  cursor: pointer;
+}
+
+.grocery-item__checkbox {
+  flex: none;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  margin: 0;
+}
+
+.grocery-item__body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: baseline;
+}
+
+.grocery-item__name {
+  font-weight: 600;
+}
+
+.grocery-item__quantity {
+  color: var(--muted);
+}
+
+.grocery-item__badge,
+.grocery-staple__badge {
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.grocery-item__sources {
+  margin: 0 0 0 2.35rem;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.grocery-item__actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-left: 2.35rem;
+}
+
+.grocery-staples {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.grocery-staples__header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.grocery-staples__header h3 {
+  margin: 0;
+}
+
+.grocery-staple {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.grocery-staple__body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: baseline;
+}
+
+.grocery-staple__name {
+  font-weight: 600;
+}
+
+.grocery-staple__quantity,
+.grocery-staple__meta {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.grocery-staple__actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* Mobile tap targets (docs/M8_PLAN.md §4): every interactive grocery control
+   keeps at least a 44px (2.75rem) hit area in both dimensions at phone widths. */
+.grocery-staple__actions button,
+.grocery-item__actions button,
+.grocery-toolbar button,
+.grocery-staples__header button,
+.grocery-controls__staples {
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+}
+
+.grocery-item__actions button,
+.grocery-staple__actions button {
+  padding: 0.5rem 0.85rem;
+}
+
+.grocery-form select {
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.grocery-form select:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+
+@media (max-width: 40rem) {
+  .grocery-controls,
+  .grocery-staple {
+    align-items: stretch;
+  }
+
+  .grocery-staple__actions button,
+  .grocery-item__actions button,
+  .grocery-toolbar button,
+  .grocery-controls__staples {
+    flex: 1;
+  }
+}
+
+/* ---------- groceries: print entry + print view (M8-08) ---------- */
+
+.grocery-toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.grocery-toolbar__print {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--text);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.grocery-toolbar__print:hover {
+  background: var(--bg);
+}
+
+.grocery-toolbar__print:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.grocery-print-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.grocery-print-controls__back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.grocery-print-controls__include {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0.5rem 0;
+}
+
+.grocery-print-controls button {
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+}
+
+.grocery-print__generated {
+  margin: 0 0 1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.grocery-print__departments,
+.grocery-print__items,
+.grocery-print__sources {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.grocery-print__department {
+  margin-bottom: 1rem;
+}
+
+.grocery-print__department-header {
+  margin: 0 0 0.4rem;
+  padding-bottom: 0.2rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 1.05rem;
+}
+
+.grocery-print__items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.grocery-print__item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.grocery-print__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* A decorative paper checkbox the shopper ticks by hand; hidden from AT. */
+.grocery-print__box {
+  flex: none;
+  inline-size: 0.95rem;
+  block-size: 0.95rem;
+  border: 1.5px solid var(--text);
+  border-radius: 2px;
+}
+
+.grocery-print__name {
+  font-weight: 600;
+}
+
+.grocery-print__quantity {
+  color: var(--muted);
+}
+
+.grocery-print__sources {
+  margin: 0 0 0 1.45rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* A printed grocery list is a document, not an app: drop the screen chrome,
+   force black-on-white, and keep headings with their items across page breaks. */
+@media print {
+  .app-header,
+  .app-nav,
+  .app-footer,
+  .skip-link,
+  .grocery-print-controls {
+    display: none !important;
+  }
+
+  :root {
+    color-scheme: light;
+  }
+
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  .app-shell {
+    max-width: none;
+    padding: 0;
+    gap: 0;
+  }
+
+  .grocery-print,
+  .grocery-print__name,
+  .grocery-print__quantity,
+  .grocery-print__generated,
+  .grocery-print__sources {
+    color: #000;
+  }
+
+  .grocery-print__department-header {
+    border-bottom-color: #000;
+    break-inside: avoid;
+    break-after: avoid;
+  }
+
+  .grocery-print__item {
+    break-inside: avoid;
+  }
+
+  .grocery-print__box,
+  .grocery-item__badge {
+    border-color: #000;
+  }
+
+  .grocery-print-page {
+    page: grocery-list;
+  }
+}
+
+/* Calendar print view (M10-01…M10-04). A dedicated printable month grid: black
+   on white, no background fills, one month per page.
+
+   Print geometry — single source of truth (M10-03). These custom properties are
+   the one place the printed calendar's page budget is defined: the month width
+   and the print height cap below derive from them, and `printScale.ts` reads
+   them at runtime via `getComputedStyle` so the JS auto-shrink budget and the
+   CSS layout cannot drift. The `@page calendar-print` margin must match
+   `--calendar-print-page-margin-mm` (asserted by e2e/print.spec.ts); @page
+   descriptors cannot reference custom properties, so that one literal stays in
+   sync by test. */
+:root {
+  --calendar-print-page-width-mm: 297;
+  --calendar-print-page-height-mm: 210;
+  --calendar-print-page-margin-mm: 10;
+  --calendar-print-base-font-pt: 12;
+  --calendar-print-floor-font-pt: 10;
+  --calendar-print-fit-safety: 0.98;
+}
+
+.calendar-print-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.calendar-print-controls__back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.calendar-print-controls__field {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+}
+
+.calendar-print-controls button {
+  min-height: 2.75rem;
+}
+
+.calendar-print-heading {
+  margin: 0 0 0.75rem;
+}
+
+.calendar-print-months {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  overflow-x: auto;
+}
+
+.calendar-print-month {
+  /* The month is laid out at the print content width (A4 landscape − margins)
+     in both media, so a single on-screen measurement is representative of the
+     printed page. The width derives from the shared print geometry. */
+  inline-size: calc(
+    (var(--calendar-print-page-width-mm) - 2 * var(--calendar-print-page-margin-mm)) * 1mm
+  );
+  /* The auto-shrink scale is applied here (not on `__content`) so the whole
+     month — month/year heading and grid — scales together and the measured
+     natural height matches the printed height. */
+  font-size: calc(var(--calendar-print-base-font-pt) * 1pt * var(--calendar-print-scale, 1));
+  flex: none;
+  color: var(--text);
+}
+
+.calendar-print-month__heading {
+  margin: 0 0 0.4em;
+  font-size: 1.4em;
+  color: var(--text);
+}
+
+.calendar-print-month__content {
+  /* No height cap on screen: the auto-shrink measurement must see the month's
+     true natural height. The cap is applied only in print (below), and released
+     for a month that cannot fit at the legibility floor. */
+  overflow: visible;
+}
+
+.calendar-print-month__table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.calendar-print-month__weekday {
+  padding: 0.2em;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 1em;
+  font-weight: 600;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.calendar-print-month__cell {
+  min-block-size: 4em;
+  padding: 0.25em;
+  border: 1px solid var(--border);
+  font-size: 1em;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.calendar-print-month__cell--outside {
+  color: var(--muted);
+}
+
+.calendar-print-month__day {
+  display: block;
+  font-weight: 600;
+}
+
+.calendar-print-month__entry {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15em;
+  align-items: baseline;
+  margin-top: 0.1em;
+}
+
+.calendar-print-month__icon {
+  flex: none;
+  color: var(--text);
+}
+
+/* Full wrap in print — no line clamp, no ellipsis, no clipping. */
+.calendar-print-month__text {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+@media print {
+  .calendar-print-controls,
+  .calendar-print-heading {
+    display: none !important;
+  }
+
+  .calendar-print-months {
+    gap: 0;
+    overflow: visible;
+  }
+
+  .calendar-print-month {
+    inline-size: auto;
+    /* One month per page; the last month must not force a trailing blank page. */
+    break-after: page;
+  }
+
+  .calendar-print-month:last-child {
+    break-after: auto;
+  }
+
+  /* Contain a month that fits at the floor to one page. The cap covers the
+     whole month (heading included) and derives from the shared print geometry,
+     so it matches the JS fit budget. A month that still overflows at the floor
+     releases the cap (`data-spill="true"`) so its content flows onto a
+     following page instead of shrinking or clipping. */
+  .calendar-print-month:not([data-spill='true']) {
+    max-height: calc(
+      (var(--calendar-print-page-height-mm) - 2 * var(--calendar-print-page-margin-mm)) * 1mm
+    );
+  }
+
+  .calendar-print-month__row,
+  .calendar-print-month__cell {
+    break-inside: avoid;
+  }
+
+  .calendar-print-month__heading,
+  .calendar-print-month__weekday,
+  .calendar-print-month__cell,
+  .calendar-print-month__day,
+  .calendar-print-month__text,
+  .calendar-print-month__icon {
+    color: #000;
+    background: transparent;
+  }
+
+  .calendar-print-month__weekday,
+  .calendar-print-month__cell {
+    border-color: #000;
+  }
+
+  .calendar-print-page {
+    page: calendar-print;
+  }
+}
+
+/* Page-size ownership is per print view (M10-02, docs/M10_PLAN.md §1.6): the
+   calendar print view opts into a named landscape page, the grocery print view
+   into a named portrait page. There is deliberately no app-wide `@page` size or
+   margin, so printing any other page keeps the browser's defaults. The paper is
+   pinned (A4) so pagination is deterministic and does not depend on the
+   browser's default paper (Letter in headless Chromium). The calendar margin
+   must match `--calendar-print-page-margin-mm` (asserted by e2e/print.spec.ts). */
+@page calendar-print {
+  size: A4 landscape;
+  margin: 10mm;
+}
+
+/* The grocery list is a single-column document, so A4 portrait is the natural
+   pinned paper; it keeps the M8 print layout deterministic too. */
+@page grocery-list {
+  size: A4 portrait;
+  margin: 12mm;
+}
+
+/* ---------- statistics overview page (#144, M11-04) ---------- */
+
+.stats-empty {
+  margin: 1.25rem 0 0;
+  padding: 1rem 1.25rem;
+  border: 1px dashed var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.stats-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin: 1.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stats-card {
+  flex: 1 1 13rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface);
+}
+
+.stats-card__label {
+  display: block;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.stats-card__value {
+  display: block;
+  font-size: 1.7rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.stats-card__range {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.stats-section {
+  margin-top: 1.75rem;
+}
+
+.stats-section h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+}
+
+.stats-note {
+  margin: 0.5rem 0 0;
+  font-size: 0.9rem;
+}
+
+.stats-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stats-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+}
+
+.stats-row--deleted {
+  border-style: dashed;
+}
+
+.stats-row__rank {
+  min-width: 1.5rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-row__name {
+  font-weight: 600;
+}
+
+.stats-row__name a {
+  display: inline-block;
+  padding: 0.25rem 0;
+}
+
+.stats-row__meta {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.stats-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stats-bar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.75rem;
+}
+
+.stats-bar-row__label {
+  flex: 0 1 auto;
+  min-width: 7rem;
+  font-weight: 600;
+}
+
+.stats-bar {
+  flex: 1 1 8rem;
+  height: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.stats-bar__fill {
+  display: block;
+  height: 100%;
+  background: var(--ok-text);
+}
+
+.stats-bar-row__value {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * On a phone a long label ("No primary protein") left too little room for the
+ * bar, so that one row wrapped its bar and count to a second line while the
+ * short rows kept them beside the label. Stacking the label makes every bar
+ * start at the same edge (M15-04).
+ */
+@media (max-width: 40rem) {
+  .stats-bar-row__label {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+}
+
+.stats-events {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stats-event {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+}
+
+.stats-event__count {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- meal-history browser (#145, M11-05) ---------- */
+
+.history-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+  margin-top: 0.5rem;
+}
+
+.history-filters__recipe {
+  flex: 1 1 16rem;
+}
+
+.history-filters__recipe .form__hint {
+  max-width: 34rem;
+}
+
+.history-filters__actions {
+  margin-left: auto;
+}
+
+.history-month {
+  margin-top: 1.5rem;
+}
+
+.history-month__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+
+.history-month__head h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.history-month__head button {
+  min-width: 5.5rem;
+}
+
+.history-month__title {
+  text-align: center;
+}
+
+.history-month__range {
+  display: block;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.history-month__note {
+  margin: 0.5rem 0 0.75rem;
+}
+
+.history-days {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.history-day {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.75rem;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+}
+
+.history-day__date {
+  flex: 0 0 8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.history-day__type {
+  flex: 0 0 9rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.history-day__name {
+  flex: 1 1 8rem;
+  font-weight: 600;
+}
+
+.history-day__name a {
+  display: inline-block;
+  padding: 0.25rem 0;
+}
+
+.history-day__protein {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.history-day__correct {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+/* ---------- audit log viewer (#152, M12-03) ---------- */
+
+.audit-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+}
+
+.audit-filters .form__field {
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+
+.audit-filters select,
+.audit-filters input {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.audit-filters input:focus-visible,
+.audit-filters select:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+
+.audit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.audit-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+}
+
+.audit-row__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.75rem;
+}
+
+.audit-row__time {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.audit-row__event {
+  font-weight: 600;
+}
+
+.audit-row__kind {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.audit-row__summary {
+  margin: 0;
+}
+
+.audit-row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.9rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.audit-row__entity {
+  font-weight: 600;
+}
+
+.audit-source--history {
+  background: var(--bad-bg);
+  color: var(--bad-text);
+  border-color: transparent;
+}
+
+.audit-row__toggle {
+  align-self: flex-start;
+}
+
+.audit-row__detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.35rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border);
+}
+
+.audit-detail {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+}
+
+.audit-detail div {
+  display: grid;
+  grid-template-columns: minmax(7rem, 10rem) 1fr;
+  gap: 0.5rem;
+}
+
+.audit-detail dt {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.audit-detail dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.audit-json {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.audit-json__label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.audit-json__value {
+  margin: 0;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg);
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.audit-json__empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.audit-list__more {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.5rem;
+}
+
+.status-chip--normal {
+  background: var(--ok-bg);
+  color: var(--ok-text);
+  border-color: transparent;
+}
+
+.status-chip--manual_only {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.status-chip--retired {
+  background: var(--bg);
+  color: var(--muted);
+}
+
+.status-chip--deleted {
+  background: var(--bad-bg);
+  color: var(--bad-text);
+  border-color: transparent;
+}
+
+/* ---------- backups (M13-06) ---------- */
+
+.backups-created {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.9rem;
+}
+
+.backups-created button {
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 0.45rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.backups-table__filename,
+.backups-table__error {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+
+.backups-table__schema {
+  max-width: 14rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.backups-table__size {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.backup-checksum {
+  font-size: 0.8rem;
+}
+
+.backup-checksum summary {
+  cursor: pointer;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.backup-checksum code {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.backup-status--completed {
+  background: var(--ok-bg);
+  color: var(--ok-text);
+  border-color: transparent;
+}
+
+.backup-status--pending {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.backup-status--restored {
+  background: var(--bg);
+  color: var(--muted);
+}
+
+.backup-status--failed,
+.backup-status--deleted {
+  background: var(--bad-bg);
+  color: var(--bad-text);
+  border-color: transparent;
+}
+
+/*
+ * The restore takes the whole page: the server is restarting, so nothing else
+ * on the page is actionable. It sits under the modal backdrop (z-index 20) so
+ * an open dialog would still be on top.
+ */
+.restore-progress {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: clamp(1.5rem, 8vh, 6rem) 1.25rem;
+  background: var(--bg);
+  overflow-y: auto;
+  text-align: center;
+}
+
+.restore-progress__title {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.restore-progress__message {
+  max-width: 32rem;
+  margin: 0;
+  font-weight: 600;
+}
+
+.restore-progress__facts {
+  display: grid;
+  gap: 0.4rem;
+  width: min(32rem, 100%);
+  margin: 0;
+  text-align: left;
+}
+
+.restore-progress__facts div {
+  display: grid;
+  grid-template-columns: minmax(7rem, 10rem) 1fr;
+  gap: 0.5rem;
+}
+
+.restore-progress__facts dt {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.restore-progress__facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.restore-progress .page-note {
+  max-width: 32rem;
+  margin: 0;
+}
+
+@media (max-width: 30rem) {
+  .restore-progress__facts div {
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
+  }
+}
+
+/* ---------- touch targets (M14-03) ---------- */
+
+/*
+ * Phone-width hit areas (docs/M14_PLAN.md §1.7). The primary navigation, view
+ * toggles and action buttons were still text-sized (21–42 px tall) at
+ * 360–414 px. The component-level mobile blocks above already size the grocery,
+ * calendar-toolbar and reference-data controls; this block covers the rest of
+ * the primary surface, and desktop styling is untouched.
+ */
+@media (max-width: 40rem) {
+  .app-nav__link,
+  .settings-nav__link,
+  .reference-data__tabs .settings-nav__link,
+  .calendar-toggle button,
+  .stats-tab,
+  .button--primary,
+  a.button--primary,
+  a.recipes__import,
+  .recipes__view-toggle button,
+  .app-account button,
+  .calendar-toolbar__nav button,
+  .data-table__actions button,
+  .modal__actions button,
+  .audit-row__toggle,
+  .history-day__correct,
+  .skip-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.75rem;
+  }
+
+  /* Icon-only controls need the width as well as the height. */
+  .calendar-toolbar__nav button {
+    min-width: 2.75rem;
+  }
+
+  /* Selects were 39 px tall; the text inputs already reach 44 px. */
+  select {
+    min-height: 2.75rem;
+  }
+}

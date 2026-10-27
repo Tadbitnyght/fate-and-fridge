@@ -1,0 +1,35 @@
+# Fate & Fridge — Docker build context exclusions.
+# Keep the image context small and never leak secrets or runtime state.
+
+# Version control / editors
+.git
+.github
+.vscode
+.idea
+
+# Secrets and environment files
+.env
+.env.*
+
+# Runtime data and NAS service-account home (see docs/DEPLOYMENT.md)
+data
+backups
+home
+
+# .NET
+**/bin
+**/obj
+**/TestResults
+backend/tests
+
+# Node
+**/node_modules
+frontend/dist
+frontend/playwright-report
+frontend/test-results
+**/*.tsbuildinfo
+
+# Not needed inside the image
+docs
+scripts
+*.md

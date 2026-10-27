@@ -1,0 +1,260 @@
+import type {
+  ImportReference,
+  ImportRecipeDraft,
+  ImportUnitDimension,
+} from '../../api/importRecipes'
+import {
+  newFormKey,
+  type IngredientFormRow,
+  type InstructionSectionFormRow,
+  type RecipeFormState,
+} from '../recipes/recipeForm'
+import type { FieldErrors } from '../../utils/fieldErrors'
+
+/**
+ * Maps a parsed import draft (docs/API.md §15) into the editable
+ * {@link RecipeFormState} used by the shared recipe form controls, so the
+ * review screen can reuse RecipeFormPage's ingredients/instructions/proteins
+ * fieldset components and the same create request builder.
+ *
+ * Only values the parser produced are carried over — nothing is invented. A
+ * line whose quantity stayed raw (ranges, word quantities) renders with an
+ * empty quantity field; the raw text is preserved in the preparation note when
+ * the parser did not split one out.
+ */
+
+function ingredientRow(ingredient: ImportRecipeDraft['ingredients'][number]): IngredientFormRow {
+  const matchedId = ingredient.matched_ingredient_id
+  const quantityText = ingredient.quantity === null ? '' : String(ingredient.quantity)
+  const unitId = ingredient.unit.matched_unit_id
+  const preparationNote =
+    ingredient.preparation_note ??
+    // Preserve unparsed raw quantity text so the user can see what was dropped
+    // instead of silently losing it.
+    (ingredient.quantity === null && ingredient.raw.length > 0
+      ? extractRawQuantityText(ingredient.raw, ingredient.name)
+      : '')
+
+  return {
+    key: newFormKey('ingredient'),
+    ingredientId: matchedId === null ? '' : String(matchedId),
+    ingredientName: matchedId === null ? '' : ingredient.name,
+    ingredientActive: true,
+    quantity: quantityText,
+    unitId: unitId === null ? '' : String(unitId),
+    unitLabel: unitId === null ? '' : (ingredient.unit.matched_symbol ?? ingredient.unit.raw ?? ''),
+    unitActive: true,
+    preparationNote,
+    isOptional: false,
+  }
+}
+
+/**
+ * When the parser left `quantity` null it kept the original token in `raw`.
+ * Show only a *numeric-looking* token (ranges, multipliers, mixed numbers the
+ * parser could not resolve) in the preparation note so the reviewer can turn
+ * it into a number. Word quantities ("a pinch", "some") are intentionally not
+ * surfaced as a prep note — they belong to the raw line, not the note.
+ */
+function extractRawQuantityText(raw: string, name: string): string {
+  const trimmed = raw.trim()
+  if (trimmed.length === 0) {
+    return ''
+  }
+  if (name.length === 0) {
+    return ''
+  }
+  // The raw line normally starts with the quantity token then the name; take
+  // the prefix before the matched name when it is a recognizable short token.
+  const index = trimmed.toLowerCase().indexOf(name.toLowerCase())
+  if (index <= 0 || index > 24) {
+    return ''
+  }
+  const prefix = trimmed.slice(0, index).trim()
+  // Only numeric-ish prefixes are useful as an editable quantity hint.
+  return /[\d/]/.test(prefix) ? prefix : ''
+}
+
+/**
+ * Per-row import-resolution metadata (M4-09/M4-10). Keyed by the
+ * {@link IngredientFormRow.key} created by {@link fromImportDraft}, so it
+ * survives adding, removing, and reordering rows. An ingredient is surfaced as
+ * "needs an ingredient" only while its row has no `ingredientId`; mapping the
+ * row clears it naturally. The nested {@link UnknownUnitLine} carries the same
+ * treatment for a unit the parser could not recognize (M4-10).
+ */
+export interface UnknownIngredientLine {
+  /** The original parsed ingredient line, shown verbatim to the reviewer. */
+  raw: string
+  /** Parsed canonical-name text, offered as the default create name. */
+  name: string
+  /** Draft suggestions (already bounded by the server) for this line. */
+  suggestions: ImportReference[]
+  /** Unrecognized unit text on this line, or `null` when the unit resolved. */
+  unit: UnknownUnitLine | null
+}
+
+/**
+ * Resolution metadata for a raw unit the parser could not match (M4-10). The
+ * server only suggests a dimension when it is obvious; otherwise the reviewer
+ * must choose one explicitly — package-size conversion is never guessed.
+ */
+export interface UnknownUnitLine {
+  /** The original parsed unit text, shown verbatim. */
+  raw: string
+  /** Suggested dimension when obvious, otherwise `null`. */
+  suggestedDimension: ImportUnitDimension | null
+  /** Existing units the reviewer can map to in one tap. */
+  suggestions: Array<{ id: number; symbol: string; display_name: string }>
+}
+
+function unknownUnitLine(
+  ingredient: ImportRecipeDraft['ingredients'][number],
+): UnknownUnitLine | null {
+  if (!ingredient.unit.is_unknown) {
+    return null
+  }
+  const raw = ingredient.unit.raw
+  // A blank unit is always allowed (M3 nullable unit) and needs no resolution.
+  // The server reports an absent unit as `raw: null`, so there is no
+  // "unrecognized unit" affordance to show for it.
+  if (raw === null || raw.trim().length === 0) {
+    return null
+  }
+  return {
+    raw,
+    suggestedDimension: ingredient.unit.suggested_dimension,
+    suggestions: ingredient.unit.suggestions,
+  }
+}
+
+/**
+ * Builds the unknown-line map for a freshly seeded draft. `rows` must be the
+ * rows returned by {@link fromImportDraft} for the same draft, in order. A row
+ * is seeded when either its ingredient or its unit is unresolved, so a
+ * known-ingredient line with an unknown unit still gets a resolution affordance.
+ *
+ * Only flat lines are seeded: the import draft contract (docs/API.md §15) has
+ * no `ingredient_groups` — groups are a `POST /recipes` (§23) concept — so
+ * `fromImportDraft` never produces group rows and there is no parsed group line
+ * to seed. Group rows the reviewer adds on the review screen are blank
+ * {@link IngredientFormRow}s with no raw unit text. If grouped import drafts
+ * are ever introduced, seed their lines here **and** thread the map into the
+ * group row list in `IngredientFields` (BUG-002).
+ */
+export function seedUnknownLines(
+  draft: ImportRecipeDraft,
+  rows: IngredientFormRow[],
+): Record<string, UnknownIngredientLine> {
+  const unknown: Record<string, UnknownIngredientLine> = {}
+  draft.ingredients.forEach((ingredient, index) => {
+    const row = rows[index]
+    if (row === undefined) {
+      return
+    }
+    const unit = unknownUnitLine(ingredient)
+    if (!ingredient.is_unknown && unit === null) {
+      return
+    }
+    unknown[row.key] = {
+      raw: ingredient.raw,
+      name: ingredient.name,
+      suggestions: ingredient.suggestions,
+      unit,
+    }
+  })
+  return unknown
+}
+
+/**
+ * Server-aligned validation for unresolved raw units (M4-10). A blank unit is
+ * always allowed (M3 nullable unit), and a line whose unit already resolved (or
+ * was mapped/created) is fine; only a present-but-unrecognized unit blocks
+ * saving. Keys use the same `ingredients[i].unit_id` paths as the server so the
+ * message lands on the unit field.
+ *
+ * Only flat lines can be unresolved: grouped import drafts cannot exist (see
+ * {@link seedUnknownLines}), so there is no nested branch to validate. If that
+ * contract ever changes, validate the group rows here at the same time as
+ * seeding them (BUG-002).
+ */
+export function validateUnknownUnits(
+  state: RecipeFormState,
+  unknownLines: Record<string, UnknownIngredientLine>,
+): FieldErrors {
+  const errors: FieldErrors = {}
+  state.ingredients.forEach((row, index) => {
+    const unit = unknownLines[row.key]?.unit
+    const raw = (unit?.raw ?? '').trim()
+    if (unit !== null && unit !== undefined && raw.length > 0 && row.unitId === '') {
+      errors[`ingredients[${index}].unit_id`] = `Choose or create a unit for “${raw}”.`
+    }
+  })
+  return errors
+}
+
+export function fromImportDraft(draft: ImportRecipeDraft): RecipeFormState {
+  const sections: InstructionSectionFormRow[] = draft.instruction_sections.map((section) => ({
+    key: newFormKey('section'),
+    title: section.title ?? '',
+    steps: section.steps.length > 0 ? section.steps : [''],
+  }))
+
+  return {
+    name: draft.name,
+    description: draft.description ?? '',
+    sourceSite: draft.source_site ?? '',
+    sourceUrl: draft.source_url ?? '',
+    author: draft.author ?? '',
+    prepMinutes: draft.prep_minutes === null ? '' : String(draft.prep_minutes),
+    cookMinutes: draft.cook_minutes === null ? '' : String(draft.cook_minutes),
+    notes: draft.notes ?? '',
+    status: 'normal',
+    isFavorite: false,
+    isVegan: false,
+    isVegetarian: false,
+    ingredients: draft.ingredients.map(ingredientRow),
+    // The import draft contract (docs/API.md §15) has no ingredient groups, so
+    // an imported recipe always starts flat; the reviewer can still add groups
+    // by hand (BUG-002).
+    groups: [],
+    sections,
+    proteinIds: draft.proteins.map((protein) => protein.id),
+    tagIds: draft.tags.map((tag) => tag.id),
+  }
+}
+
+/** A friendly, non-leaking message for an import failure. */
+export function describeImportError(code: string, retryAfterSeconds: number | null): string {
+  switch (code) {
+    case 'IMPORT_URL_INVALID':
+      return 'That does not look like a valid recipe link. Paste a full http:// or https:// address.'
+    case 'IMPORT_URL_BLOCKED':
+      return 'That address cannot be imported for security reasons. Try a different link.'
+    case 'IMPORT_FETCH_FAILED':
+      return 'The page could not be reached. Check the link and try again.'
+    case 'IMPORT_UNSUPPORTED_CONTENT':
+      return 'That link returned content this importer cannot read. Try a different page.'
+    case 'IMPORT_TOO_LARGE':
+      return 'That page is too large to import. Try a different link.'
+    case 'IMPORT_NO_RECIPE':
+      return 'No recipe could be found on that page. Try a different link.'
+    case 'IMPORT_RATE_LIMITED': {
+      const suffix =
+        retryAfterSeconds !== null && retryAfterSeconds > 0
+          ? ` Try again in about ${formatSeconds(retryAfterSeconds)}.`
+          : ' Try again later.'
+      return `You have imported too many recipes recently.${suffix}`
+    }
+    default:
+      return 'Import failed. Check the connection and try again.'
+  }
+}
+
+function formatSeconds(seconds: number): string {
+  if (seconds < 60) {
+    return `${seconds} second${seconds === 1 ? '' : 's'}`
+  }
+  const minutes = Math.ceil(seconds / 60)
+  return `${minutes} minute${minutes === 1 ? '' : 's'}`
+}

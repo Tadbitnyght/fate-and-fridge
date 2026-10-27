@@ -1,0 +1,55 @@
+# Fate & Fridge — Docker Compose stack (application + PostgreSQL).
+#
+# Quick start:
+#   cp .env.example .env      # then set a real POSTGRES_PASSWORD
+#   docker compose up -d --build
+#
+# The database is intentionally not published to the host; only the
+# application port is exposed. See docs/DEPLOYMENT.md for TrueNAS specifics.
+name: fate-and-fridge
+
+services:
+  app:
+    build:
+      context: .
+    image: fate-and-fridge:${APP_VERSION:-1.0.0}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${APP_ENV:-production}
+      ASPNETCORE_URLS: http://+:8080
+      TZ: ${TZ:-UTC}
+      DataDir: /data
+      Database__MigrateOnStartup: "true"
+      ConnectionStrings__Default: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-fatefridge};Username=${POSTGRES_USER:-fatefridge};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
+    ports:
+      - "${HOST_PORT:-50080}:8080"
+    volumes:
+      - ${HOST_DATA_DIR:-./data}/config:/data/config
+      - ${HOST_DATA_DIR:-./data}/images:/data/images
+      - ${HOST_DATA_DIR:-./data}/backups:/data/backups
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-fatefridge}
+      POSTGRES_USER: ${POSTGRES_USER:-fatefridge}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      TZ: ${TZ:-UTC}
+    volumes:
+      - ${HOST_DATA_DIR:-./data}/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s

@@ -1,0 +1,266 @@
+using System.Buffers.Text;
+using System.Security.Cryptography;
+using FateAndFridge.Api.Data;
+using Microsoft.Extensions.Logging;
+
+namespace FateAndFridge.Api.Services;
+
+/// <summary>
+/// Backup recovery key file (docs/SECURITY.md §11, docs/DATABASE.md §11):
+/// 32 CSPRNG bytes, base64url, stored at <c>{DataDir}/config/recovery.key</c>
+/// with file mode <c>0600</c>. An existing key is validated and reused, never
+/// overwritten, and its permissions are tightened to owner-only on Unix. An
+/// empty, malformed, or unreadable file fails loudly with an operator-facing
+/// error instead of being returned as a key. The value is never stored in the
+/// database and never logged.
+/// </summary>
+public sealed class RecoveryKeyStore(IConfiguration configuration, ILogger<RecoveryKeyStore> logger)
+{
+    public const int KeyLengthBytes = 32;
+
+    public const string FileName = "recovery.key";
+
+    private static readonly UnixFileMode OwnerOnlyMode =
+        UnixFileMode.UserRead | UnixFileMode.UserWrite;
+
+    /// <summary>Absolute path of the recovery key file for a configuration.</summary>
+    public static string FilePathFor(IConfiguration configuration) =>
+        Path.Combine(AppPaths.DataRoot(configuration), "config", FileName);
+
+    /// <summary>Absolute path of the recovery key file.</summary>
+    public string FilePath => FilePathFor(configuration);
+
+    /// <summary>True when a recovery key file exists (no read, no creation).</summary>
+    public bool Exists => File.Exists(FilePath);
+
+    /// <summary>
+    /// Reads the validated existing recovery key <em>without creating one</em>
+    /// (docs/M13_PLAN.md §1.3, §1.4): a backup must never mint a key that the
+    /// user has not been shown. Returns null only when the file is absent; an
+    /// unreadable or malformed file throws <see cref="InvalidDataException"/>
+    /// exactly like <see cref="GetOrCreateAsync"/>.
+    /// </summary>
+    public async Task<string?> TryReadAsync(CancellationToken cancellationToken = default)
+    {
+        if (!File.Exists(FilePath))
+        {
+            return null;
+        }
+
+        return await ReadExistingAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Reads the validated existing recovery key, or throws
+    /// <see cref="InvalidDataException"/> when it is absent or unusable. This is
+    /// the read-only counterpart of <see cref="GetOrCreateAsync"/>.
+    /// </summary>
+    public async Task<string> ReadAsync(CancellationToken cancellationToken = default) =>
+        await TryReadAsync(cancellationToken).ConfigureAwait(false)
+        ?? throw InvalidKeyFile("the file does not exist", innerException: null);
+
+    /// <summary>
+    /// Returns the validated existing recovery key, or creates one. Creation is
+    /// exclusive (a concurrently created file wins, is validated, and reused)
+    /// and the file is created with owner-only permissions on Unix. Throws
+    /// <see cref="InvalidDataException"/> when the existing file is unusable.
+    /// </summary>
+    public async Task<string> GetOrCreateAsync(CancellationToken cancellationToken = default)
+    {
+        if (File.Exists(FilePath))
+        {
+            return await ReadExistingAsync(cancellationToken);
+        }
+
+        var key = Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(KeyLengthBytes));
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
+
+            try
+            {
+                var options = new FileStreamOptions
+                {
+                    Mode = FileMode.CreateNew,
+                    Access = FileAccess.Write,
+                    Share = FileShare.None,
+                };
+                if (!OperatingSystem.IsWindows())
+                {
+                    options.UnixCreateMode = OwnerOnlyMode;
+                }
+
+                await using var stream = new FileStream(FilePath, options);
+                await using var writer = new StreamWriter(stream);
+                await writer.WriteAsync(key.AsMemory(), cancellationToken);
+            }
+            catch (IOException) when (File.Exists(FilePath))
+            {
+                // Another writer created the key first: validate and reuse it.
+                return await ReadExistingAsync(cancellationToken);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // Directory creation and key-file creation failures (read-only
+            // directory, config path occupied by a file, permission denied)
+            // surface as the same actionable operator error instead of a raw
+            // IOException/UnauthorizedAccessException.
+            throw InvalidKeyFile(
+                "the key file could not be created (check that the config directory exists and is writable)",
+                exception);
+        }
+
+        return key;
+    }
+
+    /// <summary>
+    /// Establishes a caller-supplied key as this device's recovery key when no
+    /// key file exists yet (docs/M13_PLAN.md §1.10). The clean-install restore
+    /// uses it: the operator pastes the household key of the device the archive
+    /// came from, so that key must be the key this device keeps — otherwise the
+    /// mandatory pre-restore safety backup could not be encrypted at all, and
+    /// the restored instance would have no key for later backups (a completed
+    /// setup never mints a second one). An existing file is never overwritten
+    /// and never compared with the supplied key; the supplied value is validated
+    /// but never logged.
+    /// </summary>
+    /// <returns>True when the file was created by this call.</returns>
+    /// <exception cref="ArgumentException">The value is not a base64url-encoded 32-byte key.</exception>
+    public async Task<bool> WriteIfAbsentAsync(string key, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+
+        var keyText = key.Trim();
+        if (!IsValidKey(keyText))
+        {
+            throw new ArgumentException(
+                $"The supplied key must be a base64url-encoded {KeyLengthBytes}-byte key.",
+                nameof(key));
+        }
+
+        if (File.Exists(FilePath))
+        {
+            return false;
+        }
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
+
+            var options = new FileStreamOptions
+            {
+                Mode = FileMode.CreateNew,
+                Access = FileAccess.Write,
+                Share = FileShare.None,
+            };
+            if (!OperatingSystem.IsWindows())
+            {
+                options.UnixCreateMode = OwnerOnlyMode;
+            }
+
+            try
+            {
+                await using var stream = new FileStream(FilePath, options);
+                await using var writer = new StreamWriter(stream);
+                await writer.WriteAsync(keyText.AsMemory(), cancellationToken);
+            }
+            catch (IOException) when (File.Exists(FilePath))
+            {
+                // Another writer created the key first: never overwrite it.
+                return false;
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw InvalidKeyFile(
+                "the key file could not be created (check that the config directory exists and is writable)",
+                exception);
+        }
+
+        logger.LogInformation(
+            "The recovery key supplied with the clean-install restore was adopted as this device's key.");
+        return true;
+    }
+
+    private async Task<string> ReadExistingAsync(CancellationToken cancellationToken)
+    {
+        string content;
+        try
+        {
+            content = (await File.ReadAllTextAsync(FilePath, cancellationToken)).Trim();
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw InvalidKeyFile("the file could not be read", exception);
+        }
+
+        if (!IsValidKey(content))
+        {
+            throw InvalidKeyFile(
+                content.Length == 0
+                    ? "the file is empty"
+                    : $"the content is not a base64url-encoded {KeyLengthBytes}-byte key",
+                innerException: null);
+        }
+
+        EnsureOwnerOnlyMode();
+        return content;
+    }
+
+    /// <summary>
+    /// Tightens the file to mode 0600 on Unix (idempotent); no-op on Windows.
+    /// </summary>
+    private void EnsureOwnerOnlyMode()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        try
+        {
+            if (File.GetUnixFileMode(FilePath) != OwnerOnlyMode)
+            {
+                File.SetUnixFileMode(FilePath, OwnerOnlyMode);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw InvalidKeyFile("the file permissions could not be restricted to 0600", exception);
+        }
+    }
+
+    private InvalidDataException InvalidKeyFile(string reason, Exception? innerException)
+    {
+        // Operator-facing: names the path and expected format, never the bytes.
+        logger.LogError(
+            innerException,
+            "The recovery key file at {RecoveryKeyPath} is unusable ({Reason}); expected a base64url-encoded {KeyLengthBytes}-byte key with mode 0600. Fix or remove the file and retry setup.",
+            FilePath,
+            reason,
+            KeyLengthBytes);
+
+        return new InvalidDataException(
+            $"The recovery key file at '{FilePath}' is unusable ({reason}); expected a base64url-encoded {KeyLengthBytes}-byte key with mode 0600. Fix or remove the file and retry setup.",
+            innerException);
+    }
+
+    private static bool IsValidKey(string content)
+    {
+        if (content.Length == 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            return Base64Url.DecodeFromChars(content).Length == KeyLengthBytes;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+}

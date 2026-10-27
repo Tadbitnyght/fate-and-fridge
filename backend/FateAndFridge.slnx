@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/FateAndFridge.Api/FateAndFridge.Api.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FateAndFridge.Api.Tests/FateAndFridge.Api.Tests.csproj" />
+  </Folder>
+</Solution>

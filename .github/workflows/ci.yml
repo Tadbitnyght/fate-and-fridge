@@ -1,0 +1,377 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+  DOTNET_NOLOGO: '1'
+
+jobs:
+  backend:
+    name: Backend (format, build, migrations, tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      # Dependency gate (M14-01). `TreatWarningsAsErrors=true` (Directory.Build.props)
+      # promotes every NuGet audit finding — NU1901/NU1902/NU1903/NU1904, low
+      # through critical, direct and transitive (NuGetAuditMode=all) — to an
+      # error, so a High/Critical advisory with a fix fails this step. The repo
+      # policy is stricter than the minimum: Moderate/Low fail too.
+      - name: 'Restore (NuGet audit gate: vulnerable packages fail the build)'
+        run: dotnet restore
+      # Visibility/record only: never fails the job (the gate above does that).
+      # The JSON keeps the resolved advisory list attachable for review.
+      # `--no-restore` because the gate step already restored.
+      - name: NuGet vulnerability report (JSON)
+        if: always()
+        run: |
+          mkdir -p artifacts
+          dotnet list src/FateAndFridge.Api/FateAndFridge.Api.csproj \
+            package --vulnerable --include-transitive --no-restore --format json \
+            > artifacts/nuget-vulnerable-api.json
+          dotnet list tests/FateAndFridge.Api.Tests/FateAndFridge.Api.Tests.csproj \
+            package --vulnerable --include-transitive --no-restore --format json \
+            > artifacts/nuget-vulnerable-tests.json
+      - name: Upload the NuGet vulnerability report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-vulnerability-report
+          path: backend/artifacts/nuget-vulnerable-*.json
+          if-no-files-found: warn
+      - name: Format check
+        run: dotnet format --verify-no-changes --no-restore
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+      - name: Check EF Core model matches migrations
+        run: |
+          dotnet tool restore
+          dotnet ef migrations has-pending-model-changes \
+            --project src/FateAndFridge.Api \
+            --startup-project src/FateAndFridge.Api
+      - name: Tests (unit + PostgreSQL integration via Testcontainers)
+        run: dotnet test --configuration Release
+
+  frontend:
+    name: Frontend (lint, types, tests, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      # Dependency gate (M14-01): fails on high/critical npm advisories that
+      # have a fix. `npm ci` installs the exact locked tree; the audit runs as a
+      # separate step so the JSON report survives a failing gate.
+      - name: 'Dependency audit (npm: high/critical fail)'
+        run: npm audit --audit-level=high
+      - name: Dependency audit report (JSON)
+        if: always()
+        run: |
+          mkdir -p artifacts
+          npm audit --json > artifacts/npm-audit.json || true
+      - name: Upload the npm audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-report
+          path: frontend/artifacts/npm-audit.json
+          if-no-files-found: warn
+      - name: Lint
+        run: npm run lint
+      - name: Format check
+        run: npm run format:check
+      - name: Type check
+        run: npm run typecheck
+      - name: Tests
+        run: npm run test
+      - name: Build
+        run: npm run build
+
+  a11y:
+    name: Accessibility (axe WCAG 2.1 AA, hermetic Playwright)
+    runs-on: ubuntu-latest
+    # axe over 29 routes plus the mobile audit spec: ~2 minutes, so 15 gives
+    # generous headroom while still failing a hung runner.
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      # Gate (M14-02): axe-core over the key routes with the WCAG 2.1 A/AA rule
+      # sets. The spec mocks /api/v1/** (hermetic) and fails on any violation;
+      # `best-practice` is not part of the agreed bar. Report artifacts keep the
+      # actionable list (rule id, target, help URL) attachable. The project is
+      # pinned to `chromium` because the spec manages its own 375 px and dark
+      # viewports; the mobile projects run the mobile spec below.
+      - name: Run the axe accessibility spec
+        run: npx playwright test e2e/a11y.spec.ts --project=chromium
+      # Gate (M14-03): the same hermetic bundle in the Pixel 7 and iPhone 13
+      # projects — no horizontal overflow, >= 44 px primary tap targets at phone
+      # widths, usable dialogs and sane focus. Any assertion fails the job.
+      - name: Run the mobile audit spec (Pixel 7 + iPhone 13)
+        run: npx playwright test e2e/mobile.spec.ts --project="Pixel 7" --project="iPhone 13"
+      - name: Upload the Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-a11y-report
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          if-no-files-found: warn
+
+  hermetic-e2e:
+    name: Hermetic e2e (full Playwright chromium suite)
+    runs-on: ubuntu-latest
+    # The full mocked suite (every `e2e/*.spec.ts` except the real-stack specs,
+    # which skip without E2E_BASE_URL): ~4 minutes locally, so 20 covers a slow
+    # runner plus the Vite dev-server start without hiding a hang.
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      # Gate (M14 review): the whole hermetic chromium suite — app, calendar,
+      # groceries, recipes, import, print, settings, reference data,
+      # statistics, audit log and live sync — with `/api/v1/**` mocked and no
+      # E2E_BASE_URL, so the `stack` job below only has to own the real-stack
+      # specs. `e2e/stack/*` self-skips without E2E_BASE_URL.
+      - name: Run the hermetic chromium suite
+        run: npx playwright test --project=chromium
+      - name: Upload the Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-hermetic-report
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          if-no-files-found: warn
+
+  compose:
+    name: Compose configuration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate compose file
+        run: POSTGRES_PASSWORD=ci-placeholder docker compose config -q
+
+  image-scan:
+    name: Runtime image scan (Trivy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: [backend, frontend]
+    env:
+      # Pinned on purpose (M14-01): the scanner is a gate, so its version must
+      # be reproducible. Never use `latest` here; bump deliberately and record
+      # the change in docs/M14_SECURITY_REPORT.md. The digest pins the exact
+      # scanner image in addition to the tag.
+      TRIVY_VERSION: 0.76.1
+      TRIVY_IMAGE: aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+      # Build the same image the stack runs (`compose.yaml` → Dockerfile runtime
+      # stage) so the scan covers exactly the shipped layers.
+      APP_VERSION: ci-scan
+    steps:
+      - uses: actions/checkout@v7
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          sed -i 's/change-me-before-first-start/ci-test-password/' .env
+      - name: Build the runtime image (compose app service)
+        run: docker compose build app
+      - name: Export the image for scanning
+        run: |
+          mkdir -p scan
+          docker save fate-and-fridge:ci-scan -o scan/runtime-image.tar
+      # Gate: HIGH/CRITICAL advisories that have a fix fail the job
+      # (--ignore-unfixed leaves no-fix advisories to the documented exception
+      # table in docs/M14_SECURITY_REPORT.md).
+      - name: Scan the runtime image (HIGH/CRITICAL, fixed only)
+        run: |
+          docker run --rm \
+            -v "$PWD/scan:/scan" \
+            -v "$PWD/.trivy-cache:/root/.cache/trivy" \
+            "${TRIVY_IMAGE}" image \
+              --input /scan/runtime-image.tar \
+              --scanners vuln \
+              --severity HIGH,CRITICAL \
+              --ignore-unfixed \
+              --exit-code 1 \
+              --timeout 10m \
+              --format json \
+              --output /scan/trivy-runtime-image.json
+      - name: Write the human-readable scan report
+        if: always() && hashFiles('scan/runtime-image.tar') != ''
+        run: |
+          mkdir -p scan
+          docker run --rm \
+            -v "$PWD/scan:/scan" \
+            -v "$PWD/.trivy-cache:/root/.cache/trivy" \
+            "${TRIVY_IMAGE}" image \
+              --input /scan/runtime-image.tar \
+              --scanners vuln \
+              --severity HIGH,CRITICAL \
+              --ignore-unfixed \
+              --exit-code 0 \
+              --timeout 10m \
+              --format table | tee scan/trivy-runtime-image.txt
+      # Medium/Low advisories are reported and tracked (policy in
+      # docs/SECURITY.md §20), so record an unfiltered report as well. This step
+      # never fails the job.
+      - name: Record all severities (Medium/Low included)
+        if: always() && hashFiles('scan/runtime-image.tar') != ''
+        run: |
+          mkdir -p scan
+          docker run --rm \
+            -v "$PWD/scan:/scan" \
+            -v "$PWD/.trivy-cache:/root/.cache/trivy" \
+            "${TRIVY_IMAGE}" image \
+              --input /scan/runtime-image.tar \
+              --scanners vuln \
+              --exit-code 0 \
+              --timeout 10m \
+              --format json \
+              --output /scan/trivy-runtime-image-all.json || true
+      - name: Upload the image scan report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-runtime-image-report
+          path: |
+            scan/trivy-runtime-image.json
+            scan/trivy-runtime-image.txt
+            scan/trivy-runtime-image-all.json
+          if-no-files-found: error
+
+  stack:
+    name: Docker stack acceptance + Playwright
+    runs-on: ubuntu-latest
+    needs: [backend, frontend, compose]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          sed -i 's/change-me-before-first-start/ci-test-password/' .env
+      - name: Build images
+        run: docker compose build
+      - name: Start stack
+        run: docker compose up -d
+      - name: Wait for a healthy application
+        run: |
+          for i in $(seq 1 90); do
+            if curl -fsS http://localhost:50080/api/v1/health >/dev/null; then
+              echo "Application is healthy."
+              break
+            fi
+            if [ "$i" -eq 90 ]; then
+              echo "Application did not become healthy in time."
+              docker compose logs
+              exit 1
+            fi
+            sleep 5
+          done
+          curl -fsS http://localhost:50080/api/v1/health
+          curl -fsS http://localhost:50080/api/v1/health/db
+      - name: Verify startup migrations ran
+        run: docker compose logs app | grep -i "migrations applied"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Install Playwright Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      # Only the real-stack specs run here. The hermetic suites are owned by the
+      # `hermetic-e2e` job (full chromium suite) and the `a11y` job (axe and
+      # mobile projects) — the `frontend` job runs no Playwright at all.
+      # Re-running them against this stack added parallel load to the one-shot
+      # acceptance flow (it consumed the first-run setup in a retry, CI run
+      # 40145178694) without proving anything the hermetic jobs do not.
+      - name: Playwright stack acceptance
+        working-directory: frontend
+        env:
+          E2E_BASE_URL: http://localhost:50080
+        run: npx playwright test e2e/stack --project=chromium
+      - name: Reset stack for the real-stack live-sync flow
+        run: |
+          docker compose down -v
+          # The stack persists state in bind mounts, not named volumes, so
+          # `down -v` leaves the configured database in place. Remove the
+          # bind-mounted data directory (from the configured HOST_DATA_DIR) to
+          # reproduce a fresh install; Docker recreates it on `up`.
+          # `sudo` is required: the containers create root-owned files (and the
+          # postgres data dir is owned by uid 70), which the runner user cannot
+          # remove. GitHub-hosted runners have passwordless sudo.
+          data_dir="$(grep -E '^HOST_DATA_DIR=' .env | cut -d= -f2- || true)"
+          sudo rm -rf "${data_dir:-./data}"
+          docker compose up -d
+          for i in $(seq 1 90); do
+            if curl -fsS http://localhost:50080/api/v1/health >/dev/null; then
+              echo "Application is healthy."
+              break
+            fi
+            if [ "$i" -eq 90 ]; then
+              echo "Application did not become healthy in time."
+              docker compose logs
+              exit 1
+            fi
+            sleep 5
+          done
+          curl -fsS http://localhost:50080/api/v1/health
+          curl -fsS http://localhost:50080/api/v1/health/db
+      - name: Playwright real-stack live-sync flow
+        working-directory: frontend
+        env:
+          E2E_BASE_URL: http://localhost:50080
+          E2E_STACK_LIVE_SYNC: '1'
+        run: npx playwright test e2e/stack/live-sync.spec.ts
+      - name: Stop stack
+        if: always()
+        run: docker compose down -v
