@@ -29,7 +29,7 @@ export function updateSecuritySettings(patch: SecuritySettingsPatch): Promise<Se
 
 /**
  * Single-user → multiuser conversion (`POST /settings/auth-mode`). On success
- * the response is the signed-in session payload (cookie + CSRF pair included);
+ * the response is the signed-in session payload (cookie + CSRF pair included)
  * downgrade and already-multiuser conflicts use their own error codes.
  */
 export function switchToMultiuser(admin: { username: string; password: string }): Promise<Session> {

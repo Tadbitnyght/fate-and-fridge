@@ -2,7 +2,7 @@ namespace FateAndFridge.Api.Services;
 
 /// <summary>
 /// Advisory transaction-lock keys that serialize mutations affecting the
-/// admin-count invariant (M1-10). Taken inside the mutation transaction so the
+/// admin-count invariant. Taken inside the mutation transaction so the
 /// lock is released on commit/rollback.
 /// </summary>
 internal static class UserManagementLock

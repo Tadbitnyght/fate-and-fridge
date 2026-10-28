@@ -42,7 +42,7 @@ describe('grocery print page', () => {
     await screen.findByText('Onion')
 
     const boxes = view.container.querySelectorAll('.grocery-print__box')
-    // Onion (Produce), Bread (Bakery), and the manual Paper towels (Other);
+    // Onion (Produce), Bread (Bakery), and the manual Paper towels (Other)
     // the checked Carrot is excluded by default.
     expect(boxes).toHaveLength(3)
     boxes.forEach((box) => expect(box).toHaveAttribute('aria-hidden', 'true'))

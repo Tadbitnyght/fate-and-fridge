@@ -49,8 +49,8 @@ function GroceryPrintItem({ item }: { item: GroceryItem }) {
 }
 
 /**
- * Print-optimized grocery view (M8-08, docs/M8_PLAN.md §1.14). It renders the
- * same live projection as the M8-07 list (`GET /groceries`, no query → the
+ * Print-optimized grocery view. It renders the
+ * same live projection as the list (`GET /groceries`, no query → the
  * caller's remembered range) grouped by department in server order with the
  * "Other" group last, and excludes checked items by default. The
  * "Include checked items" toggle is the only control here and is independent of

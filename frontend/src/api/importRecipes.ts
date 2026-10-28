@@ -3,11 +3,10 @@ import type { RecipeImage } from './recipes'
 
 /**
  * Typed client for the M4 import contract (docs/API.md §15).
- *
  * Import is **stateless and draft-only**: `POST /import/recipe-url` fetches and
  * parses a page and returns a draft; nothing is written until the reviewed
  * draft is submitted through the normal `POST /recipes` endpoint. These
- * functions only describe the wire shapes — the server enforces `recipes.edit`,
+ * functions only describe the wire shapes — the server enforces `recipes.edit`
  * SSRF policy, throttling, and image content rules.
  */
 

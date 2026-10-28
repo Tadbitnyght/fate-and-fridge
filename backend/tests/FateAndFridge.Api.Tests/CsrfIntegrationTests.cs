@@ -15,7 +15,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// CSRF matrix for authenticated cookie requests (docs/API.md §4/§5,
+/// CSRF matrix for authenticated cookie requests (docs/API.md §4/§5
 /// docs/SECURITY.md §15): authenticated unsafe methods require the
 /// <c>X-CSRF-TOKEN</c> header and the token is bound to the session, safe
 /// methods are not validated, and requests without a valid session are never
@@ -24,8 +24,8 @@ namespace FateAndFridge.Api.Tests;
 /// locally.
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class CsrfIntegrationTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class CsrfIntegrationTests(SetupFixture fixture) : IAsyncLifetime
 {
     private const string AntiforgeryCookieName = "faf_csrf";
 
@@ -82,7 +82,7 @@ public sealed class CsrfIntegrationTests(M1SetupFixture fixture) : IAsyncLifetim
     }
 
     /// <summary>
-    /// M14-05: every cookie-authenticated unsafe route in the API must reject a
+    /// Every cookie-authenticated unsafe route in the API must reject a
     /// missing or invalid <c>X-CSRF-TOKEN</c> with <c>403 CSRF_VALIDATION_FAILED</c>.
     /// The route list is read from the running host, so a newly added unsafe
     /// route is covered automatically. The two documented exemptions are the
@@ -164,7 +164,7 @@ public sealed class CsrfIntegrationTests(M1SetupFixture fixture) : IAsyncLifetim
         using var factory = fixture.CreateFactory();
         using var client = factory.CreateClient();
 
-        // A mutating route, a destructive route, and a dangerous-action route:
+        // A mutating route, a destructive route, and a dangerous-action route
         // none may be stopped by the antiforgery gate when no session exists.
         foreach (var (method, path) in new[]
         {
@@ -577,7 +577,7 @@ public sealed class CsrfIntegrationTests(M1SetupFixture fixture) : IAsyncLifetim
 
     /// <summary>
     /// Turns a route pattern into a concrete path. Values are intentionally
-    /// meaningless: the CSRF middleware rejects before any parameter binding,
+    /// meaningless: the CSRF middleware rejects before any parameter binding
     /// so only the route shape matters.
     /// </summary>
     private static string ConcretePath(string pattern) =>

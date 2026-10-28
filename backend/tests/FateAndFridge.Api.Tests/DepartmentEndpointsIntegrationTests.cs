@@ -17,15 +17,15 @@ using Microsoft.EntityFrameworkCore;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// HTTP-level verification of M2-05 departments (docs/API.md §22): CRUD,
+/// HTTP-level verification of departments (docs/API.md §22): CRUD
 /// ordering/search/limit, retire and delete semantics, the complete-permutation
 /// order update, the route permission matrix, and audit coverage for every
 /// write. Requires a Docker daemon; run with
 /// <c>dotnet test --filter "Category!=Integration"</c> to skip locally.
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class DepartmentEndpointsIntegrationTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class DepartmentEndpointsIntegrationTests(SetupFixture fixture) : IAsyncLifetime
 {
     private const string DepartmentsPath = "/api/v1/departments";
     private const string AdminPassword = "root horse battery staple";
@@ -881,7 +881,7 @@ public sealed class DepartmentEndpointsIntegrationTests(M1SetupFixture fixture) 
             cancellationToken);
 
     /// <summary>
-    /// Boots the host (which runs the M2-04 startup seeder) and then clears
+    /// Boots the host (which runs the startup seeder) and then clears
     /// ingredients and departments so each test controls its own reference data.
     /// </summary>
     private async Task<ApiFactory> StartFactoryWithCleanReferenceDataAsync(
@@ -967,7 +967,7 @@ public sealed class DepartmentEndpointsIntegrationTests(M1SetupFixture fixture) 
     {
         await using var context = fixture.CreateContext();
 
-        // M12-01 mirrors login/logout into audit_events; these suites assert the
+        // Mirrors login/logout into audit_events; these suites assert the
         // reference-data/recipe rows they themselves write, so the auth mirror is
         // excluded here.
         return await context.AuditEvents.AsNoTracking()

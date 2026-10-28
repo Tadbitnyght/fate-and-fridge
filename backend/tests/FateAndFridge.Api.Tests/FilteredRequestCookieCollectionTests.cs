@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Http;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// Regression coverage for the M1-08 session-rotation re-mint: the antiforgery
+/// Regression coverage for the session-rotation re-mint: the antiforgery
 /// cookie is hidden from the framework view without re-serializing the raw
 /// <c>Cookie</c> header, so unrelated cookies (percent-encoded values included)
 /// are neither mutated nor dropped.

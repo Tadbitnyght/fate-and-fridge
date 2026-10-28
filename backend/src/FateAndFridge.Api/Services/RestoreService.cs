@@ -47,7 +47,7 @@ public abstract record RestoreRequester
     public sealed record Administrator(string Reason, long? ActorUserId, string? IpAddress) : RestoreRequester;
 
     /// <summary>
-    /// The clean-install setup wizard (docs/M13_PLAN.md §1.10): no session and
+    /// The clean-install setup wizard: no session and
     /// no actor exist yet, so the pasted key is the credential. The restore
     /// service takes ownership of the array and zeroes it when the restore
     /// finishes.
@@ -152,25 +152,24 @@ public sealed class RestoreOperation
 }
 
 /// <summary>
-/// The M13-04 restore orchestration (docs/M13_PLAN.md §1.9, §2.1, §4;
-/// docs/SECURITY.md §12; docs/API.md §18).
+/// The restore orchestration.
 /// </summary>
 /// <remarks>
 /// <para>
 /// <see cref="BeginAsync"/> does every step that must happen **before** any
 /// mutation: it takes the same operation gate as backup creation, resolves the
 /// archive, reads and verifies it with the recovery key (header, GCM
-/// authentication, ciphertext checksum, entry checksums against the manifest),
+/// authentication, ciphertext checksum, entry checksums against the manifest)
 /// refuses an archive whose schema version this build does not know, and only
 /// then creates the mandatory safety backup. A validation failure therefore
 /// leaves no row, no file, no maintenance mode, and no marker behind.
 /// </para>
 /// <para>
 /// <see cref="ExecuteAsync"/> runs afterwards (the endpoint has already answered
-/// <c>202</c>): extraction into <c>{DataDir}/backups/.restore/&lt;id&gt;/staging</c>,
+/// <c>202</c>): extraction into <c>{DataDir}/backups/.restore/&lt;id&gt;/staging</c>
 /// maintenance mode, connection termination plus
 /// <c>pg_restore --clean --if-exists --no-owner --no-privileges
-/// --single-transaction</c>, session revocation, the <c>backup.restored</c>
+/// single-transaction</c>, session revocation, the <c>backup.restored</c>
 /// audit row written into the restored database with raw SQL, the
 /// <c>images/</c> and <c>config/dp-keys/</c> content swap (a copy inside the
 /// bind-mount roots, never a rename, with rollback), the restore
@@ -179,7 +178,6 @@ public sealed class RestoreOperation
 /// <para>
 /// Single instance only: the maintenance flag and the operation gate are
 /// process-local, which matches the one-container deployment
-/// (docs/M13_PLAN.md §1.18).
 /// </para>
 /// </remarks>
 public sealed class RestoreService(
@@ -193,7 +191,7 @@ public sealed class RestoreService(
     TimeProvider timeProvider,
     ILogger<RestoreService> logger)
 {
-    /// <summary>Maximum accepted archive upload (docs/M13_PLAN.md §1.9).</summary>
+    /// <summary>Maximum accepted archive upload.</summary>
     public const long MaximumUploadBytes = 2L * 1024 * 1024 * 1024;
 
     /// <summary>The tar entry that carries the PostgreSQL custom-format dump.</summary>
@@ -206,7 +204,7 @@ public sealed class RestoreService(
     public const string UploadFileName = "upload.ffbackup";
 
     /// <summary>
-    /// The audited reason of a clean-install restore (docs/M13_PLAN.md §1.10):
+    /// The audited reason of a clean-install restore
     /// there is no Admin to type one before setup, and the audit row must still
     /// explain how a system-actor restore happened.
     /// </summary>
@@ -263,7 +261,6 @@ public sealed class RestoreService(
     /// The shared restore sequence for both entry points: the Admin restore and
     /// the pre-setup clean-install restore differ only in where the recovery key
     /// comes from and in who is recorded in the audit row
-    /// (docs/M13_PLAN.md §1.9, §1.10).
     /// </summary>
     public async Task<RestoreStartOutcome> BeginAsync(
         RestoreSource source,
@@ -287,7 +284,7 @@ public sealed class RestoreService(
         ArgumentException.ThrowIfNullOrWhiteSpace(reason);
 
         // A pre-setup restore has no Admin and no system actor to attribute the
-        // safety backup or the audit row to (docs/M13_PLAN.md §1.10).
+        // safety backup or the audit row to.
         long? actorUserId = requester is RestoreRequester.Administrator { ActorUserId: { } actor }
             ? actor
             : null;
@@ -322,7 +319,7 @@ public sealed class RestoreService(
             if (requester is RestoreRequester.Setup && source is not RestoreSource.Upload)
             {
                 // Before setup there is no backup catalogue to choose from: the
-                // archive must come with the request (docs/M13_PLAN.md §1.10).
+                // archive must come with the request.
                 return Failure(
                     StatusCodes.Status400BadRequest,
                     ErrorCodes.ValidationFailed,
@@ -438,7 +435,7 @@ public sealed class RestoreService(
             // The clean-install path adopts the pasted key before the safety
             // backup: a device that has not completed setup has no key file, and
             // the household key is the one the restored instance must keep
-            // (docs/M13_PLAN.md §1.10). Validation above has already passed, so
+            // Validation above has already passed, so
             // nothing is written when the archive or its key is refused.
             if (requester is RestoreRequester.Setup)
             {
@@ -455,7 +452,7 @@ public sealed class RestoreService(
             }
 
             // Step 4: the safety backup exists and is verified before anything
-            // is touched (docs/M13_PLAN.md §1.9 step 2, §4).
+            // is touched.
             state.MarkPhase("safety_backup");
             var backups = scope.ServiceProvider.GetRequiredService<BackupService>();
             var safety = await backups
@@ -526,7 +523,7 @@ public sealed class RestoreService(
 
         try
         {
-            // ---- Before the database commit: nothing has been replaced. ----
+            // Before the database commit: nothing has been replaced.
 
             BackupManifest manifest;
             try
@@ -574,7 +571,7 @@ public sealed class RestoreService(
                     stagingDirectory);
             }
 
-            // ---- pg_restore has committed: the database is the archive's. ----
+            // pg_restore has committed: the database is the archive's.
 
             var markerDocument = new RestoreMarkerDocument
             {
@@ -647,7 +644,7 @@ public sealed class RestoreService(
                 state.MarkPhase("marker");
                 RestoreMarker.Write(configuration, markerDocument, logger);
 
-                // The marker is on disk, so the whole working directory (upload,
+                // The marker is on disk, so the whole working directory (upload
                 // staging copy, and the swapped-out originals) is reclaimable.
                 RemoveDirectory(restoreDirectory);
             }
@@ -745,10 +742,10 @@ public sealed class RestoreService(
 
     /// <summary>
     /// Handles a failure after <c>pg_restore</c> committed. The database is
-    /// already the archive's, so this never claims the original data is intact:
+    /// already the archive's, so this never claims the original data is intact
     /// it records the error, writes the marker (best effort) and requests the
     /// graceful stop that applies migrations on the next start, and only then
-    /// clears maintenance mode (docs/M13_PLAN.md §1.9 step 8).
+    /// clears maintenance mode.
     /// </summary>
     private RestoreExecutionOutcome FailAfterCommit(
         RestoreOperation operation,
@@ -860,7 +857,7 @@ public sealed class RestoreService(
 
     /// <summary>
     /// Stores the pasted key as this device's recovery key when no key file
-    /// exists yet (docs/M13_PLAN.md §1.10). An existing device key is never
+    /// exists yet. An existing device key is never
     /// overwritten: the restore still runs, and the safety backup is encrypted
     /// with whichever key this device already holds. The key value itself is
     /// never logged.
@@ -895,7 +892,7 @@ public sealed class RestoreService(
     }
 
     /// <summary>
-    /// Opens the archive with the recovery key, authenticates every record,
+    /// Opens the archive with the recovery key, authenticates every record
     /// checks the ciphertext SHA-256 when one is known, and verifies every entry
     /// against the manifest. Nothing is written.
     /// </summary>
@@ -954,7 +951,6 @@ public sealed class RestoreService(
     /// Refuses an archive this build cannot restore into: the manifest's
     /// <c>schema_version</c> must be one of the migrations compiled into this
     /// application, and must not be newer than the latest one
-    /// (docs/M13_PLAN.md §1.9 step 1, §4).
     /// </summary>
     private static RestoreStartOutcome.Failure? CheckSchemaVersionAsync(
         AppDbContext dbContext,
@@ -1116,7 +1112,7 @@ public sealed class RestoreService(
 
     /// <summary>
     /// Deletes every session in the restored database so every client must sign
-    /// in again (docs/M13_PLAN.md §1.9 step 7). A restored database that predates
+    /// in again. A restored database that predates
     /// the sessions table has nothing to revoke.
     /// </summary>
     private async Task RevokeSessionsAsync(CancellationToken cancellationToken)
@@ -1143,7 +1139,6 @@ public sealed class RestoreService(
     /// Writes the <c>backup.restored</c> audit row into the **restored**
     /// database with raw SQL, so it works even when the restored schema is
     /// slightly older than this build's entity model
-    /// (docs/M13_PLAN.md §1.9 step 7).
     /// </summary>
     private async Task WriteRestoreAuditAsync(
         RestoreOperation operation,
@@ -1270,7 +1265,7 @@ public sealed class RestoreService(
 
     /// <summary>
     /// Reconciles the restored <c>backup_metadata</c> with the archives on disk
-    /// (docs/M13_PLAN.md §1.9). The catalog is a projection of the files: rows
+    /// The catalog is a projection of the files: rows
     /// are upserted by filename with the real size and checksum, and rows whose
     /// file is gone are marked <c>deleted</c>. Never deletes a file, and is
     /// idempotent, so the startup path can run it again.
@@ -1299,13 +1294,13 @@ public sealed class RestoreService(
 
     /// <summary>
     /// Replaces the **contents** of <c>images/</c> and <c>config/dp-keys/</c>
-    /// with the staged copies (docs/M13_PLAN.md §1.9 step 6).
+    /// with the staged copies.
     /// </summary>
     /// <remarks>
     /// Both live directories are bind-mount roots in the container, so they
     /// cannot be renamed (the kernel reports <c>EXDEV</c> / "Resource busy" even
     /// on the same filesystem). Each target is therefore snapshotted by copying
-    /// its children to <c>old-&lt;name&gt;</c>, emptied by deleting its children,
+    /// its children to <c>old-&lt;name&gt;</c>, emptied by deleting its children
     /// and filled by copying the staged children in — the mount root itself is
     /// never renamed, moved, or deleted. The root's mode is captured before the
     /// children are deleted and re-applied after the copy, because
@@ -1369,7 +1364,7 @@ public sealed class RestoreService(
                     fileOperations.CopyDirectoryContents(pair.Staged, pair.Live);
                 }
 
-                // The bind-mount root keeps the permissions the household set,
+                // The bind-mount root keeps the permissions the household set
                 // whatever mode the archive's staging tree was extracted with.
                 if (liveMode is { } mode)
                 {
@@ -1439,7 +1434,7 @@ public sealed class RestoreService(
 
     /// <summary>
     /// Best-effort last-five retention for safety archives after a successful
-    /// restore (docs/M13_PLAN.md §1.8). A restored database that predates
+    /// restore. A restored database that predates
     /// <c>backup_metadata</c> is skipped, and retention never fails the restore.
     /// </summary>
     private async Task PruneSafetyBackupsAsync(CancellationToken cancellationToken)
@@ -1483,7 +1478,7 @@ public sealed class RestoreService(
     /// Reclaims a post-commit restore's working files. The database already is
     /// the archive's, so the <c>old-*</c> copies are deleted too — except those a
     /// failed swap rollback reported as the only remaining copy of the previous
-    /// files (docs/M13_PLAN.md §1.9).
+    /// files.
     /// </summary>
     private void ReclaimRestoreFiles(
         string restoreDirectory,

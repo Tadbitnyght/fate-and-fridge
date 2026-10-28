@@ -52,8 +52,8 @@ public sealed record IngredientMergeResponse(
 }
 
 /// <summary>
-/// M2-08 ingredients routes (docs/API.md §22): authenticated reads, writes gated
-/// by <c>reference_data.edit</c>, Admin-only hard delete, per-ingredient aliases,
+/// Ingredients routes (docs/API.md §22): authenticated reads, writes gated
+/// by <c>reference_data.edit</c>, Admin-only hard delete, per-ingredient aliases
 /// and the shared canonical-name/alias uniqueness namespace.
 /// </summary>
 public static class IngredientEndpoints
@@ -608,7 +608,7 @@ public static class IngredientEndpoints
         var actor = await actorProvider.GetCurrentActorAsync(cancellationToken);
         if (actor is null)
         {
-            // The permission filter already rejected unauthenticated requests;
+            // The permission filter already rejected unauthenticated requests
             // keep the defensive envelope so the handler cannot fail open.
             return (null, null, ApiResults.Error(
                 StatusCodes.Status401Unauthorized,

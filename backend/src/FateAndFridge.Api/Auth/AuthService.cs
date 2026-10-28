@@ -74,14 +74,14 @@ public abstract record ResetPasswordResult
 
 /// <summary>
 /// Credential check, session issue/revocation, and auth-event bookkeeping
-/// (M1-07; docs/SECURITY.md §2/§3, docs/DATABASE.md §2). Failures are generic;
+/// (docs/SECURITY.md §2/§3, docs/DATABASE.md §2). Failures are generic
 /// unknown usernames still pay one Argon2id verification so response timing
 /// does not disclose account existence.
 /// </summary>
 /// <remarks>
 /// Per-account lockout bookkeeping is delegated to
 /// <see cref="LockoutLoginAttemptPolicy"/>. Failures are applied under an
-/// atomic per-user row lock (<c>SELECT ... FOR UPDATE</c> plus a single
+/// atomic per-user row lock (<c>SELECT... FOR UPDATE</c> plus a single
 /// counter write) so parallel attempts cannot lose increments. Per-IP limiting
 /// reserves a slot through <see cref="ILoginIpThrottle"/> before verification.
 /// </remarks>
@@ -140,8 +140,8 @@ public sealed class AuthService(
         ArgumentNullException.ThrowIfNull(username);
         ArgumentNullException.ThrowIfNull(password);
 
-        // Atomic per-IP reservation before any verification or database work:
-        // parallel attempts cannot slip past the threshold with a check-then-
+        // Atomic per-IP reservation before any verification or database work
+        // parallel attempts cannot slip past the threshold with a check-then
         // record race. Over-threshold attempts are rejected immediately and
         // deliberately write no auth event, only a warning log, so an abuse
         // burst cannot amplify database writes.
@@ -263,7 +263,7 @@ public sealed class AuthService(
                 userAgent),
             cancellationToken);
 
-        // M12-01 mirror: the audit stream records the successful login without
+        // Mirror: the audit stream records the successful login without
         // any credential or session token (docs/PRODUCT_SPEC.md §43).
         await auditService.WriteAsync(
             new AuditEventEntry(
@@ -281,7 +281,7 @@ public sealed class AuthService(
 
     /// <summary>
     /// Revokes one session server-side and notifies that session's live-sync
-    /// connections (docs/M9_PLAN.md §1.13). The caller deletes the cookie.
+    /// connections. The caller deletes the cookie.
     /// Returns false when the session id does not exist. The revocation and the
     /// <c>auth.logout</c> audit row commit atomically; an already-revoked
     /// session is a no-op and writes no audit row.
@@ -411,7 +411,7 @@ public sealed class AuthService(
 
         // Only after the commit: notify the revoked sibling sessions' live-sync
         // connections and abort them (the rotating current session is excluded
-        // via exceptSessionId, docs/M9_PLAN.md §1.13).
+        // via exceptSessionId).
         await liveSync.PublishSessionRevokedForUserAsync(userId, sessionId, cancellationToken);
 
         // The cookie expiry is a client-side hint; the database idle window
@@ -425,7 +425,7 @@ public sealed class AuthService(
     /// the reset unblocks a locked account, revokes every session of the
     /// target, and writes a <c>password_reset</c> event naming the acting user.
     /// Inactive targets are reset as well; their login stays blocked until the
-    /// user is re-enabled (M1-10).
+    /// user is re-enabled.
     /// </summary>
     public async Task<ResetPasswordResult> ResetPasswordAsync(
         long targetUserId,
@@ -475,7 +475,7 @@ public sealed class AuthService(
                 new Dictionary<string, object?> { ["actor_user_id"] = actorUserId }),
             cancellationToken);
 
-        // M12-01: an Admin reset is a user-lifecycle audit event. Only the
+        // An Admin reset is a user-lifecycle audit event. Only the
         // public fields and the fact that a temporary password was issued are
         // recorded — never the credential itself (docs/SECURITY.md §17).
         await auditService.WriteAsync(
@@ -498,7 +498,7 @@ public sealed class AuthService(
         await transaction.CommitAsync(cancellationToken);
 
         // Only after the commit: tell every revoked session's live-sync
-        // connections and abort them (docs/M9_PLAN.md §1.13).
+        // connections and abort them.
         await liveSync.PublishSessionRevokedForUserAsync(user.Id, exceptSessionId: null, cancellationToken);
 
         return new ResetPasswordResult.Success(temporaryPassword);
@@ -507,7 +507,7 @@ public sealed class AuthService(
     /// <summary>
     /// Applies one credential failure under a per-user row lock so parallel
     /// attempts cannot lose increments (docs/SECURITY.md §3). The state is read
-    /// with <c>SELECT ... FOR UPDATE</c>, the pure policy decides the outcome,
+    /// with <c>SELECT... FOR UPDATE</c>, the pure policy decides the outcome
     /// and the counters are written back in the same transaction; concurrent
     /// claimers serialize on the row, so the 10th parallel failure
     /// deterministically engages the lock.
@@ -601,7 +601,7 @@ public sealed class AuthService(
                 new Dictionary<string, object?> { ["reason"] = reason }),
             cancellationToken);
 
-        // M12-01 mirror: the attempted username (never the password), the
+        // Mirror: the attempted username (never the password), the
         // outcome category, and the IP; only the outcome category is stored.
         await auditService.WriteAsync(
             new AuditEventEntry(

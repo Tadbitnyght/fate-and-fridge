@@ -1,9 +1,7 @@
 import { apiDownload, type DownloadedFile } from './client'
 
 /**
- * Typed client for the M13-07 Admin recovery-key export (docs/API.md §18,
- * docs/M13_PLAN.md §1.11).
- *
+ * Typed client for the Admin recovery-key export.
  * The key is only ever returned as a `text/plain` attachment; it is never a
  * JSON body and the app never renders it inline. The route is Admin-only on the
  * existing `admin` role (and the single-user system actor) and requires the

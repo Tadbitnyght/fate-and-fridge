@@ -40,8 +40,8 @@ public sealed record UserResponse(
 public sealed record ResetPasswordResponse(string TemporaryPassword);
 
 /// <summary>
-/// User management routes (docs/API.md §5/§6/§21). Admin-only via the M1-09
-/// <c>RequireAdmin()</c> filter (the single-user system actor also passes);
+/// User management routes (docs/API.md §5/§6/§21). Admin-only via the
+/// <c>RequireAdmin</c> filter (the single-user system actor also passes)
 /// members receive <c>403 FORBIDDEN</c> and unauthenticated callers
 /// <c>401 AUTH_REQUIRED</c>.
 /// </summary>
@@ -344,7 +344,7 @@ public static class UserEndpoints
         var actor = await actorProvider.GetCurrentActorAsync(cancellationToken);
         if (actor is null)
         {
-            // RequireAdmin() already rejected unauthenticated requests; keep the
+            // RequireAdmin already rejected unauthenticated requests; keep the
             // defensive envelope so the handler cannot fail open.
             return ApiResults.Error(
                 StatusCodes.Status401Unauthorized,

@@ -47,8 +47,7 @@ public readonly struct RestoreRequestReadResult
 }
 
 /// <summary>
-/// Reads the two accepted restore request shapes (docs/M13_PLAN.md §2.2,
-/// docs/API.md §18): JSON <c>{ backup_id, reason, confirmation }</c> or a
+/// Reads the two accepted restore request shapes: JSON <c>{ backup_id, reason, confirmation }</c> or a
 /// <c>multipart/form-data</c> upload with <c>file</c>, <c>reason</c>, and
 /// <c>confirmation</c>.
 /// </summary>

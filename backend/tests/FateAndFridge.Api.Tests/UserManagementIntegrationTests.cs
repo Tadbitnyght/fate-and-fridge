@@ -18,7 +18,7 @@ using Microsoft.Extensions.Logging;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// HTTP-level verification of M1-10 user management (docs/API.md §6/§21):
+/// HTTP-level verification of user management (docs/API.md §6/§21)
 /// authorization matrix, CRUD, username/password validation, permission
 /// replacement, disable/enable semantics, temporary-password handling, and
 /// last-active-Admin safety including the concurrent race. Requires a Docker
@@ -26,8 +26,8 @@ namespace FateAndFridge.Api.Tests;
 /// locally.
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class UserManagementIntegrationTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class UserManagementIntegrationTests(SetupFixture fixture) : IAsyncLifetime
 {
     private const string AdminPassword = "root horse battery staple";
     private const string MemberPassword = "correct horse battery staple";

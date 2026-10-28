@@ -6,7 +6,7 @@ namespace FateAndFridge.Api.Tests;
 
 /// <summary>
 /// Unit coverage for the reroll operation metadata serialization
-/// (docs/M6_PLAN.md §2.3): the documented snake_case keys, in order, including
+/// the documented snake_case keys, in order, including
 /// the nullable spacing fields and the <c>"kind"</c> discriminator.
 /// </summary>
 public sealed class RandomizerEndpointsModelTests

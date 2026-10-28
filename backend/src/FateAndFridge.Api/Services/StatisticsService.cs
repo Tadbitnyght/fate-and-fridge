@@ -10,9 +10,9 @@ public sealed record StatisticsWindowRecord(string Label, DateOnly Start, DateOn
 
 /// <summary>
 /// One ranked recipe in <c>most_eaten</c> / <c>least_recently_eaten</c>
-/// (docs/M11_PLAN.md §2.2). <see cref="RecipeId"/> is null only for a tombstone
+/// <see cref="RecipeId"/> is null only for a tombstone
 /// (a hard-deleted recipe, whose meals still count under the stored snapshot
-/// name); <see cref="Status"/> is one of <c>normal</c>, <c>manual_only</c>,
+/// name); <see cref="Status"/> is one of <c>normal</c>, <c>manual_only</c>
 /// <c>retired</c>, or <c>deleted</c>.
 /// </summary>
 public sealed record RankedRecipeRecord(
@@ -27,7 +27,7 @@ public sealed record ProteinCountRecord(long ProteinId, string Name, int Count);
 
 /// <summary>
 /// Recipe occurrences with a primary protein grouped per protein, plus the
-/// explicit count of occurrences without one (docs/M11_PLAN.md §1.12).
+/// explicit count of occurrences without one.
 /// </summary>
 public sealed record ProteinDistributionRecord(
     IReadOnlyList<ProteinCountRecord> Proteins,
@@ -37,8 +37,7 @@ public sealed record ProteinDistributionRecord(
 public sealed record SpecialEventCountRecord(CalendarEntryType EntryType, int Count);
 
 /// <summary>
-/// The three per-recipe history metrics (docs/PRODUCT_SPEC.md §12,
-/// docs/M11_PLAN.md §1.2, §2.2): <see cref="LastEaten"/> is the latest eaten
+/// The three per-recipe history metrics: <see cref="LastEaten"/> is the latest eaten
 /// occurrence (strictly before the household today), <see cref="NextPlanned"/>
 /// the nearest today-or-future occurrence, and <see cref="TimesEaten"/> the
 /// historical occurrence count. A metric stays null when there is no such
@@ -49,7 +48,7 @@ public sealed record RecipeMetricsRecord(
     DateOnly? NextPlanned,
     int? TimesEaten);
 
-/// <summary>The household statistics overview (docs/M11_PLAN.md §2.2).</summary>
+/// <summary>The household statistics overview.</summary>
 public sealed record StatisticsOverviewRecord(
     DateOnly Today,
     string Timezone,
@@ -64,7 +63,7 @@ public sealed record StatisticsOverviewRecord(
     IReadOnlyList<SpecialEventCountRecord> SpecialEventCounts);
 
 /// <summary>
-/// The on-demand statistics aggregate reads (docs/M11_PLAN.md §1.14, §2.1).
+/// The on-demand statistics aggregate reads.
 /// Every metric is computed from <c>calendar_entries</c> (plus the recipe and
 /// protein joins) on each request: no cache, no statistics table, and no
 /// background job. The service is scoped over the request
@@ -73,11 +72,11 @@ public sealed record StatisticsOverviewRecord(
 /// <remarks>
 /// Occurrence eligibility and the eaten/planned split come from
 /// <see cref="MealOccurrenceRules"/> so this overview, the per-recipe metrics
-/// (M11-02), and the meal-history browser (M11-03) cannot drift. "Eaten" is
+///and the meal-history browser cannot drift. "Eaten" is
 /// strictly before the household today; today's dinner is not eaten
-/// (docs/M11_PLAN.md §1.3). Rankings group by <c>recipe_id</c> when present, else
+/// Rankings group by <c>recipe_id</c> when present, else
 /// the normalized stored snapshot name, so a retired or hard-deleted recipe's
-/// meals keep counting (docs/M11_PLAN.md §1.5, §1.20).
+/// meals keep counting.
 /// </remarks>
 public sealed class StatisticsService(AppDbContext dbContext, HouseholdClock clock)
 {
@@ -89,7 +88,7 @@ public sealed class StatisticsService(AppDbContext dbContext, HouseholdClock clo
 
     /// <summary>
     /// The seven special-event types counted for the household calendar year
-    /// (docs/M11_PLAN.md §1.13). The plain <c>recipe</c> type is covered by the
+    /// The plain <c>recipe</c> type is covered by the
     /// meal counts instead.
     /// </summary>
     private static readonly CalendarEntryType[] SpecialEventTypes =
@@ -109,7 +108,7 @@ public sealed class StatisticsService(AppDbContext dbContext, HouseholdClock clo
     /// <summary>
     /// Builds the household overview: all-time rankings, the household calendar
     /// month/year meal counts, the primary-protein distribution, and the
-    /// special-event counts (docs/M11_PLAN.md §2.2).
+    /// special-event counts.
     /// </summary>
     public async Task<StatisticsOverviewRecord> GetOverviewAsync(
         CancellationToken cancellationToken = default)
@@ -213,8 +212,7 @@ public sealed class StatisticsService(AppDbContext dbContext, HouseholdClock clo
     }
 
     /// <summary>
-    /// The per-recipe metrics for a page of live recipes (Last Eaten / Next
-    /// Planned / Times Eaten; docs/PRODUCT_SPEC.md §12, docs/M11_PLAN.md §1.2).
+    /// The per-recipe metrics for a page of live recipes
     /// One aggregate query keyed by the requested ids serves a whole page, so a
     /// list of cards needs no per-card fetch (§1.27). An id with no occurrence is
     /// absent from the result; a caller treats a missing id as all-null history.
@@ -245,7 +243,7 @@ public sealed class StatisticsService(AppDbContext dbContext, HouseholdClock clo
     /// <summary>
     /// The per-recipe metrics for one live recipe, or null when no live recipe
     /// has that id — the caller maps that to <c>404 NOT_FOUND</c>
-    /// (docs/M11_PLAN.md §1.21). A hard-deleted recipe's meals stay in the
+    /// A hard-deleted recipe's meals stay in the
     /// household rankings (served from the tombstone snapshot name) but are never
     /// served from here: this always requires a live <c>recipes</c> row.
     /// </summary>
@@ -270,7 +268,7 @@ public sealed class StatisticsService(AppDbContext dbContext, HouseholdClock clo
 
     /// <summary>
     /// Splits one recipe's occurrences into its eaten and planned metrics. Eaten
-    /// is strictly past (docs/M11_PLAN.md §1.3) so today's dinner counts as
+    /// is strictly past so today's dinner counts as
     /// Next Planned, not Times Eaten. <see cref="RecipeMetricsRecord.TimesEaten"/>
     /// stays null when the recipe was never eaten (never a fake zero).
     /// </summary>
@@ -362,7 +360,7 @@ public sealed class StatisticsService(AppDbContext dbContext, HouseholdClock clo
             else
             {
                 // A hard-deleted recipe (M12) survives only as its stored
-                // snapshot name (docs/M11_PLAN.md §1.5).
+                // snapshot name.
                 group.Name = group.SnapshotName ?? "Unknown meal";
                 group.Status = DeletedStatus;
             }
@@ -420,7 +418,7 @@ public sealed class StatisticsService(AppDbContext dbContext, HouseholdClock clo
             else
             {
                 // No live recipe (tombstone) or a recipe with no protein rows is
-                // reported explicitly, never silently dropped (docs/M11_PLAN.md §1.12).
+                // reported explicitly, never silently dropped.
                 noPrimaryProtein++;
             }
         }

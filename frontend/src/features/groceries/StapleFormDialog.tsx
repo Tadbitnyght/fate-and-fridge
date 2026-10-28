@@ -99,7 +99,7 @@ export function StapleFormDialog({
     }
 
     // Retiring is a destructive-ish change: confirm before dropping the staple
-    // out of the active list (docs/M8_PLAN.md §1.9). Reactivation is harmless.
+    // out of the active list. Reactivation is harmless.
     if (mode === 'edit' && staple?.is_active && !isActive) {
       setRetireError(null)
       setConfirmRetire(true)

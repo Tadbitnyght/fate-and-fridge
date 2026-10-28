@@ -2,7 +2,7 @@ namespace FateAndFridge.Api.Domain;
 
 /// <summary>
 /// A range-scoped free-text or ingredient-linked grocery item added by hand
-/// (docs/M8_PLAN.md §1.8, §2.3). The item belongs to the range that begins at
+/// The item belongs to the range that begins at
 /// <see cref="RangeStart"/> and spans <see cref="RangeDays"/> days, and is
 /// hidden when the active range changes. <see cref="SaveForFuture"/> promotes
 /// it to a household staple. Department is optional (M8_PLAN.md §1.12 sends
@@ -16,7 +16,7 @@ public sealed class ManualGroceryItem
 
     public long? IngredientId { get; set; }
 
-    /// <summary>Optional; see docs/M8_PLAN.md §1.12 ("Other last").</summary>
+    /// <summary>Optional; ("Other last").</summary>
     public long? DepartmentId { get; set; }
 
     public decimal? QuantityNumeric { get; set; }

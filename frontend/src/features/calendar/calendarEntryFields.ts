@@ -9,7 +9,7 @@ import {
  * The editable meal-defining fields of a calendar entry. This is the single
  * source of the per-type field set shared by the ordinary editor
  * (`DateDetailDialog`) and the M12 historical correction flow, so the two can
- * never drift apart (docs/M12_PLAN.md §1.9).
+ * never drift apart.
  */
 export interface CalendarEntryFieldsValue {
   entryType: CalendarEntryType

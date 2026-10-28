@@ -1,14 +1,13 @@
 import { apiRequest } from './client'
 
 /**
- * Typed client for the M8 grocery contract (docs/API.md §13, docs/M8_PLAN.md
- * §2.2). Reads require `groceries.view`; manual items, staples, and check state
+ * Typed client for the M8 grocery contract. Reads require `groceries.view`; manual items, staples, and check state
  * writes require `groceries.edit`. The server enforces permissions, range
  * resolution, and ordering — these functions only describe the wire shapes.
  * JSON property names are snake_case.
  */
 
-/* ---------- ranges ---------- */
+/* ranges ---------- */
 
 export type GroceryRangePreset =
   'next_3_days' | 'next_7_days' | 'next_14_days' | 'rest_of_month' | 'custom'
@@ -39,11 +38,11 @@ export interface GroceryRangeQuery {
   days?: number
 }
 
-/* ---------- list ---------- */
+/* list ---------- */
 
 export type GrocerySourceType = 'recipe' | 'manual'
 
-/** One contributing meal for a recipe-derived line (docs/M8_PLAN.md §1.6). */
+/** One contributing meal for a recipe-derived line. */
 export interface GroceryItemSource {
   recipe_id: number
   recipe_name: string
@@ -79,7 +78,7 @@ export interface GroceryList {
   departments: GroceryDepartment[]
 }
 
-/* ---------- manual items ---------- */
+/* manual items ---------- */
 
 export interface GroceryManualItem {
   id: number
@@ -109,7 +108,7 @@ export interface GroceryManualItemRequest {
 /** Partial update: an explicit `null` clears a nullable field. */
 export type GroceryManualItemPatch = Partial<GroceryManualItemRequest>
 
-/* ---------- staples ---------- */
+/* staples ---------- */
 
 export interface GroceryStaple {
   id: number
@@ -142,7 +141,7 @@ export interface GroceryStapleRangeRequest {
   range_days: number
 }
 
-/* ---------- preferences ---------- */
+/* preferences ---------- */
 
 export interface GroceryPreferences {
   hide_checked: boolean
@@ -158,7 +157,7 @@ export interface GroceryPreferencesPatch {
   range_days?: number | null
 }
 
-/* ---------- check state ---------- */
+/* check state ---------- */
 
 export interface GroceryCheckResult {
   identity: string
@@ -167,7 +166,7 @@ export interface GroceryCheckResult {
   checked_by_user_id: number | null
 }
 
-/* ---------- requests ---------- */
+/* requests ---------- */
 
 function rangeQuery(range: GroceryRangeQuery): string {
   const query = new URLSearchParams()

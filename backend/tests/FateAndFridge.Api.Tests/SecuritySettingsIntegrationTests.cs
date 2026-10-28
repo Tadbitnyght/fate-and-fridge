@@ -17,14 +17,14 @@ namespace FateAndFridge.Api.Tests;
 
 /// <summary>
 /// HTTP-level verification of <c>GET/PATCH /api/v1/settings/security</c>
-/// (M1-11, docs/API.md §21): normalization, confirmation and caller-coverage
+/// (docs/API.md §21): normalization, confirmation and caller-coverage
 /// validation, persistence with immediate effect, and the authorization
 /// matrix. Requires a Docker daemon; run with
 /// <c>dotnet test --filter "Category!=Integration"</c> to skip locally.
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class SecuritySettingsIntegrationTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class SecuritySettingsIntegrationTests(SetupFixture fixture) : IAsyncLifetime
 {
     private const string AdminPassword = "root horse battery staple";
     private const string MemberPassword = "correct horse battery staple";

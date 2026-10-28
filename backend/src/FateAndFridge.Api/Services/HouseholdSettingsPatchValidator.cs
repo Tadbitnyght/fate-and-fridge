@@ -97,8 +97,8 @@ public static class HouseholdSettingsPatchValidator
 
         var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
 
-        // Unknown properties are ignored. When a key appears more than once,
-        // JsonElement.TryGetProperty returns the last occurrence (last-one-wins);
+        // Unknown properties are ignored. When a key appears more than once
+        // JsonElement.TryGetProperty returns the last occurrence (last-one-wins)
         // no extra de-duplication is applied here.
         var hasHouseholdName = body.TryGetProperty("household_name", out var householdName);
         var hasTimezone = body.TryGetProperty("timezone", out var timezone);

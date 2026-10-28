@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Http;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// Route-builder enforcement helpers (M1-09): invalid permission keys fail
+/// Route-builder enforcement helpers: invalid permission keys fail
 /// fast at mapping time, so a typo cannot silently create an unprotected or
 /// permanently forbidden route, and the enforcing filter fails closed when it
 /// is attached without any requirement metadata.
@@ -40,7 +40,7 @@ public sealed class PermissionEnforcementTests
     {
         // Attaching the filter without a PermissionRequirement is a server
         // misconfiguration: it must throw instead of failing open. The shared
-        // exception handler maps it to the 500 envelope (M1-15).
+        // exception handler maps it to the 500 envelope.
         var httpContext = new DefaultHttpContext();
         httpContext.SetEndpoint(new Endpoint(
             _ => Task.CompletedTask,

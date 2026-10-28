@@ -4,7 +4,7 @@ using FluentAssertions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// Pre-parse budget guard for the HTML fallback (docs/M4_PLAN.md §1.5, §2.1).
+/// Pre-parse budget guard for the HTML fallback.
 /// The estimator must be cheap, total, and conservative: it only decides
 /// whether <see cref="HtmlFallbackParser"/> runs, never whether JSON-LD runs.
 /// </summary>

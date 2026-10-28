@@ -6,8 +6,8 @@ using FluentAssertions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// Docker-free exhaustive checks for the M3-04 signature and dimension reader
-/// (docs/M3_PLAN.md §1.7): valid JPEG/PNG/WebP headers, animated PNG/WebP
+/// Docker-free exhaustive checks for the signature and dimension reader
+/// valid JPEG/PNG/WebP headers, animated PNG/WebP
 /// detection, truncation, wrong magic, and oversize dimensions. Every fixture
 /// is generated in-code.
 /// </summary>

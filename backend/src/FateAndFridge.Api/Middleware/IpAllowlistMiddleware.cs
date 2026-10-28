@@ -4,7 +4,7 @@ using FateAndFridge.Api.Services;
 namespace FateAndFridge.Api.Middleware;
 
 /// <summary>
-/// App-wide IP allowlist (docs/SECURITY.md §5, docs/API.md §21). When enabled,
+/// App-wide IP allowlist (docs/SECURITY.md §5, docs/API.md §21). When enabled
 /// only loopback and clients covered by the configured ranges may reach any
 /// route except <c>/api/v1/health/*</c>; blocked clients receive
 /// <c>403 IP_NOT_ALLOWED</c>. Runs before authentication and setup gating so a

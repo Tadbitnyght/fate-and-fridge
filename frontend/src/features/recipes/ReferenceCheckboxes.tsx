@@ -1,4 +1,4 @@
-/** Checkbox multi-select for recipe proteins and tags (M3-10, issue #37). */
+/** Checkbox multi-select for recipe proteins and tags (issue #37). */
 
 export interface ReferenceCheckboxOption {
   id: number

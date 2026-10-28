@@ -50,11 +50,11 @@ body {
 }
 
 /*
- * Base control surface (M15-04). A <button> with no component rule used to fall
+ * Base control surface. A <button> with no component rule used to fall
  * back to the browser default (13 px Arial, a 2 px radius), so "Sign out", the
  * audit export row and "Check now" looked like a different application. This is
  * one geometry for every unstyled button, using the existing tokens. The zero
- * specificity of `:where()` keeps every component rule in charge of its own
+ * specificity of `:where` keeps every component rule in charge of its own
  * controls.
  */
 :where(button) {
@@ -102,8 +102,7 @@ body {
   flex: 1;
 }
 
-/* ---------- update notice (M13-09) ---------- */
-
+/* update notice ---------- */
 /*
  * A single block in the shell's flex column above <main>. It wraps on narrow
  * screens and keeps the meaning in the text, never in colour alone.
@@ -226,7 +225,7 @@ body {
   }
 }
 
-/* ---------- app shell: header, navigation, account ---------- */
+/* app shell: header, navigation, account ---------- */
 
 .app-header {
   display: flex;
@@ -273,7 +272,7 @@ body {
   font-size: 0.9rem;
 }
 
-/* Live-sync indicator (docs/M9_PLAN.md §1.9): non-blocking, colour-independent
+/* Live-sync indicator: non-blocking, colour-independent
    because the glyph and label carry the state. */
 .live-sync-status {
   display: inline-flex;
@@ -335,7 +334,7 @@ body {
   outline-offset: 2px;
 }
 
-/* ---------- pages ---------- */
+/* pages ---------- */
 
 .page h2 {
   margin: 0 0 0.5rem;
@@ -350,7 +349,7 @@ body {
   margin-top: 1.25rem;
 }
 
-/* ---------- standalone screens (setup, login, change password) ---------- */
+/* standalone screens (setup, login, change password) ---------- */
 
 .screen {
   display: flex;
@@ -374,7 +373,6 @@ body {
  * Loading and error states that render inside the app shell sit where page
  * content sits: the standalone screen padding indented them by 1rem and pushed
  * them 2.5rem down, and its full-width button looked like a page-wide control
- * (M15-04).
  */
 .app-main .screen {
   max-width: none;
@@ -406,7 +404,7 @@ body {
   margin: 0;
 }
 
-/* ---------- forms ---------- */
+/* forms ---------- */
 
 .form {
   display: flex;
@@ -487,7 +485,7 @@ body {
   outline-offset: 2px;
 }
 
-/* ---------- setup wizard ---------- */
+/* setup wizard ---------- */
 
 .wizard {
   gap: 0.75rem;
@@ -733,7 +731,7 @@ body {
   }
 }
 
-/* ---------- settings area (M1-14) ---------- */
+/* settings area ---------- */
 
 .settings-nav {
   margin: 0.75rem 0 1.25rem;
@@ -797,7 +795,7 @@ body {
   margin-top: 1rem;
 }
 
-/* Update status / About panel (M13-09). */
+/* Update status / About panel. */
 .about-updates {
   padding: 0.75rem 1rem;
   border: 1px solid var(--border);
@@ -943,7 +941,7 @@ body {
   border-color: transparent;
 }
 
-/* ---------- modal dialogs ---------- */
+/* modal dialogs ---------- */
 
 .modal-backdrop {
   position: fixed;
@@ -990,7 +988,7 @@ body {
   gap: 0.5rem;
 }
 
-/* ---------- one-time temporary password ---------- */
+/* one-time temporary password ---------- */
 
 .one-time {
   display: flex;
@@ -1057,7 +1055,7 @@ body {
   }
 }
 
-/* ---------- reference data (M2-11, #24) ---------- */
+/* reference data (#24) ---------- */
 
 .reference-data__tabs .settings-nav__list {
   flex-wrap: wrap;
@@ -1284,7 +1282,7 @@ body {
   }
 }
 
-/* ---------- accessibility (M1-15 part B) ---------- */
+/* accessibility (part B) ---------- */
 
 .skip-link {
   position: absolute;
@@ -1330,14 +1328,14 @@ main:focus-visible {
  * The route change moves focus to the page heading so a screen reader announces
  * where it landed. A heading is not an interactive control, so it must not paint
  * the interactive focus ring: the browser default drew a hard rectangle around
- * the page title on every route (M15-04).
+ * the page title on every route.
  */
 h1[tabindex='-1']:focus,
 h2[tabindex='-1']:focus {
   outline: none;
 }
 
-/* ---------- cards ---------- */
+/* cards ---------- */
 
 .card {
   margin-top: 1rem;
@@ -1353,7 +1351,7 @@ h2[tabindex='-1']:focus {
 }
 
 /*
- * Dashboard quick links (M15-06). The action line is the only control on each
+ * Dashboard quick links. The action line is the only control on each
  * dashboard card; as a plain inline link it was a ~19 px tall tap target. It
  * now uses the same geometry as the base button (44 px minimum height) while
  * staying a link for keyboard and screen-reader users.
@@ -1388,9 +1386,9 @@ h2[tabindex='-1']:focus {
   white-space: nowrap;
 }
 
-/* ---------- statistics tabs (#117) ---------- */
+/* statistics tabs (#117) ---------- */
 
-/* The statistics page (M11-05) uses the same accessible tab pattern. */
+/* The statistics page uses the same accessible tab pattern. */
 .stats-tabs {
   display: flex;
   flex-wrap: wrap;
@@ -1449,7 +1447,7 @@ h2[tabindex='-1']:focus {
   outline-offset: 2px;
 }
 
-/* ---------- recipes (M3-10 / M3-11) ---------- */
+/* recipes ---------- */
 
 .button--primary,
 a.button--primary,
@@ -1539,7 +1537,6 @@ a.button--primary:focus-visible {
  * Both filter rows span the grid: the flag row used to be squeezed into one
  * ~11rem column (so its three checkboxes stacked on desktop) while the actions
  * row sat beside it, half-height and out of line with the fields above
- * (M15-04).
  */
 .recipes__flag-filters,
 .recipes__filter-actions {
@@ -1771,7 +1768,7 @@ a.button--primary:focus-visible {
   gap: 0.75rem;
 }
 
-/* M12-09 hard-delete danger zone: visually separated from the save actions. */
+/* Hard-delete danger zone: visually separated from the save actions. */
 .recipe-form__danger {
   margin-top: 2rem;
   padding: 1rem;
@@ -1898,7 +1895,7 @@ a.button--primary:focus-visible {
   gap: 0.5rem;
 }
 
-/* ---------- unknown ingredient resolution (M4-09) ---------- */
+/* unknown ingredient resolution ---------- */
 
 .ingredient-row--unknown {
   border-color: var(--bad-text);
@@ -1949,7 +1946,7 @@ a.button--primary:focus-visible {
   gap: 0.5rem;
 }
 
-/* Unrecognized unit block (M4-10): nested inside the shared unknown block. */
+/* Unrecognized unit block: nested inside the shared unknown block. */
 .ingredient-row__unknown-unit {
   border-top: 1px solid var(--bad-text);
   padding-top: 0.5rem;
@@ -1983,7 +1980,7 @@ a.button--primary:focus-visible {
   }
 }
 
-/* ---------- import review (M4-08) ---------- */
+/* import review ---------- */
 
 .recipes__header-actions {
   display: flex;
@@ -2074,7 +2071,7 @@ a.recipes__import:focus-visible {
     min-height: 2.75rem;
   }
 
-  /* The M4-11 duplicate warning uses the shared Modal; keep its actions at a
+  /* The duplicate warning uses the shared Modal; keep its actions at a
      comfortable touch-target height on phones. */
   .modal__actions button,
   .modal__actions a {
@@ -2084,7 +2081,7 @@ a.recipes__import:focus-visible {
   }
 }
 
-/* ---------- calendar (M5) ---------- */
+/* calendar (M5) ---------- */
 
 .calendar-toolbar {
   display: flex;
@@ -2621,7 +2618,7 @@ a.recipes__import:focus-visible {
   font-size: 0.8rem;
 }
 
-/* ---------- groceries (M8-07) ---------- */
+/* groceries ---------- */
 
 .grocery-toolbar {
   display: flex;
@@ -2841,7 +2838,7 @@ a.recipes__import:focus-visible {
   gap: 0.5rem;
 }
 
-/* Mobile tap targets (docs/M8_PLAN.md §4): every interactive grocery control
+/* Mobile tap targets: every interactive grocery control
    keeps at least a 44px (2.75rem) hit area in both dimensions at phone widths. */
 .grocery-staple__actions button,
 .grocery-item__actions button,
@@ -2885,7 +2882,7 @@ a.recipes__import:focus-visible {
   }
 }
 
-/* ---------- groceries: print entry + print view (M8-08) ---------- */
+/* groceries: print entry + print view ---------- */
 
 .grocery-toolbar__actions {
   display: flex;
@@ -3015,7 +3012,7 @@ a.recipes__import:focus-visible {
   font-size: 0.85rem;
 }
 
-/* A printed grocery list is a document, not an app: drop the screen chrome,
+/* A printed grocery list is a document, not an app: drop the screen chrome
    force black-on-white, and keep headings with their items across page breaks. */
 @media print {
   .app-header,
@@ -3069,10 +3066,10 @@ a.recipes__import:focus-visible {
   }
 }
 
-/* Calendar print view (M10-01…M10-04). A dedicated printable month grid: black
+/* Calendar print view. A dedicated printable month grid: black
    on white, no background fills, one month per page.
 
-   Print geometry — single source of truth (M10-03). These custom properties are
+   Print geometry — single source of truth. These custom properties are
    the one place the printed calendar's page budget is defined: the month width
    and the print height cap below derive from them, and `printScale.ts` reads
    them at runtime via `getComputedStyle` so the JS auto-shrink budget and the
@@ -3267,7 +3264,7 @@ a.recipes__import:focus-visible {
   }
 }
 
-/* Page-size ownership is per print view (M10-02, docs/M10_PLAN.md §1.6): the
+/* Page-size ownership is per print view: the
    calendar print view opts into a named landscape page, the grocery print view
    into a named portrait page. There is deliberately no app-wide `@page` size or
    margin, so printing any other page keeps the browser's defaults. The paper is
@@ -3286,7 +3283,7 @@ a.recipes__import:focus-visible {
   margin: 12mm;
 }
 
-/* ---------- statistics overview page (#144, M11-04) ---------- */
+/* statistics overview page (#144,) ---------- */
 
 .stats-empty {
   margin: 1.25rem 0 0;
@@ -3440,7 +3437,7 @@ a.recipes__import:focus-visible {
  * On a phone a long label ("No primary protein") left too little room for the
  * bar, so that one row wrapped its bar and count to a second line while the
  * short rows kept them beside the label. Stacking the label makes every bar
- * start at the same edge (M15-04).
+ * start at the same edge.
  */
 @media (max-width: 40rem) {
   .stats-bar-row__label {
@@ -3473,7 +3470,7 @@ a.recipes__import:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
-/* ---------- meal-history browser (#145, M11-05) ---------- */
+/* meal-history browser (#145,) ---------- */
 
 .history-filters {
   display: flex;
@@ -3584,7 +3581,7 @@ a.recipes__import:focus-visible {
   margin-left: auto;
 }
 
-/* ---------- audit log viewer (#152, M12-03) ---------- */
+/* audit log viewer (#152,) ---------- */
 
 .audit-filters {
   display: flex;
@@ -3772,7 +3769,7 @@ a.recipes__import:focus-visible {
   border-color: transparent;
 }
 
-/* ---------- backups (M13-06) ---------- */
+/* backups ---------- */
 
 .backups-created {
   display: flex;
@@ -3918,12 +3915,12 @@ a.recipes__import:focus-visible {
   }
 }
 
-/* ---------- touch targets (M14-03) ---------- */
+/* touch targets ---------- */
 
 /*
- * Phone-width hit areas (docs/M14_PLAN.md §1.7). The primary navigation, view
+ * Phone-width hit areas. The primary navigation, view
  * toggles and action buttons were still text-sized (21–42 px tall) at
- * 360–414 px. The component-level mobile blocks above already size the grocery,
+ * 360–414 px. The component-level mobile blocks above already size the grocery
  * calendar-toolbar and reference-data controls; this block covers the rest of
  * the primary surface, and desktop styling is untouched.
  */

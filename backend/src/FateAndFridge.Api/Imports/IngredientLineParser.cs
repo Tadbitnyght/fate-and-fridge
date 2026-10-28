@@ -5,7 +5,7 @@ namespace FateAndFridge.Api.Imports;
 
 /// <summary>
 /// One raw ingredient line split into its parts by <see cref="IngredientLineParser"/>
-/// (docs/M4_PLAN.md §1.12). A value that could not be parsed unambiguously stays
+/// A value that could not be parsed unambiguously stays
 /// <c>null</c> (or, for <see cref="Name"/>, empty) rather than being guessed; the
 /// full <see cref="Raw"/> line is always preserved.
 /// </summary>
@@ -23,7 +23,7 @@ public sealed record ParsedIngredientLine(
 
 /// <summary>
 /// Pure, dependency-free split of a raw ingredient line into quantity, unit
-/// text, name, and preparation note (docs/M4_PLAN.md §1.12). This type reads no
+/// text, name, and preparation note. This type reads no
 /// database and never throws: malformed input degrades to a preserved name.
 /// </summary>
 /// <remarks>
@@ -355,7 +355,7 @@ public static class IngredientLineParser
                 && LooksLikeMalformedFraction(text, fractionStart))
             {
                 // A whitespace-separated numeric token with a slash that did not
-                // parse (for example an overflowing denominator) is malformed;
+                // parse (for example an overflowing denominator) is malformed
                 // the whole token must not degrade to its integer prefix.
                 return false;
             }

@@ -8,7 +8,7 @@ using FateAndFridge.Api.Imports;
 namespace FateAndFridge.Api.Endpoints;
 
 /// <summary>
-/// M4-04 import routes (docs/M4_PLAN.md §2.2, docs/API.md §15):
+/// Import routes
 /// <c>POST /api/v1/import/recipe-url</c> (draft-only, <c>recipes.edit</c>) and
 /// <c>POST /api/v1/import/check</c> (<c>recipes.view</c>). Both use the shared
 /// error envelope; the draft route throttles per-user page fetches.

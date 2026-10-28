@@ -96,9 +96,9 @@ public abstract record IngredientMergeResult
 }
 
 /// <summary>
-/// M2-08 ingredients management (docs/API.md §22, docs/DATABASE.md §4):
+/// Ingredients management (docs/API.md §22, docs/DATABASE.md §4)
 /// searchable reference data whose canonical names and aliases share one global
-/// uniqueness namespace, an optional active department, per-ingredient aliases,
+/// uniqueness namespace, an optional active department, per-ingredient aliases
 /// retire/delete semantics, and an audit row staged into the caller's
 /// <see cref="AppDbContext"/> for every write.
 /// </summary>
@@ -121,7 +121,7 @@ public sealed class IngredientService(
 
     /// <summary>
     /// Lists ingredients ordered by id, prefix matches first when searching. The
-    /// search matches the canonical name and alias text case-insensitively;
+    /// search matches the canonical name and alias text case-insensitively
     /// retired ingredients are excluded unless requested.
     /// </summary>
     public async Task<IReadOnlyList<IngredientRecord>> ListAsync(
@@ -642,9 +642,9 @@ public sealed class IngredientService(
     /// Merges one ingredient into another (docs/API.md §22): in a single
     /// transaction it locks both rows, reassigns recipe references through the
     /// usage seam, moves the source's aliases to the target when their
-    /// normalized text is free of the target and of every other ingredient,
+    /// normalized text is free of the target and of every other ingredient
     /// copies the source's canonical name to the target as an alias under the
-    /// same rule, retires the source with <c>merged_into_ingredient_id</c> set,
+    /// same rule, retires the source with <c>merged_into_ingredient_id</c> set
     /// and stages one <c>merged</c> audit event with before/after snapshots.
     /// </summary>
     /// <remarks>
@@ -986,7 +986,7 @@ public sealed class IngredientService(
 
     /// <summary>
     /// Looks up one normalized value in the shared ingredient namespace. The
-    /// owning ingredient id is returned for both canonical-name and alias hits,
+    /// owning ingredient id is returned for both canonical-name and alias hits
     /// with the alias row id when the hit is an alias.
     /// </summary>
     private async Task<UniquenessConflict?> FindUniquenessConflictAsync(

@@ -4,8 +4,7 @@ using FluentAssertions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// schema.org JSON-LD recipe extraction matrix (docs/M4_PLAN.md §1.5, §4;
-/// docs/PRODUCT_SPEC.md §28).
+/// Schema.org JSON-LD recipe extraction matrix.
 /// </summary>
 public sealed class StructuredRecipeParserTests
 {

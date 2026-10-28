@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
 /**
- * Statistics + meal-history UI (M11-04/M11-05) against a mocked API, matching
+ * Statistics + meal-history UI against a mocked API, matching
  * the hermetic pattern of the other e2e specs: no real backend, but the real
  * Vite bundle, routing, and rendering.
  */

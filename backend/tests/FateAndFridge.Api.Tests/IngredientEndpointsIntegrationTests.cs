@@ -22,8 +22,8 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// HTTP-level verification of M2-08 ingredients (docs/API.md §22): CRUD, search
-/// and limit behavior, the shared canonical-name/alias uniqueness namespace,
+/// HTTP-level verification of ingredients (docs/API.md §22): CRUD, search
+/// and limit behavior, the shared canonical-name/alias uniqueness namespace
 /// atomic alias creation, department validation, retire/delete semantics
 /// through the usage seam (including the merge-reference FK), the route
 /// permission matrix, and audit coverage for every write. Requires a Docker
@@ -31,8 +31,8 @@ namespace FateAndFridge.Api.Tests;
 /// locally.
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class IngredientEndpointsIntegrationTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class IngredientEndpointsIntegrationTests(SetupFixture fixture) : IAsyncLifetime
 {
     private const string IngredientsPath = "/api/v1/ingredients";
 
@@ -2013,7 +2013,7 @@ public sealed class IngredientEndpointsIntegrationTests(M1SetupFixture fixture) 
             cancellationToken);
 
     /// <summary>
-    /// Boots the host (which runs the M2-04 startup seeder), then clears
+    /// Boots the host (which runs the startup seeder), then clears
     /// ingredients, their aliases, and departments so each test controls its
     /// own reference data. Pass a counting <see cref="IReferenceUsageChecker"/>
     /// fake to exercise the delete-usage seam; the default registration returns
@@ -2179,7 +2179,7 @@ public sealed class IngredientEndpointsIntegrationTests(M1SetupFixture fixture) 
     {
         await using var context = fixture.CreateContext();
 
-        // M12-01 mirrors login/logout into audit_events; these suites assert the
+        // Mirrors login/logout into audit_events; these suites assert the
         // reference-data/recipe rows they themselves write, so the auth mirror is
         // excluded here.
         return await context.AuditEvents.AsNoTracking()

@@ -21,7 +21,7 @@ public sealed record RecipeUnitReference(
     bool IsActive);
 
 /// <summary>
-/// One ingredient line of a recipe (M3-06, docs/M3_PLAN.md §1.8–§1.9). The
+/// One ingredient line of a recipe. The
 /// quantity is a precise decimal or null ("to taste"); the unit is optional.
 /// </summary>
 public sealed record RecipeIngredientRecord(
@@ -40,7 +40,7 @@ public sealed record RecipeIngredientGroupRecord(
     int SortOrder,
     IReadOnlyList<RecipeIngredientRecord> Ingredients);
 
-/// <summary>One ordered instruction step (M3-07).</summary>
+/// <summary>One ordered instruction step.</summary>
 public sealed record RecipeInstructionStepRecord(
     long Id,
     string Text,
@@ -66,8 +66,8 @@ public sealed record RecipeTagRecord(
 
 /// <summary>
 /// One recipe as exposed by the API and by audit snapshots (docs/DATABASE.md
-/// §3, §6, §7), including its active image (M3-04) and its nested ingredient,
-/// instruction, protein, and tag slices (M3-05 … M3-08).
+/// §3, §6, §7), including its active image and its nested ingredient
+/// instruction, protein, and tag slices.
 /// </summary>
 public sealed record RecipeRecord(
     long Id,
@@ -103,7 +103,7 @@ public readonly record struct RecipeField<T>(bool IsSet, T Value)
     public static RecipeField<T> Set(T value) => new(true, value);
 }
 
-/// <summary>One ingredient line supplied by create/update (M3-06).</summary>
+/// <summary>One ingredient line supplied by create/update.</summary>
 public sealed record RecipeIngredientWrite(
     long IngredientId,
     decimal? Quantity,
@@ -111,19 +111,19 @@ public sealed record RecipeIngredientWrite(
     string? PreparationNote,
     bool IsOptional);
 
-/// <summary>One ordered ingredient group supplied by create/update (M3-05/M3-06).</summary>
+/// <summary>One ordered ingredient group supplied by create/update.</summary>
 public sealed record RecipeIngredientGroupWrite(
     string? Title,
     IReadOnlyList<RecipeIngredientWrite> Ingredients);
 
-/// <summary>One ordered instruction section supplied by create/update (M3-07).</summary>
+/// <summary>One ordered instruction section supplied by create/update.</summary>
 public sealed record RecipeInstructionSectionWrite(
     string? Title,
     IReadOnlyList<string> Steps);
 
 /// <summary>
 /// Recipe metadata and nested collections accepted by create and update
-/// (M3-02 … M3-09, docs/M3_PLAN.md §1). Unset fields are unchanged on update
+/// Unset fields are unchanged on update
 /// and take their defaults on create. A set collection is a full replacement of
 /// that slice.
 /// </summary>
@@ -164,11 +164,11 @@ public abstract record RecipeMutationResult
 }
 
 /// <summary>
-/// M3 recipe service (docs/M3_PLAN.md §1–§2): base metadata and status
-/// lifecycle (M3-02), favorite/diet flags (M3-03), image attachment (M3-04),
-/// ingredient groups and ingredients (M3-05/M3-06), instruction sections and
-/// steps (M3-07), protein/tag associations (M3-08), and the full authorized
-/// document CRUD contract (M3-09). Every write stages one audit row into the
+/// M3 recipe service: base metadata and status
+/// lifecycle, favorite/diet flags, image attachment
+/// ingredient groups and ingredients, instruction sections and
+/// steps, protein/tag associations, and the full authorized
+/// document CRUD contract. Every write stages one audit row into the
 /// caller's <see cref="AppDbContext"/> and commits as a single transaction.
 /// </summary>
 public sealed class RecipeService(
@@ -200,7 +200,7 @@ public sealed class RecipeService(
     /// <summary>Unique index that guards the recipe display-name lookup form.</summary>
     private const string RecipeNameConstraint = "ix_recipes_normalized_name";
 
-    /// <summary>Named sorts accepted by <c>GET /recipes</c> (M3-09).</summary>
+    /// <summary>Named sorts accepted by <c>GET /recipes</c>.</summary>
     public static readonly IReadOnlyList<string> SortValues =
         ["recently_added", "name", "favorites", "recently_eaten", "least_recently_eaten", "most_eaten"];
 
@@ -214,8 +214,7 @@ public sealed class RecipeService(
 
     /// <summary>
     /// Lists recipes matching the filters and named sort, the unpaged total, and
-    /// the per-recipe history metrics for the returned page (M3-09, M11-02;
-    /// docs/M11_PLAN.md §1.27). The metrics come from one aggregate query for the
+    /// the per-recipe history metrics for the returned page. The metrics come from one aggregate query for the
     /// page — or, for a history-aware sort, for every matching recipe before the
     /// page is chosen — so a list never issues a query per card.
     /// </summary>
@@ -279,7 +278,7 @@ public sealed class RecipeService(
         var total = await query.CountAsync(cancellationToken);
 
         // History-aware sorts must see every matching recipe before paging, so
-        // they order the id set and page it themselves (M11-02, docs/API.md §23).
+        // they order the id set and page it themselves (docs/API.md §23).
         if (IsHistorySort(sort))
         {
             return await ListByHistoryAsync(query, sort, limit, offset, total, cancellationToken)
@@ -306,7 +305,7 @@ public sealed class RecipeService(
             cancellationToken);
 
         // One aggregate query for the whole page keys the three §12 metrics, so
-        // the browser never fetches a metric per card (docs/M11_PLAN.md §1.27).
+        // the browser never fetches a metric per card.
         var metrics = await statistics.GetMetricsAsync(
             recipes.Select(recipe => recipe.Id).ToArray(),
             cancellationToken).ConfigureAwait(false);
@@ -323,7 +322,7 @@ public sealed class RecipeService(
         sort is "recently_eaten" or "least_recently_eaten" or "most_eaten";
 
     /// <summary>
-    /// Orders the whole matching set by history, then pages it (docs/API.md §23):
+    /// Orders the whole matching set by history, then pages it (docs/API.md §23)
     /// <c>recently_eaten</c> by latest eaten date, <c>least_recently_eaten</c> by
     /// oldest eaten date, and <c>most_eaten</c> by eaten count — ties break on
     /// <c>id</c> and recipes with no history sort last in every case.
@@ -498,7 +497,7 @@ public sealed class RecipeService(
     /// <summary>
     /// Applies a partial update: omitted fields are unchanged and an explicit
     /// null clears an optional field. A set collection slice is a full
-    /// replacement. The whole update, including nested rows and the audit row,
+    /// replacement. The whole update, including nested rows and the audit row
     /// commits in one transaction.
     /// </summary>
     public async Task<RecipeMutationResult> UpdateAsync(
@@ -598,7 +597,7 @@ public sealed class RecipeService(
 
             await auditService.WriteAsync(
                 new AuditEventEntry(
-                    // A status change into retired is the M12 retire transition;
+                    // A status change into retired is the M12 retire transition
                     // every other edit stays a plain update (exactly one row).
                     !wasRetired && recipe.Status == RecipeStatus.Retired
                         ? AuditEventTypes.RecipeRetired
@@ -614,7 +613,7 @@ public sealed class RecipeService(
             if (renamed)
             {
                 // Refresh future/today calendar snapshots; historical entries
-                // stay frozen (docs/M5_PLAN.md §1.5).
+                // stay frozen.
                 await CalendarService.RefreshSnapshotsAsync(
                     dbContext,
                     clock,
@@ -849,8 +848,8 @@ public sealed class RecipeService(
 
     /// <summary>
     /// Canonical source-URL normalization shared by recipe save and M4 import
-    /// duplicate detection (docs/M3_PLAN.md §1.19, docs/M4_PLAN.md §1.9):
-    /// lowercase the scheme and host, drop a default port, drop the fragment,
+    /// duplicate detection
+    /// lowercase the scheme and host, drop a default port, drop the fragment
     /// trim a trailing slash from a non-root path, and sort query parameters.
     /// Nothing else is rewritten and the URL is never fetched. This is the form
     /// stored in <see cref="Recipe.NormalizedSourceUrl"/>; callers must not fork
@@ -858,7 +857,7 @@ public sealed class RecipeService(
     /// </summary>
     /// <remarks>
     /// Canonicalization here is intentionally narrow and best-effort: it folds
-    /// the variants the M4 duplicate warning must tolerate (trailing slash,
+    /// the variants the M4 duplicate warning must tolerate (trailing slash
     /// query-parameter order, fragment, case, default port). It does not resolve
     /// redirects, percent-decode, or otherwise reinterpret the path.
     /// </remarks>

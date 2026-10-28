@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// Recovery key file handling (docs/SECURITY.md §11): 32 CSPRNG bytes,
+/// Recovery key file handling (docs/SECURITY.md §11): 32 CSPRNG bytes
 /// base64url, mode 0600, reuse instead of overwriting, and loud failure for an
 /// existing unusable file.
 /// </summary>

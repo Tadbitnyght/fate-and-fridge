@@ -5,8 +5,7 @@ namespace FateAndFridge.Api.Services;
 
 /// <summary>
 /// The transaction-scoped PostgreSQL advisory locks shared by the calendar and
-/// recipe writers (docs/M6_PLAN.md §1.11, docs/M7_PLAN.md §1.12,
-/// docs/M12_PLAN.md §4, docs/M14_PLAN.md §1.9). Every writer must derive a key
+/// recipe writers. Every writer must derive a key
 /// here: two writers that use a different key do not serialize at all, which is
 /// exactly the BUG-003/BUG-011 race.
 /// </summary>
@@ -21,7 +20,7 @@ internal static class AdvisoryLocks
     /// <summary>
     /// Serializes every mutation of one household-local calendar date. The key
     /// is the date's day number: stable across servers, time zones, and app
-    /// restarts (docs/M7_PLAN.md §1.12).
+    /// restarts.
     /// </summary>
     public static Task LockDateAsync(
         DatabaseFacade database,

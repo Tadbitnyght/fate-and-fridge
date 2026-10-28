@@ -3,11 +3,10 @@ import { apiRequest } from './client'
 
 /**
  * Typed client for the M11 statistics contract (docs/API.md §14).
- *
  * Reads require `recipes.view` (`calendar.view` for meal history); the
  * single-user system actor and Admins hold both. The server enforces all of
  * that — these types only describe the wire shapes. JSON property names are
- * snake_case, and every date/datetime is household-local (`HouseholdClock`),
+ * snake_case, and every date/datetime is household-local (`HouseholdClock`)
  * never a client-side reinterpretation.
  */
 
@@ -35,7 +34,7 @@ export type SpecialEventType =
   | 'fend_for_yourself'
   | 'vacation'
 
-/** Canonical display order for the special-event counts (docs/M11_PLAN.md §1.13). */
+/** Canonical display order for the special-event counts. */
 export const SPECIAL_EVENT_TYPES: SpecialEventType[] = [
   'eat_out',
   'host_family_dinner',
@@ -115,12 +114,11 @@ export function getStatisticsOverview(): Promise<StatisticsOverview> {
   return apiRequest<StatisticsOverview>('/statistics/overview')
 }
 
-/* ---------- meal history ---------- */
+/* meal history ---------- */
 
 /**
  * One day of the strictly-past meal log. A day row **is** the entry
  * (`calendar_entries.meal_date` is unique), so there is no blank filler
- * (docs/M11_PLAN.md §1.22).
  */
 export interface MealHistoryDay {
   /** Household-local `YYYY-MM-DD`. */
@@ -159,10 +157,9 @@ export interface MealHistoryPaging {
 /**
  * `GET /api/v1/statistics/history` (docs/API.md §14). One month page of the
  * read-only meal log, newest first.
- *
  * The wire shape here matches the shipped server response and the documented
  * contract: `days` is a **sibling** of `month` (docs/API.md §14, the §14
- * example, and `M11MealHistoryIntegrationTests.The_month_page_keeps_days_as_a_sibling_of_month`).
+ * example, and `MealHistoryIntegrationTests.The_month_page_keeps_days_as_a_sibling_of_month`).
  */
 export interface MealHistoryResponse {
   range: MealHistoryRange
@@ -171,7 +168,7 @@ export interface MealHistoryResponse {
   paging: MealHistoryPaging
 }
 
-/** Server-side, AND-combined meal-history filters (docs/M11_PLAN.md §1.25). */
+/** Server-side, AND-combined meal-history filters. */
 export interface MealHistoryParams {
   /** Household-local `YYYY-MM-DD` range bound. */
   start?: string

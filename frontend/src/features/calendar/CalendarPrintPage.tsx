@@ -14,23 +14,22 @@ import {
 } from './printRange'
 
 /**
- * Calendar print view (M10-01/M10-06, docs/M10_PLAN.md §1.3). A dedicated,
- * deep-linkable client route (`/calendar/print`) mirroring `/groceries/print`:
+ * Calendar print view. A dedicated
+ * deep-linkable client route (`/calendar/print`) mirroring `/groceries/print`
  * screen-only controls (start month, month count 1–12, Print, Back) and one
  * printable month per page in chronological order, each with a month/year
  * heading.
- *
  * The start month defaults to the month being viewed: the calendar toolbar
  * navigates here with `?month=YYYY-MM`; without the param the current month is
  * used. Reads reuse the existing month-scoped calendar range endpoint — no new
- * API (docs/M10_PLAN.md §2.3). All print styling lives in `index.css`.
+ * API. All print styling lives in `index.css`.
  */
 export function CalendarPrintPage(): JSX.Element {
   const { canView } = useCalendarAccess()
   const [searchParams, setSearchParams] = useSearchParams()
   const monthParam = searchParams.get('month')
   // The URL is the source of truth for the start month, so browser
-  // back/forward between `?month=` values updates the view (M10-06) and the
+  // back/forward between `?month=` values updates the view and the
   // month control writes the URL rather than shadowing it in local state.
   const start = useMemo(() => resolveStartMonth(monthParam), [monthParam])
   const [monthCount, setMonthCount] = useState(1)

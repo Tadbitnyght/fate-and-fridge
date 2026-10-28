@@ -18,12 +18,12 @@ public static class SessionAuthenticationDefaults
     /// <summary>Opaque session cookie name (docs/SECURITY.md §2).</summary>
     public const string CookieName = "faf_session";
 
-    /// <summary>Claim carrying the forced-password-change flag (M1-08).</summary>
+    /// <summary>Claim carrying the forced-password-change flag.</summary>
     public const string MustChangePasswordClaim = "must_change_password";
 
     /// <summary>
     /// Claim carrying the database id of the resolved session, used by logout
-    /// to revoke exactly the current session (M1-07).
+    /// to revoke exactly the current session.
     /// </summary>
     public const string SessionIdClaim = "session_id";
 
@@ -52,7 +52,7 @@ public static class SessionCookie
     };
 
     /// <summary>
-    /// Sets the session cookie on the response (used by login, M1-07). Pass
+    /// Sets the session cookie on the response (used by login). Pass
     /// <paramref name="expires"/> to write a persistent cookie; omitting it
     /// writes a browser-session cookie.
     /// </summary>
@@ -130,7 +130,7 @@ public sealed class SessionAuthenticationHandler : AuthenticationHandler<Authent
         }
 
         // Bind antiforgery request tokens to this session (see
-        // SessionAntiforgeryDataProvider): rotation replaces the stored hash,
+        // SessionAntiforgeryDataProvider): rotation replaces the stored hash
         // so tokens minted before rotation stop validating.
         Context.Items[SessionAuthenticationDefaults.SessionTokenHashItemKey] =
             Convert.ToHexString(resolved.Session.TokenHash);
@@ -146,7 +146,7 @@ public sealed class SessionAuthenticationHandler : AuthenticationHandler<Authent
         // auth response (docs/API.md §5).
         Response.Headers.CacheControl = "no-store";
 
-        // Routes using RequireAuthorization() get the same stable envelope as
+        // Routes using RequireAuthorization get the same stable envelope as
         // endpoints that check ICurrentActorProvider themselves.
         var result = ApiResults.Error(
             StatusCodes.Status401Unauthorized,

@@ -87,7 +87,7 @@ const multiCandidate: ImportParseResponse = {
 }
 
 /**
- * A draft whose source URL already exists (M4-11 exact normalized-URL match).
+ * A draft whose source URL already exists (exact normalized-URL match).
  * Its ingredients are fully resolved so the save path is reachable once the
  * warning is acknowledged.
  */
@@ -103,7 +103,7 @@ const duplicateCandidate: ImportParseResponse = {
   ],
 }
 
-/** A draft whose name resembles an existing recipe (M4-12 similar-name warning). */
+/** A draft whose name resembles an existing recipe (similar-name warning). */
 const similarNameCandidate: ImportParseResponse = {
   ...singleCandidate,
   recipes: [
@@ -194,9 +194,9 @@ const gram = {
 }
 
 /**
- * The flour line is fully matched but its unit ("pkg") is unrecognized (M4-10).
+ * The flour line is fully matched but its unit ("pkg") is unrecognized.
  * It has a `mass` suggested dimension and an existing-unit suggestion so the
- * reviewer can either map it or create it with an explicit dimension.
+ * user can either map it or create it with an explicit dimension.
  */
 const unknownUnitCandidate: ImportParseResponse = {
   ...singleCandidate,
@@ -224,7 +224,7 @@ const unknownUnitCandidate: ImportParseResponse = {
 
 /**
  * Same as {@link unknownUnitCandidate} but the parser could not infer a
- * dimension, so the reviewer must choose one explicitly (never guessed).
+ * dimension, so the user must choose one explicitly (never guessed).
  */
 const unknownUnitNoDimensionCandidate: ImportParseResponse = {
   ...unknownUnitCandidate,
@@ -771,7 +771,7 @@ describe('import unknown unit flow', () => {
       { path: '/units', method: 'POST', status: 201, body: created },
     ])
 
-    // Suggested dimension is preselected (mass) so the reviewer can accept it.
+    // Suggested dimension is preselected (mass) so the user can accept it.
     expect(screen.getByLabelText('New unit symbol')).toHaveValue('pkg')
     expect((screen.getByLabelText('Dimension') as HTMLSelectElement).value).toBe('mass')
     // Mass units require an explicit base factor — never guessed.
@@ -1055,7 +1055,7 @@ describe('import ingredient groups (BUG-002)', () => {
 
   // The import draft contract (docs/API.md §15) has no `ingredient_groups`, so
   // grouped import drafts are impossible and `fromImportDraft` starts flat. The
-  // reviewer can still add a group by hand; those rows are ordinary blank rows
+  // user can still add a group by hand; those rows are ordinary blank rows
   // with no parsed line, so they must save through `ingredient_groups` without
   // any unknown-unit resolution state.
   const flatCandidate: ImportParseResponse = {
@@ -1083,7 +1083,7 @@ describe('import ingredient groups (BUG-002)', () => {
     expect(ingredientSelects).toHaveLength(3)
     fireEvent.change(ingredientSelects[2], { target: { value: '12' } })
 
-    // A reviewer-added group row has no parsed line, so it never claims an
+    // A user-added group row has no parsed line, so it never claims an
     // unrecognized unit and never blocks saving on one.
     expect(screen.queryByText(/Unrecognized unit:/)).not.toBeInTheDocument()
     expect(

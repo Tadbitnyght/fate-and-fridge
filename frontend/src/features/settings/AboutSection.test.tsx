@@ -45,7 +45,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('About section (M13-08 / M13-09)', () => {
+describe('About section', () => {
   it('shows the app and schema versions plus the live update status to a member', async () => {
     installMockFetch(baseRoutes({ path: '/updates', body: updateStatus() }))
 

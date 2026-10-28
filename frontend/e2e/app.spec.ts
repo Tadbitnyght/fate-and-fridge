@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
+import { RETIRED_PLAN_COPY } from './support/developmentCopy'
+
 const setupIncomplete = { setup_completed: false, auth_mode: null, recovery_key_present: false }
 
 const calendarSettings = {
@@ -53,7 +55,7 @@ interface MockApiOptions {
   household?: unknown
   /**
    * Response for `POST /setup/restore`. When set, the mocked app simulates the
-   * restart: the first status poll fails, the second is the maintenance 503,
+   * restart: the first status poll fails, the second is the maintenance 503
    * and later polls report a completed single-user setup.
    */
   restore?: CompleteResponse
@@ -248,8 +250,8 @@ test('dashboard offers product quick links and no roadmap', async ({ page }) => 
   )
 
   // The in-app roadmap is gone: no link, card, or footer entry points at it.
-  await expect(page.getByRole('link', { name: /milestone|roadmap/i })).toHaveCount(0)
-  await expect(page.getByText(/milestone|roadmap/i)).toHaveCount(0)
+  await expect(page.getByRole('link', { name: RETIRED_PLAN_COPY })).toHaveCount(0)
+  await expect(page.getByText(RETIRED_PLAN_COPY)).toHaveCount(0)
 })
 
 test('the retired /progress route is not a product route', async ({ page }) => {
@@ -262,7 +264,7 @@ test('the retired /progress route is not a product route', async ({ page }) => {
   await expect(page).toHaveURL(/\/calendar$/)
   await expect(page.getByRole('heading', { level: 2, name: 'Calendar' })).toBeVisible()
   await expect(page.getByRole('heading', { level: 2, name: 'Progress' })).toHaveCount(0)
-  await expect(page.getByText(/milestone|roadmap|future & ideas/i)).toHaveCount(0)
+  await expect(page.getByText(RETIRED_PLAN_COPY)).toHaveCount(0)
 })
 
 test('skip link moves keyboard focus to the main content', async ({ page }) => {

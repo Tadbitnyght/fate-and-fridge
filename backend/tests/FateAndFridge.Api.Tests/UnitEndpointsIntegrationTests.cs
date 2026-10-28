@@ -19,7 +19,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// HTTP-level verification of M2-06 units (docs/API.md §22): CRUD, search and
+/// HTTP-level verification of units (docs/API.md §22): CRUD, search and
 /// limit behavior, unit conflicts, dimension immutability, base-factor rules
 /// and <c>factor_changed</c> audit snapshots, per-unit aliases, retire/delete
 /// semantics through the usage seam, the route permission matrix, and audit
@@ -27,8 +27,8 @@ namespace FateAndFridge.Api.Tests;
 /// <c>dotnet test --filter "Category!=Integration"</c> to skip locally.
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class UnitEndpointsIntegrationTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class UnitEndpointsIntegrationTests(SetupFixture fixture) : IAsyncLifetime
 {
     private const string UnitsPath = "/api/v1/units";
     private const string AdminPassword = "root horse battery staple";
@@ -1290,7 +1290,7 @@ public sealed class UnitEndpointsIntegrationTests(M1SetupFixture fixture) : IAsy
             cancellationToken);
 
     /// <summary>
-    /// Boots the host (which runs the M2-04 startup seeder), then clears units
+    /// Boots the host (which runs the startup seeder), then clears units
     /// and unit aliases so each test controls its own reference data. Pass a
     /// counting <see cref="IReferenceUsageChecker"/> fake to exercise the
     /// delete-usage seam; the default registration returns zero for every
@@ -1402,7 +1402,7 @@ public sealed class UnitEndpointsIntegrationTests(M1SetupFixture fixture) : IAsy
     {
         await using var context = fixture.CreateContext();
 
-        // M12-01 mirrors login/logout into audit_events; these suites assert the
+        // Mirrors login/logout into audit_events; these suites assert the
         // reference-data/recipe rows they themselves write, so the auth mirror is
         // excluded here.
         return await context.AuditEvents.AsNoTracking()

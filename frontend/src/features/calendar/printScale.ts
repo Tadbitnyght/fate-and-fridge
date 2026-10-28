@@ -1,7 +1,5 @@
 /**
- * Deterministic auto-shrink for the printed calendar (M10-03, docs/M10_PLAN.md
- * §2.2).
- *
+ * Deterministic auto-shrink for the printed calendar.
  * Mechanism. The printable month is laid out at the **print content width** in
  * both screen and print media, and every dimension inside it is `em`-based, so
  * its rendered height is proportional to the month's `font-size`. We measure the
@@ -11,17 +9,14 @@
  * font-size multiplier (`--calendar-print-scale`) on the month. Scaling the
  * font size reflows the layout (unlike a `transform`), so the browser's
  * pagination sees the shrunk height and keeps the month on one page.
- *
  * This is **deterministic**: the scale is a pure function of the measured
  * content height and the fixed page geometry, so identical content always
  * produces the identical scale (no timers, randomness, or user-visible seeds).
- *
  * The scale is clamped to `MIN_PRINT_SCALE` so the month's text never prints
  * smaller than `PRINT_FLOOR_FONT_PT` (≈10pt). When even the floor scale cannot
  * fit the content, `shouldSpillPrintMonth` reports true and the view leaves the
  * month unconstrained (`data-spill="true"`) so it continues onto a following
  * page instead of shrinking further or clipping.
- *
  * Single source of truth. The page geometry lives in `index.css` as CSS custom
  * properties on `:root` (`--calendar-print-*`); `index.css` derives the month
  * width and the print height cap from them, and this module reads the same
@@ -139,7 +134,7 @@ export function printMinScale(geometry: PrintGeometry = PRINT_GEOMETRY_FALLBACK)
   return geometry.floorFontPt / geometry.baseFontPt
 }
 
-/* ----- Fallback-geometry constants (pure math and unit-test convenience). ----- */
+/* Fallback-geometry constants (pure math and unit-test convenience). ----- */
 
 /** Month font size in pt at scale 1 (the largest the calendar prints). */
 export const PRINT_BASE_FONT_PT = PRINT_GEOMETRY_FALLBACK.baseFontPt
@@ -166,7 +161,6 @@ export const PRINT_AVAILABLE_HEIGHT_PX = printAvailableHeightPx()
 /**
  * The font-size multiplier that shrinks `naturalHeightPx` to fit
  * `availableHeightPx`, clamped to `[MIN_PRINT_SCALE, MAX_PRINT_SCALE]`.
- *
  * A non-positive or non-finite measurement (e.g. jsdom, which lays nothing out)
  * yields `MAX_PRINT_SCALE`, i.e. no shrink.
  */

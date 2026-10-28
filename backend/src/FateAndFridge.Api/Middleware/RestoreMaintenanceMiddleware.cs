@@ -4,7 +4,7 @@ using FateAndFridge.Api.Services;
 namespace FateAndFridge.Api.Middleware;
 
 /// <summary>
-/// Path rules for restore maintenance mode (docs/M13_PLAN.md §1.9 step 3):
+/// Path rules for restore maintenance mode
 /// every route is blocked except <c>/api/v1/health</c> and its subroutes, so the
 /// container health check keeps succeeding while the database is replaced.
 /// </summary>

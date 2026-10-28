@@ -13,7 +13,7 @@ import {
 } from '../../api/backups'
 
 /**
- * Query-key prefix for the Admin backup catalogue (docs/API.md §18). Create,
+ * Query-key prefix for the Admin backup catalogue (docs/API.md §18). Create
  * delete, and restore all invalidate the prefix so the list reflects the
  * server's rows without a reload.
  */

@@ -56,8 +56,8 @@ function createInitialValues(timezone: string): SetupFormValues {
 }
 
 /**
- * Setup wizard (M1-13): mode, household, admin account, optional IP allowlist,
- * review, and the one-time recovery key. Client validation mirrors the server;
+ * Setup wizard: mode, household, admin account, optional IP allowlist
+ * review, and the one-time recovery key. Client validation mirrors the server
  * server field errors are mapped back to the step that owns the field.
  */
 export function SetupWizard() {

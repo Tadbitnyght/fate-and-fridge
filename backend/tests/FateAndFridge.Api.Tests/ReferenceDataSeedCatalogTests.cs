@@ -6,7 +6,7 @@ namespace FateAndFridge.Api.Tests;
 
 /// <summary>
 /// Fast (no database) checks that the embedded M2 seed catalog matches the
-/// authoritative docs/M2_PLAN.md §2 lists exactly: counts, order, dimensions,
+/// authoritative lists exactly: counts, order, dimensions
 /// factors, and aliases.
 /// </summary>
 public sealed class ReferenceDataSeedCatalogTests

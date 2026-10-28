@@ -30,8 +30,8 @@ type DialogState =
   | { kind: 'delete'; item: GroceryItem }
 
 /**
- * Groceries page (M8-07, docs/M8_PLAN.md §1.7–§1.13): the live projection over
- * the active range, with a range selector, a per-user hide-checked toggle,
+ * Groceries page: the live projection over
+ * the active range, with a range selector, a per-user hide-checked toggle
  * manual-item add/edit/delete, and household staples. `groceries.view` gates
  * the content; `groceries.edit` only hides/disables writes — the server is the
  * sole authorization gate.

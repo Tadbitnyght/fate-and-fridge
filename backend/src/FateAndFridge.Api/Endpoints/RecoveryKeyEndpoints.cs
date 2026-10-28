@@ -8,13 +8,12 @@ using FateAndFridge.Api.Services;
 namespace FateAndFridge.Api.Endpoints;
 
 /// <summary>
-/// Admin-only recovery-key export (docs/M13_PLAN.md §1.11, §2.2;
-/// docs/SECURITY.md §11, docs/DATABASE.md §11): the one confirmed download of
+/// Admin-only recovery-key export: the one confirmed download of
 /// the household key file.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The route is <c>RequireAdmin()</c> on the existing <c>admin</c> role (and the
+/// The route is <c>RequireAdmin</c> on the existing <c>admin</c> role (and the
 /// single-user system actor); no eighth permission key is introduced. The
 /// caller must also pass the shared dangerous-action guard with the exact typed
 /// <c>EXPORT</c> confirmation, and the attempt is audited as

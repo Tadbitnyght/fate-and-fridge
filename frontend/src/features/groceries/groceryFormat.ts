@@ -10,7 +10,7 @@ import {
 import { parseIsoDate } from '../calendar/calendarDates'
 import { firstFieldError, extractServerFieldErrors } from '../../utils/fieldErrors'
 
-/** Short meal attribution, e.g. `Tue 10/6` (docs/M8_PLAN.md §1.6). */
+/** Short meal attribution, e.g. `Tue 10/6`. */
 export function formatSourceDate(iso: string): string {
   const weekday = formatHouseholdWeekday(iso)
   if (weekday.length === 0) {
@@ -40,7 +40,7 @@ export function formatRangeSummary(start: string, end: string): string {
 }
 
 /**
- * Quantity/unit text for a grocery line, e.g. `1 1/2 lb` (docs/M8_PLAN.md §1.5).
+ * Quantity/unit text for a grocery line, e.g. `1 1/2 lb`.
  * A quantity-less line renders only its unit, or nothing when it has neither.
  */
 export function formatQuantityLabel(quantityText: string, unit: string | null): string {

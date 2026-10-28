@@ -236,7 +236,7 @@ describe('recipe browser', () => {
     expect(scope.queryAllByRole('link')).toHaveLength(1)
 
     // The stretched-link pattern: the card is the positioning context and the
-    // name link's ::after covers it (the real pointer behaviour is asserted in
+    // name link's::after covers it (the real pointer behaviour is asserted in
     // the e2e card test).
     expect(card).toHaveClass('recipe-card')
     expect(indexCss).toMatch(/\.recipe-card\s*\{[^}]*position:\s*relative/)

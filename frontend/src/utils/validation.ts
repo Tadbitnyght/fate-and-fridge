@@ -1,6 +1,6 @@
 /**
  * Field-level validation shared by the setup wizard and the admin console.
- * These rules mirror the server (`HouseholdSettingsPatchValidator`,
+ * These rules mirror the server (`HouseholdSettingsPatchValidator`
  * `UsernamePolicy`, `PasswordPolicy`); the server stays authoritative.
  */
 

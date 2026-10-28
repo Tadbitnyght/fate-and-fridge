@@ -4,7 +4,7 @@ using Microsoft.Extensions.Options;
 namespace FateAndFridge.Api.Imports;
 
 /// <summary>
-/// Per-user import fetch limits (docs/M4_PLAN.md §1.15, docs/API.md §15):
+/// Per-user import fetch limits
 /// 30 page fetches and 60 image fetches per rolling one-hour window by default.
 /// Excess requests receive <c>429 IMPORT_RATE_LIMITED</c>. Loopback callers and
 /// the single-user system actor are throttled too.
@@ -20,7 +20,7 @@ public sealed class ImportThrottleOptions
     /// <summary>Page fetches allowed per actor per window.</summary>
     public int PageFetchesPerHour { get; set; } = 30;
 
-    /// <summary>Image fetches allowed per actor per window (M4-07 consumes this).</summary>
+    /// <summary>Image fetches allowed per actor per window (consumes this).</summary>
     public int ImageFetchesPerHour { get; set; } = 60;
 
     /// <summary>Fixed window length in seconds (one hour).</summary>
@@ -57,7 +57,7 @@ public interface IImportThrottle
 {
     /// <summary>
     /// Atomically reserves one slot of <paramref name="budget"/> for
-    /// <paramref name="actorKey"/>. Call before performing the outbound fetch;
+    /// <paramref name="actorKey"/>. Call before performing the outbound fetch
     /// a blocked decision means the caller answers <c>429</c> without I/O.
     /// </summary>
     ImportThrottleDecision Reserve(string actorKey, ImportFetchBudget budget);
@@ -65,7 +65,7 @@ public interface IImportThrottle
 
 /// <summary>
 /// In-memory fixed-window counter keyed by actor and budget, stamped by the
-/// injected <see cref="TimeProvider"/>. State is intentionally process-local:
+/// injected <see cref="TimeProvider"/>. State is intentionally process-local
 /// V1 runs one app container, so limits are not shared across replicas.
 /// </summary>
 public sealed class ImportThrottle : IImportThrottle

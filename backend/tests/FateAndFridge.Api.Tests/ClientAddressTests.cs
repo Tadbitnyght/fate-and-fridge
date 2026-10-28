@@ -7,7 +7,7 @@ using Microsoft.Extensions.Primitives;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// Shared address rules (docs/API.md §21): strict range parsing/normalization,
+/// Shared address rules (docs/API.md §21): strict range parsing/normalization
 /// runtime address normalization, matching, and forwarded-header resolution.
 /// </summary>
 public sealed class ClientAddressTests

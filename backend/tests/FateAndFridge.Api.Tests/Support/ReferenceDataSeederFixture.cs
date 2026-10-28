@@ -8,13 +8,13 @@ using Testcontainers.PostgreSql;
 namespace FateAndFridge.Api.Tests.Support;
 
 /// <summary>
-/// PostgreSQL fixture for the M2-04 reference-data seeder. The container starts
+/// PostgreSQL fixture for the reference-data seeder. The container starts
 /// fully migrated; tests reset the reference data or roll the migration history
-/// back to the M1 baseline as needed (docs/M2_PLAN.md §2).
+/// back to the M1 baseline as needed.
 /// </summary>
 public sealed class ReferenceDataSeederFixture : IAsyncLifetime
 {
-    public const string M1BaselineMigrationId = "20260930015712_M1SchemaBaseline";
+    public const string BaselineMigrationId = "20260930015712_M1SchemaBaseline";
 
     private readonly PostgreSqlContainer _postgres =
         new PostgreSqlBuilder("postgres:17-alpine").Build();
@@ -81,7 +81,7 @@ public sealed class ReferenceDataSeederFixture : IAsyncLifetime
     public async Task MigrateToM1BaselineAsync(CancellationToken cancellationToken)
     {
         await using var context = CreateContext();
-        await context.GetService<IMigrator>().MigrateAsync(M1BaselineMigrationId, cancellationToken);
+        await context.GetService<IMigrator>().MigrateAsync(BaselineMigrationId, cancellationToken);
     }
 
     /// <summary>Applies every migration, as upgrading an older install would.</summary>

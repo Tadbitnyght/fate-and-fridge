@@ -7,8 +7,7 @@ namespace FateAndFridge.Api.Imports;
 
 /// <summary>
 /// Best-effort extraction of schema.org <c>Recipe</c> data from a page that has
-/// no JSON-LD <c>Recipe</c> (docs/M4_PLAN.md §1.5, §2.1;
-/// docs/PRODUCT_SPEC.md §28; docs/SECURITY.md §7–§8).
+/// no JSON-LD <c>Recipe</c>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -18,7 +17,7 @@ namespace FateAndFridge.Api.Imports;
 /// Microdata is tried first (<c>itemtype</c> containing
 /// <c>schema.org/Recipe</c>); only when it yields no recipe are conservative
 /// heading/list heuristics used. Ambiguous values are left null/empty rather
-/// than guessed (docs/M4_PLAN.md §1.4).
+/// than guessed.
 /// </para>
 /// <para>
 /// Parsing is total: malformed, truncated, or hostile markup is handled by the
@@ -844,11 +843,11 @@ public static class HtmlFallbackParser
 
     /// <summary>
     /// Text rendered to a user, excluding descendants that must never contribute
-    /// recipe content (<c>script</c>, <c>style</c>, <c>template</c>,
+    /// recipe content (<c>script</c>, <c>style</c>, <c>template</c>
     /// <c>noscript</c>, and <c>head</c>; docs/SECURITY.md §8). Unlike
     /// <c>TextContent</c> this cannot leak script/style source into a field.
     /// The walk is iterative with an explicit stack and a visit cap, so its
-    /// stack depth never depends on attacker markup (docs/M4_PLAN.md §4).
+    /// stack depth never depends on attacker markup.
     /// </summary>
     private static string GetVisibleText(IElement element)
     {
@@ -887,7 +886,7 @@ public static class HtmlFallbackParser
     }
 
     /// <summary>
-    /// Reads a microdata value from the first applicable attribute, then text:
+    /// Reads a microdata value from the first applicable attribute, then text
     /// <c>content</c>, <c>datetime</c>, visible text, then <c>src</c>/<c>href</c>.
     /// This yields an image <c>src</c> for an <c>&lt;img&gt;</c> while preferring
     /// an anchor's visible text over its URL.

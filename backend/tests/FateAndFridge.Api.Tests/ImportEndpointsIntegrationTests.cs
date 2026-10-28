@@ -19,15 +19,15 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// HTTP-level verification of the M4-04 draft-only import routes
-/// (docs/M4_PLAN.md §2.2, docs/API.md §15): draft shape, multi-candidate
-/// pages, structured fetch failures, throttling, the full permission matrix,
+/// HTTP-level verification of the draft-only import routes
+/// draft shape, multi-candidate
+/// pages, structured fetch failures, throttling, the full permission matrix
 /// and the no-write guarantee. Uses an injected fake <see cref="IImportFetcher"/>
 /// with offline fixtures; no test touches the public internet.
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class ImportEndpointsIntegrationTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class ImportEndpointsIntegrationTests(SetupFixture fixture) : IAsyncLifetime
 {
     private const string ImportPath = "/api/v1/import/recipe-url";
     private const string CheckPath = "/api/v1/import/check";
@@ -592,9 +592,9 @@ public sealed class ImportEndpointsIntegrationTests(M1SetupFixture fixture) : IA
     private const string StoredSourceUrl = "https://example.com/recipes/lasagna?b=2&a=1";
 
     /// <summary>
-    /// M4-11 exact normalized-source-URL matrix (docs/M4_PLAN.md §1.9/§4). The
+    /// Exact normalized-source-URL matrix. The
     /// stored recipe is folded with <c>RecipeService.BuildNormalizedSourceUrl</c>
-    /// and the incoming URL varies by trailing slash, query order, fragment,
+    /// and the incoming URL varies by trailing slash, query order, fragment
     /// default port, case, and a genuine non-match.
     /// </summary>
     [Theory]
@@ -684,8 +684,8 @@ public sealed class ImportEndpointsIntegrationTests(M1SetupFixture fixture) : IA
     }
 
     /// <summary>
-    /// The duplicate lookup must not write: a successful match leaves the recipe,
-    /// audit, and image row counts unchanged (docs/M4_PLAN.md §1.2).
+    /// The duplicate lookup must not write: a successful match leaves the recipe
+    /// audit, and image row counts unchanged.
     /// </summary>
     [Fact]
     public async Task Import_check_source_url_match_creates_no_rows()
@@ -949,7 +949,7 @@ public sealed class ImportEndpointsIntegrationTests(M1SetupFixture fixture) : IA
     /// <summary>
     /// Seeds the ingredient-match fixture directly (the production seeder only
     /// creates units). Clears any leftover ingredient rows first because the M1
-    /// reset does not touch the M2 ingredient tables. Returns the active flour,
+    /// reset does not touch the M2 ingredient tables. Returns the active flour
     /// the active scallion (aliased "Green Onion"), and the retired ingredient id.
     /// </summary>
     private async Task<(long FlourId, long ScallionId, long RetiredId)> SeedIngredientsAsync(

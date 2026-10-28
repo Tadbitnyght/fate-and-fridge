@@ -23,7 +23,7 @@ function retryAfterSeconds(error: unknown): number | null {
 }
 
 /**
- * Import entry screen (M4-08, docs/PRODUCT_SPEC.md §28). Paste a recipe URL and
+ * Import entry screen (docs/PRODUCT_SPEC.md §28). Paste a recipe URL and
  * choose Import or Cancel; a successful parse hands off to the editable review.
  * All import routes require `recipes.edit` server-side; the UI hides the flow
  * from actors who cannot use it.

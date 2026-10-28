@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 namespace FateAndFridge.Api.Services;
 
 /// <summary>
-/// One grocery preference snapshot (docs/M8_PLAN.md §1.7, §1.11, §2.3): the
+/// One grocery preference snapshot: the
 /// per-user <c>hide_checked</c> toggle and the remembered range. A null range
 /// preset means "no remembered range" and falls back to the Next 7 Days default.
 /// <see cref="UpdatedAt"/> is null when no row is stored.
@@ -23,7 +23,7 @@ public sealed record GroceryPreferenceSnapshot(
     public static readonly GroceryPreferenceSnapshot Default = new(false, null, null, null);
 }
 
-/// <summary>Outcome of a grocery preference PATCH (docs/M8_PLAN.md §2.2).</summary>
+/// <summary>Outcome of a grocery preference PATCH.</summary>
 public abstract record GroceryPreferenceOutcome
 {
     private GroceryPreferenceOutcome()
@@ -39,8 +39,7 @@ public abstract record GroceryPreferenceOutcome
 }
 
 /// <summary>
-/// Reads and writes the caller's grocery preferences (docs/M8_PLAN.md §1.7,
-/// §1.11, §2.2). Preferences are per-user; the multiuser path stores them in
+/// Reads and writes the caller's grocery preferences. Preferences are per-user; the multiuser path stores them in
 /// <c>user_grocery_preferences</c> keyed by <c>user_id</c>. The single-user
 /// system actor has <see cref="Auth.CurrentActor.UserId"/> = null and no
 /// <c>users</c> row (so the FK-bearing table cannot hold its preference), so its
@@ -90,7 +89,7 @@ public sealed class GroceryPreferenceService(
 
     /// <summary>
     /// Applies a partial preferences update and persists the normalized result
-    /// (docs/M8_PLAN.md §2.2). A fixed preset stores only the preset and clears
+    /// A fixed preset stores only the preset and clears
     /// the range; <c>custom</c> stores the preset plus start/days; clearing the
     /// preset stores all three as null. Range values are validated against the
     /// household today and the 366-day cap.

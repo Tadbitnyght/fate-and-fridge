@@ -21,16 +21,14 @@ import { fullDateLabel } from './calendarDates'
 import { useCalendarDay, useCorrectCalendarEntry } from './useCalendar'
 
 /**
- * M12-07 reusable historical-correction flow (docs/M12_PLAN.md §1.9, §1.11,
- * §1.12, docs/API.md §17).
- *
+ * Reusable historical-correction flow.
  * Step 1 edits the same per-type entry fields as the ordinary editor (via
  * {@link CalendarEntryFields}); step 2 collects the dangerous-action reason and
  * the typed date confirmation in the shared {@link DangerousActionDialog}. The
- * server remains the authority: it re-validates the reason and confirmation,
+ * server remains the authority: it re-validates the reason and confirmation
  * the past-only rule, and the lock acknowledgement. A correction never changes
  * the lock state, so the dialog only sends `lock_acknowledged: true` for a
- * locked date (see docs/M12_PLAN.md §1.12).
+ * locked date.
  */
 export function HistoricalCorrectionDialog({
   date,

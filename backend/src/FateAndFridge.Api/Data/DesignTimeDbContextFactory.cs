@@ -6,7 +6,7 @@ namespace FateAndFridge.Api.Data;
 /// <summary>
 /// Allows <c>dotnet ef</c> commands to run without starting the application
 /// host. Reads the same <c>ConnectionStrings__Default</c> environment variable
-/// used at runtime; commands that only build the model (for example,
+/// used at runtime; commands that only build the model (for example
 /// <c>migrations add</c>) never open a connection.
 /// </summary>
 public sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>

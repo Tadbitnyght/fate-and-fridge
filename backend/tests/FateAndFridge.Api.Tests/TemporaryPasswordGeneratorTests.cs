@@ -4,7 +4,7 @@ using FluentAssertions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// Admin-reset temporary passwords (docs/SECURITY.md §2): CSPRNG-generated,
+/// Admin-reset temporary passwords (docs/SECURITY.md §2): CSPRNG-generated
 /// policy-compliant, and free of lookalike characters.
 /// </summary>
 public sealed class TemporaryPasswordGeneratorTests

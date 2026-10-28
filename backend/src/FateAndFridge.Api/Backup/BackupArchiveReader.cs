@@ -37,8 +37,7 @@ public sealed class BackupArchiveEntry
 }
 
 /// <summary>
-/// Streaming reader for a <c>.ffbackup</c> archive (docs/M13_PLAN.md §1.4,
-/// docs/SECURITY.md §12). The reader never writes to disk: it exposes entry
+/// Streaming reader for a <c>.ffbackup</c> archive. The reader never writes to disk: it exposes entry
 /// streams and verifies the checksums in <c>manifest.json</c> against the
 /// decrypted entries. The optional expected ciphertext SHA-256 is checked
 /// before the header is parsed or anything is decrypted.

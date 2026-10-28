@@ -6,8 +6,7 @@ using FluentAssertions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// Pure unit tests for the shared dangerous-action guard (docs/M12_PLAN.md
-/// §1.11). No database or HTTP is involved: the guard is the server-side
+/// Pure unit tests for the shared dangerous-action guard. No database or HTTP is involved: the guard is the server-side
 /// authority every dangerous endpoint (historical correction, hard delete, audit
 /// prune, M13 restore) must call.
 /// </summary>

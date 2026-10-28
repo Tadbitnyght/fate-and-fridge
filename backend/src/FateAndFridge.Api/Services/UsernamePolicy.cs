@@ -2,7 +2,7 @@ namespace FateAndFridge.Api.Services;
 
 /// <summary>
 /// Username rules shared by setup completion, user management, and the
-/// auth-mode switch (docs/API.md §6, docs/DATABASE.md §2): 3–32 ASCII letters,
+/// auth-mode switch (docs/API.md §6, docs/DATABASE.md §2): 3–32 ASCII letters
 /// digits, or <c>.</c>, <c>_</c>, <c>-</c> after trimming. The value is stored
 /// trimmed; <c>normalized_username</c> is the lowercased lookup form.
 /// </summary>

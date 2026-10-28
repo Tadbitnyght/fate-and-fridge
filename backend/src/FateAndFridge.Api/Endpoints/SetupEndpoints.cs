@@ -25,7 +25,7 @@ public sealed record SetupCompleteResponse(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] AuthSessionResponse? Session);
 
 /// <summary>
-/// The <c>202 Accepted</c> body of a clean-install restore (docs/API.md §21):
+/// The <c>202 Accepted</c> body of a clean-install restore (docs/API.md §21)
 /// the restore id, the archive's file name, and the safety archive created
 /// before anything was touched. There is no <c>backup_id</c> before setup — no
 /// backup catalogue exists yet.
@@ -59,7 +59,7 @@ public static class SetupEndpoints
         // repeat, 400 with field errors on invalid input.
         group.MapPost("/complete", CompleteSetupAsync);
 
-        // Public **only before setup** (docs/M13_PLAN.md §1.10): the pre-setup
+        // Public **only before setup**: the pre-setup
         // gate already exempts /api/v1/setup/*, so this route is unreachable as
         // a pre-setup escape hatch once setup is complete — it answers 409.
         group.MapPost("/restore", RestoreFromBackupAsync);
@@ -148,9 +148,9 @@ public static class SetupEndpoints
 
     /// <summary>
     /// Restores an uploaded archive **before** setup completes
-    /// (docs/M13_PLAN.md §1.10, docs/API.md §21). No session and no Admin exist
+    /// No session and no Admin exist
     /// yet, so the archive plus the pasted recovery key are the credential and
-    /// the typed <c>RESTORE</c> is the acknowledgement. The shared M13-04
+    /// the typed <c>RESTORE</c> is the acknowledgement. The shared
     /// sequence does the work: format/integrity/checksum/schema validation, then
     /// the mandatory safety backup, then <c>202</c> and a background restore that
     /// stops the process so the container restarts into the restored state.

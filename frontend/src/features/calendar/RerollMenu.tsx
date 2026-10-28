@@ -7,7 +7,7 @@ import { BATCH_MODE_LABELS, BATCH_MODE_ORDER } from './batchModes'
 const MODE_ORDER = BATCH_MODE_ORDER
 
 /**
- * "Reroll…" toolbar menu (M7-09). A single trigger opens a portal popover with
+ * "Reroll…" toolbar menu. A single trigger opens a portal popover with
  * the three batch ranges (7 days / Rest of month / Fill empty); choosing one
  * hands the mode to the page, which opens the preview wizard. It is a plain
  * button + menu so it works identically on desktop and mobile, is reachable by

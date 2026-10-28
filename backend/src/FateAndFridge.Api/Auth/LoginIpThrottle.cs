@@ -44,7 +44,7 @@ public sealed record LoginIpThrottleDecision(bool Allowed, TimeSpan RetryAfter)
 }
 
 /// <summary>
-/// Per-IP login limiter (M1-07 part 2). Each attempt atomically reserves a slot
+/// Per-IP login limiter (part 2). Each attempt atomically reserves a slot
 /// before verification; over-threshold attempts are rejected immediately.
 /// A successful login resets the address, so slots effectively count failures.
 /// </summary>

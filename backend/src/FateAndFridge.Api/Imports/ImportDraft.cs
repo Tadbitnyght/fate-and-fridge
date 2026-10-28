@@ -1,14 +1,13 @@
 namespace FateAndFridge.Api.Imports;
 
 /// <summary>
-/// Draft returned by <c>POST /api/v1/import/recipe-url</c> (docs/M4_PLAN.md
-/// §2.2, docs/API.md §15). It is a pure response shape: no database row is
+/// Draft returned by <c>POST /api/v1/import/recipe-url</c>. It is a pure response shape: no database row is
 /// created or changed while it is produced.
 /// </summary>
 /// <param name="Source">Provenance of the fetched page.</param>
 /// <param name="SourceUrlMatch">
 /// Existing recipe whose normalized source URL equals the page URL, or null
-/// (M4-11 owns the full duplicate workflow; M4-04 exposes the exact match).
+/// (owns the full duplicate workflow; exposes the exact match).
 /// </param>
 /// <param name="Capabilities">What the acting user may do during review.</param>
 /// <param name="Recipes">One entry per parsed candidate; always at least one on success.</param>
@@ -18,7 +17,7 @@ public sealed record ImportDraftResponse(
     ImportDraftCapabilities Capabilities,
     IReadOnlyList<ImportDraftRecipe> Recipes);
 
-/// <summary>Source block of an import draft (docs/M4_PLAN.md §2.2).</summary>
+/// <summary>Source block of an import draft.</summary>
 /// <param name="Url">Absolute URL the draft was parsed from (after redirects).</param>
 /// <param name="Site">Host of <paramref name="Url"/>.</param>
 /// <param name="PageTitle">Page title; null until enrichment lands in a later M4 issue.</param>
@@ -36,10 +35,10 @@ public sealed record ImportDraftSource(
 /// <summary>Minimal <c>{ id, name }</c> reference used by duplicate/name diagnostics.</summary>
 public sealed record ImportDraftReference(long Id, string Name);
 
-/// <summary>Capabilities of the acting user, so the UI can hide create affordances (docs/M4_PLAN.md §1.3).</summary>
+/// <summary>Capabilities of the acting user, so the UI can hide create affordances.</summary>
 public sealed record ImportDraftCapabilities(bool CanCreateReferenceData);
 
-/// <summary>One parsed recipe candidate in an import draft (docs/M4_PLAN.md §2.2).</summary>
+/// <summary>One parsed recipe candidate in an import draft.</summary>
 public sealed record ImportDraftRecipe(
     int Index,
     string Name,
@@ -59,11 +58,11 @@ public sealed record ImportDraftRecipe(
     IReadOnlyList<string> Warnings);
 
 /// <summary>
-/// One raw ingredient line in a draft. The quantity, name, preparation note,
-/// and unit slice are populated by <c>IngredientLineParser</c>/<c>ImportNormalizer</c>;
-/// canonical ingredient matching (<see cref="MatchedIngredientId"/>,
+/// One raw ingredient line in a draft. The quantity, name, preparation note
+/// and unit slice are populated by <c>IngredientLineParser</c>/<c>ImportNormalizer</c>
+/// canonical ingredient matching (<see cref="MatchedIngredientId"/>
 /// <see cref="MatchKind"/>, and ingredient suggestions) is populated by
-/// <c>IngredientMatcher</c>. Unknown lines keep safe defaults (null match,
+/// <c>IngredientMatcher</c>. Unknown lines keep safe defaults (null match
 /// <c>IsUnknown = true</c>) until the review screen resolves them.
 /// </summary>
 public sealed record ImportDraftIngredient(
@@ -77,7 +76,7 @@ public sealed record ImportDraftIngredient(
     IReadOnlyList<ImportDraftReference> Suggestions,
     ImportDraftUnit Unit);
 
-/// <summary>Unit slice of a draft ingredient (docs/M4_PLAN.md §2.2).</summary>
+/// <summary>Unit slice of a draft ingredient.</summary>
 public sealed record ImportDraftUnit(
     string? Raw,
     long? MatchedUnitId,
@@ -92,7 +91,7 @@ public sealed record ImportDraftUnitSuggestion(long Id, string Symbol, string Di
 /// <summary>Instruction section of a draft candidate.</summary>
 public sealed record ImportDraftInstructionSection(string? Title, IReadOnlyList<string> Steps);
 
-/// <summary>Response of <c>POST /api/v1/import/check</c> (docs/M4_PLAN.md §2.2).</summary>
+/// <summary>Response of <c>POST /api/v1/import/check</c>.</summary>
 public sealed record ImportDraftCheckResponse(
     ImportDraftReference? SourceUrlMatch,
     IReadOnlyList<ImportDraftReference> NameMatches);

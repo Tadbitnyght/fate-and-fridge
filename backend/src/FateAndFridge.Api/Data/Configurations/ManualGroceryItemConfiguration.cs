@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace FateAndFridge.Api.Data.Configurations;
 
-/// <summary>Maps the <c>manual_grocery_items</c> table (docs/M8_PLAN.md §2.3).</summary>
+/// <summary>Maps the <c>manual_grocery_items</c> table.</summary>
 public sealed class ManualGroceryItemConfiguration : IEntityTypeConfiguration<ManualGroceryItem>
 {
     public void Configure(EntityTypeBuilder<ManualGroceryItem> builder)

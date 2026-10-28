@@ -37,7 +37,7 @@ public sealed record AuthEventEntry(
     string? UserAgent,
     IReadOnlyDictionary<string, object?>? Metadata = null);
 
-/// <summary>Writes security-relevant authentication events (M1-07).</summary>
+/// <summary>Writes security-relevant authentication events.</summary>
 public interface IAuthEventWriter
 {
     Task WriteAsync(AuthEventEntry entry, CancellationToken cancellationToken = default);

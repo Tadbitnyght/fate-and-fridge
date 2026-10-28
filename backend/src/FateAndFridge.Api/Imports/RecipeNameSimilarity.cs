@@ -2,7 +2,7 @@ namespace FateAndFridge.Api.Imports;
 
 /// <summary>
 /// Deterministic similar-name scoring for the import duplicate warning
-/// (docs/M4_PLAN.md §1.9). It recognizes, in descending confidence, folded
+/// It recognizes, in descending confidence, folded
 /// exact equality, whole-word containment, shared tokens, and a small edit
 /// distance between two already-folded normalized names.
 /// </summary>

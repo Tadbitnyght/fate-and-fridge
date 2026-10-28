@@ -30,7 +30,7 @@ public abstract record TagMutationResult
 }
 
 /// <summary>
-/// M2-10 tags management (docs/API.md §22, docs/DATABASE.md §7): normalized-name
+/// Tags management (docs/API.md §22, docs/DATABASE.md §7): normalized-name
 /// uniqueness with <c>TAG_EXISTS</c> conflicts, no retire concept, Admin-only
 /// hard delete, and an audit row staged into the caller's
 /// <see cref="AppDbContext"/> for every write.

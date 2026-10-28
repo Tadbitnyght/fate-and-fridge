@@ -4,7 +4,7 @@ using FluentAssertions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// The shared table-driven household date labels (docs/M11_PLAN.md §2.1) used by
+/// The shared table-driven household date labels used by
 /// the statistics windows and the meal-history month pages and paging cursors.
 /// They must read the same in every deployment, including globalization-invariant
 /// hosts where ICU-backed month names are empty.

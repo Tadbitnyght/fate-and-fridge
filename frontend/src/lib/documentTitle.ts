@@ -1,9 +1,8 @@
-/** Product name used in the browser tab (docs/PRODUCT_SPEC.md, M15-04). */
+/** Product name used in the browser tab (docs/PRODUCT_SPEC.md). */
 export const APP_NAME = 'Fate & Fridge'
 
 /**
  * Browser-tab titles by route, most specific first.
- *
  * Each label matches the heading the route renders, so the tab and the page
  * say the same thing. Patterns are anchored and accept an optional trailing
  * slash; unknown paths (the startup redirect, the catch-all) fall back to the

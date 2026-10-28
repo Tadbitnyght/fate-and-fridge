@@ -8,7 +8,7 @@ import type {
 import type { FieldErrors } from '../../utils/fieldErrors'
 
 /**
- * Editable form model for a recipe (M3-10). Ingredient/unit ids are kept as
+ * Editable form model for a recipe. Ingredient/unit ids are kept as
  * strings so the selects have an empty "choose" option; numbers are parsed when
  * the request is built. Reference names are retained so a retired reference
  * that is already on the recipe stays displayable and selectable.

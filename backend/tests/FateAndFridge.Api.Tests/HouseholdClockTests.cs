@@ -5,9 +5,9 @@ using FluentAssertions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// Pure unit matrix for the household clock (docs/M5_PLAN.md §1.7, §4):
+/// Pure unit matrix for the household clock
 /// household-local dates across DST and offset changes, the three M14 zones
-/// (docs/M14_PLAN.md §1.8), and the frozen historical boundary that keeps
+/// and the frozen historical boundary that keeps
 /// history immutable across timezone changes in either direction.
 /// </summary>
 public sealed class HouseholdClockTests
@@ -55,7 +55,7 @@ public sealed class HouseholdClockTests
         var timeZone = HouseholdClock.ResolveTimeZone(timeZoneId);
 
         // A missing-tzdata UTC fallback must fail loudly here, not silently
-        // shift the household's "today" (docs/M14_PLAN.md §1.8).
+        // shift the household's "today".
         timeZone.Id.Should().Be(timeZoneId);
         timeZone.Should().NotBe(TimeZoneInfo.Utc);
     }
@@ -83,7 +83,7 @@ public sealed class HouseholdClockTests
     [Theory]
     // 23:59 and 00:01 household-local, with the UTC calendar date deliberately
     // different on at least one side per zone: a UTC-naive implementation
-    // returns the wrong "today" for that case (docs/M14_PLAN.md §1.8).
+    // returns the wrong "today" for that case.
     [InlineData(Chicago, "2026-11-16T05:59:00Z", "2026-11-15", "2026-11-16")]
     [InlineData(Chicago, "2026-11-16T06:01:00Z", "2026-11-16", "2026-11-16")]
     [InlineData(Auckland, "2026-11-15T10:59:00Z", "2026-11-15", "2026-11-15")]
@@ -206,11 +206,11 @@ public sealed class HouseholdClockTests
     }
 
     [Theory]
-    // Boundary moved forward (the old local day became the frozen boundary):
+    // Boundary moved forward (the old local day became the frozen boundary)
     // the boundary date is historical even when it is still "today".
     [InlineData("2026-11-15", "2026-11-15", "2026-11-15", true)]
     [InlineData("2026-11-15", "2026-11-15", "2026-11-16", false)]
-    // Boundary moved backward (a timezone change made the local date earlier):
+    // Boundary moved backward (a timezone change made the local date earlier)
     // the stored boundary is ahead of today and must keep everything at or
     // before it frozen.
     [InlineData("2026-11-13", "2026-11-15", "2026-11-13", true)]

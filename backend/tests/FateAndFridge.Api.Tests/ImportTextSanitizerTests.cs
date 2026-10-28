@@ -4,7 +4,7 @@ using FluentAssertions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// Untrusted imported-text sanitization (docs/M4_PLAN.md §1.7, docs/SECURITY.md §8).
+/// Untrusted imported-text sanitization.
 /// </summary>
 public sealed class ImportTextSanitizerTests
 {

@@ -35,7 +35,7 @@ type UndoTarget =
   { kind: 'single'; operation: CalendarOperation } | { kind: 'batch'; operation: CalendarOperation }
 
 /**
- * Calendar page (M5-09/M5-10/M5-12): a desktop month grid and a mobile
+ * Calendar page: a desktop month grid and a mobile
  * Month/Agenda toggle, with a date-detail dialog, locked/today/historical
  * styling, and a print button. All writes are enforced server-side.
  */

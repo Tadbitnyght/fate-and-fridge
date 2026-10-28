@@ -18,15 +18,15 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// HTTP-level verification of the M6 undo route (docs/M6_PLAN.md §1.13):
+/// HTTP-level verification of the M6 undo route
 /// exact restore of the pre-reroll entry or blank date, the later-change
 /// conflict, expiry/idempotency, malformed ids, the permission matrix, and that
 /// undo writes exactly one history row and no audit rows. Helpers mirror the
 /// reroll endpoint tests; the clock is injected so "today" is deterministic.
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class UndoEndpointsIntegrationTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class UndoEndpointsIntegrationTests(SetupFixture fixture) : IAsyncLifetime
 {
     private const string CalendarPath = "/api/v1/calendar";
     private const string OperationsPath = "/api/v1/operations";
@@ -297,7 +297,7 @@ public sealed class UndoEndpointsIntegrationTests(M1SetupFixture fixture) : IAsy
 
         (await context.AuditEvents.CountAsync(row => !row.EventType.StartsWith("auth."), Ct)).Should().Be(
             0,
-            "undo stages no audit row; M12-01 only mirrors auth events");
+            "undo stages no audit row; only auth events are mirrored");
     }
 
     [Fact]

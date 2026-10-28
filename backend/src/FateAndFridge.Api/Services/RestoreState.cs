@@ -3,7 +3,7 @@ namespace FateAndFridge.Api.Services;
 /// <summary>
 /// The seam through which a finished restore asks the host to stop so
 /// <c>restart: unless-stopped</c> restarts the container
-/// (docs/M13_PLAN.md §1.9). It is a seam so the orchestration can be tested
+/// It is a seam so the orchestration can be tested
 /// without stopping the test host.
 /// </summary>
 public interface IRestoreRestartSignal
@@ -18,7 +18,7 @@ public interface IRestoreRestartSignal
 /// <summary>
 /// Production <see cref="IRestoreRestartSignal"/>: stops this process through
 /// the host lifetime so the container's restart policy brings it back
-/// (docs/M13_PLAN.md §1.9). Nothing here touches the database or the files.
+/// Nothing here touches the database or the files.
 /// </summary>
 public sealed class HostRestartSignal(
     IHostApplicationLifetime lifetime,
@@ -34,7 +34,7 @@ public sealed class HostRestartSignal(
 
 /// <summary>
 /// Process-local restore state: the maintenance flag and the progress of the
-/// restore that owns it (docs/M13_PLAN.md §1.9 step 3). A singleton, because
+/// restore that owns it. A singleton, because
 /// maintenance mode must be visible to every request and there is exactly one
 /// restore lane per instance (the backup operation gate serializes it).
 /// </summary>

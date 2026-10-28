@@ -12,14 +12,14 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// PostgreSQL-backed verification of the M2-02 audit writer (docs/DATABASE.md §10):
+/// PostgreSQL-backed verification of the audit writer (docs/DATABASE.md §10)
 /// row contents, the injected clock, transaction atomicity, and secret-free
 /// payloads. Requires a Docker daemon; run with
 /// <c>dotnet test --filter "Category!=Integration"</c> to skip locally.
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class AuditServiceIntegrationTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class AuditServiceIntegrationTests(SetupFixture fixture) : IAsyncLifetime
 {
     private static readonly DateTimeOffset Start = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
 

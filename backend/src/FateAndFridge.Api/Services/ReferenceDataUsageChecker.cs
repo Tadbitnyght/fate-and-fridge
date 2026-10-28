@@ -4,8 +4,7 @@ using Microsoft.EntityFrameworkCore;
 namespace FateAndFridge.Api.Services;
 
 /// <summary>
-/// M3 implementation of the reference-data usage seam (docs/M3_PLAN.md §2,
-/// M3-06/M3-08): counts recipe references so ingredient, unit, protein, and tag
+/// M3 implementation of the reference-data usage seam: counts recipe references so ingredient, unit, protein, and tag
 /// hard deletes stay blocked while any recipe — retired recipes included —
 /// still references the row, and reassigns recipe ingredient references during
 /// an ingredient merge.

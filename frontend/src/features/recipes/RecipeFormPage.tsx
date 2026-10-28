@@ -97,11 +97,10 @@ function describeHardDeleteError(caught: unknown): string {
 }
 
 /**
- * Accessible recipe create/edit form (M3-10, issue #37). Every collection is a
+ * Accessible recipe create/edit form (issue #37). Every collection is a
  * full replacement on save (docs/API.md §23). Picker selects only choose
  * existing references — no inline creation or free-text fallback (M3 §1.20).
- *
- * Admins additionally get the M12-09 danger zone (hard delete) on the
+ * Admins additionally get the danger zone (hard delete) on the
  * detail/editor route only; the server enforces the Admin role.
  */
 export function RecipeFormPage() {
@@ -111,7 +110,7 @@ export function RecipeFormPage() {
   const { canEdit, isAdmin } = useRecipeAccess()
 
   // The import review flow navigates here after saving; if the optional photo
-  // download failed it passes a non-fatal warning through router state (M4-08).
+  // download failed it passes a non-fatal warning through router state.
   const imageWarning =
     typeof (location.state as { imageWarning?: unknown } | null)?.imageWarning === 'string'
       ? (location.state as { imageWarning: string }).imageWarning

@@ -13,8 +13,7 @@ namespace FateAndFridge.Api.Services;
 
 /// <summary>
 /// Serializes backup creation inside this process so two requests can never run
-/// two <c>pg_dump</c> processes (docs/M13_PLAN.md §4: "concurrent backup requests
-/// are serialized"). A second attempt is told <c>BACKUP_IN_PROGRESS</c> instead
+/// two <c>pg_dump</c> processes. A second attempt is told <c>BACKUP_IN_PROGRESS</c> instead
 /// of waiting; the endpoints answer immediately and the UI re-lists.
 /// </summary>
 public sealed class BackupOperationGate
@@ -65,7 +64,7 @@ public abstract record BackupDeleteOutcome
 
 /// <summary>
 /// What one catalog reconciliation found on disk and changed in
-/// <c>backup_metadata</c> (docs/M13_PLAN.md §1.9). <see cref="Skipped"/> is true
+/// <c>backup_metadata</c>. <see cref="Skipped"/> is true
 /// when the restored database predates the table, so nothing could be
 /// reconciled.
 /// </summary>
@@ -77,8 +76,7 @@ public sealed record BackupCatalogReconciliation(
     bool Skipped);
 
 /// <summary>
-/// The M13-03 backup lifecycle (docs/M13_PLAN.md §1.4–§1.8, §2.1, §4;
-/// docs/SECURITY.md §11, §12): <c>pg_dump</c> capture, encrypted archive
+/// The backup lifecycle: <c>pg_dump</c> capture, encrypted archive
 /// creation, the <c>backup_metadata</c> row, list/download/delete, and the
 /// last-five safety-backup retention.
 /// </summary>
@@ -88,7 +86,7 @@ public sealed record BackupCatalogReconciliation(
 /// <c>{DataDir}/backups/.tmp</c>, writes the encrypted archive to a sibling
 /// temp file, renames it into place, and only then marks the row
 /// <see cref="BackupStatus.Completed"/> with the ciphertext checksum and size.
-/// Any failure marks the row <see cref="BackupStatus.Failed"/> with the error,
+/// Any failure marks the row <see cref="BackupStatus.Failed"/> with the error
 /// removes partial files, and writes no success audit row.
 /// </para>
 /// <para>
@@ -113,7 +111,7 @@ public sealed class BackupService(
     /// <summary>How many safety archives survive a retention prune.</summary>
     public const int SafetyBackupRetention = 5;
 
-    /// <summary>Subdirectory of the data root that holds archives (docs/M13_PLAN.md §1.6).</summary>
+    /// <summary>Subdirectory of the data root that holds archives.</summary>
     public const string ArchivesDirectoryName = "backups";
 
     private const int MaximumErrorMessageLength = 1000;
@@ -161,11 +159,11 @@ public sealed class BackupService(
 
     /// <summary>
     /// Makes <c>backup_metadata</c> agree with the archives that actually exist
-    /// on disk (docs/M13_PLAN.md §1.9, §2.1). A <c>pg_dump</c> snapshot is taken
+    /// on disk. A <c>pg_dump</c> snapshot is taken
     /// while the backup row is still <c>pending</c> (and before the safety row
     /// exists), so after a restore the catalog can disagree with
-    /// <c>{DataDir}/backups</c>. This enumerates both archive directories,
-    /// upserts one completed row per file with the ciphertext SHA-256 and size,
+    /// <c>{DataDir}/backups</c>. This enumerates both archive directories
+    /// upserts one completed row per file with the ciphertext SHA-256 and size
     /// marks rows whose file is gone <c>deleted</c> (history is kept), and never
     /// deletes a file.
     /// </summary>
@@ -358,7 +356,7 @@ public sealed class BackupService(
 
     /// <summary>
     /// Creates the mandatory pre-restore safety backup in
-    /// <c>{DataDir}/backups/safety</c> (docs/M13_PLAN.md §1.6, §1.9 step 2).
+    /// <c>{DataDir}/backups/safety</c>.
     /// The restore already holds <see cref="BackupOperationGate"/>, so this
     /// entry point never takes it: a re-entrant acquire would deadlock the
     /// restore against itself. Apart from the kind and the destination
@@ -586,7 +584,7 @@ public sealed class BackupService(
     /// <summary>
     /// Deletes one archive: removes the file and marks the row
     /// <see cref="BackupStatus.Deleted"/> with a <c>backup.deleted</c> audit row
-    /// (docs/M13_PLAN.md §1.8). The caller must have validated the reason and
+    /// The caller must have validated the reason and
     /// the typed <c>DELETE</c> confirmation with
     /// <see cref="DangerousActionGuard"/>. A still-pending row is refused so a
     /// running create's file is never deleted underneath it.
@@ -661,7 +659,7 @@ public sealed class BackupService(
 
     /// <summary>
     /// Retention for pre-restore safety archives
-    /// (docs/M13_PLAN.md §1.8): keep the newest <paramref name="keep"/> safety
+    /// keep the newest <paramref name="keep"/> safety
     /// archives by file timestamp and mark the matching older rows
     /// <see cref="BackupStatus.Deleted"/>; never touch a
     /// <see cref="BackupKind.Manual"/> archive, and never prune a pending safety
@@ -669,7 +667,7 @@ public sealed class BackupService(
     /// </summary>
     /// <remarks>
     /// Retention reconciles the **directory** as well as the rows. A restore's
-    /// safety archive is created in the database the restore is about to replace,
+    /// safety archive is created in the database the restore is about to replace
     /// so after the swap its row no longer exists and the file would be invisible
     /// to a row-only prune forever. Ordering by file timestamp keeps that archive
     /// — it is the newest file on disk — and retires the rows still present for
@@ -938,8 +936,7 @@ public sealed class BackupService(
     /// Adds every regular file below <paramref name="root"/> under
     /// <paramref name="entryPrefix"/>. Symbolic links and other reparse points
     /// are skipped so the archive can never pull in a file from outside
-    /// <c>/data/{images,config/dp-keys}</c> (docs/M13_PLAN.md §1.5,
-    /// docs/SECURITY.md §12). Entries are added in ordinal path order so the
+    /// <c>/data/{images,config/dp-keys}</c>. Entries are added in ordinal path order so the
     /// same data always produces the same archive ordering.
     /// </summary>
     private static async Task AddDirectoryEntriesAsync(

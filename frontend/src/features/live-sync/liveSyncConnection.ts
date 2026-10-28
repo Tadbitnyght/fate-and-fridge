@@ -7,7 +7,7 @@ import {
   type RetryContext,
 } from '@microsoft/signalr'
 
-/** Hub path (docs/M9_PLAN.md §1.2). */
+/** Hub path. */
 export const LIVE_SYNC_HUB_URL = '/hub/live'
 
 /** Backoff ceiling for reconnects and initial-connect retries. */

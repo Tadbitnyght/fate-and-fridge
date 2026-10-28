@@ -26,7 +26,7 @@ public sealed class ApiFactory(
     /// <summary>
     /// When supplied, the recording <see cref="ILiveSyncPublisher"/> registered
     /// into the test host so a test can assert the exact events a committed
-    /// write emitted (M9-02…M9-05) without opening a socket.
+    /// write emitted without opening a socket.
     /// </summary>
     public RecordingLiveSyncPublisher? LiveSyncPublisher { get; } = liveSyncPublisher;
 
@@ -45,16 +45,16 @@ public sealed class ApiFactory(
         builder.UseSetting("ConnectionStrings:Default", connectionString);
         builder.UseSetting("Database:MigrateOnStartup", migrateOnStartup ? "true" : "false");
 
-        // M13-09: the startup update check is off by default in tests so no
+        // The startup update check is off by default in tests so no
         // test host reaches the public network; the update-check suite opts in
-        // with its own stub transport (docs/M13_PLAN.md §1.13).
+        // with its own stub transport.
         builder.UseSetting("Updates:StartupCheckEnabled", startupUpdateCheck ? "true" : "false");
         if (dataDir is not null)
         {
             builder.UseSetting("DataDir", dataDir);
         }
 
-        // Tests inject counting IReferenceUsageChecker fakes (M2-06 seam), the
+        // Tests inject counting IReferenceUsageChecker fakes (seam), the
         // recording live-sync publisher, and other overrides without replacing
         // the whole factory.
         if (LiveSyncPublisher is not null || configureServices is not null)

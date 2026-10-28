@@ -1,7 +1,7 @@
 namespace FateAndFridge.Api.Domain;
 
 /// <summary>
-/// Household user. Users are disabled or retired rather than hard-deleted;
+/// Household user. Users are disabled or retired rather than hard-deleted
 /// timestamps are set by the application and are always UTC.
 /// </summary>
 public sealed class User

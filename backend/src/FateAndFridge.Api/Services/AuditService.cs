@@ -7,7 +7,6 @@ namespace FateAndFridge.Api.Services;
 
 /// <summary>
 /// Stable <c>audit_events.event_type</c> values for reference-data changes
-/// (docs/DATABASE.md §10, docs/M2_PLAN.md §3 M2-02).
 /// </summary>
 /// <remarks>
 /// The vocabulary is intentionally open: <c>event_type</c> and
@@ -31,16 +30,16 @@ public static class AuditEventTypes
 
     public const string Reordered = "reordered";
 
-    // M3-04: the active recipe image was uploaded/replaced or its alt text
+    // The active recipe image was uploaded/replaced or its alt text
     // changed.
     public const string ImageUpdated = "image_updated";
 
-    // M3-04: the active recipe image was removed.
+    // The active recipe image was removed.
     public const string ImageRemoved = "image_removed";
 
-    // ---- M12 families (docs/M12_PLAN.md §1.3, §2.1) ----------------------
+    // M12 families
     // Recipe create/update deliberately keep the M2 Retired/Updated-style
-    // values ("created"/"updated") with entity_type "recipe" (M3 emit sites,
+    // values ("created"/"updated") with entity_type "recipe" (M3 emit sites
     // unchanged); only the retire transition gets a dotted lifecycle event.
 
     // Calendar meal changes.
@@ -54,13 +53,13 @@ public static class AuditEventTypes
 
     public const string CalendarUnlocked = "calendar.unlocked";
 
-    // M12-06: an Admin corrected one past date's entry.
+    // An Admin corrected one past date's entry.
     public const string CalendarHistoricalCorrection = "calendar.historical_correction";
 
     // Recipe lifecycle: status -> retired.
     public const string RecipeRetired = "recipe.retired";
 
-    // M12-08: an Admin irreversibly hard-deleted a recipe; the row retains the
+    // An Admin irreversibly hard-deleted a recipe; the row retains the
     // recipe before-image, the reason, and the affected counts.
     public const string RecipeHardDeleted = "recipe.hard_deleted";
 
@@ -86,7 +85,7 @@ public static class AuditEventTypes
 
     public const string SettingsAuthModeSwitched = "settings.auth_mode_switched";
 
-    // M13-09: an Admin enabled or disabled the outbound release check.
+    // An Admin enabled or disabled the outbound release check.
     public const string SettingsUpdateCheckChanged = "settings.update_check_changed";
 
     // Groceries: manual items and the staple catalog.
@@ -114,14 +113,14 @@ public static class AuditEventTypes
 
     public const string BackupRestored = "backup.restored";
 
-    // M13-03: an Admin deleted one archive (file removed, row marked deleted).
+    // An Admin deleted one archive (file removed, row marked deleted).
     public const string BackupDeleted = "backup.deleted";
 
-    // M13-07: an Admin downloaded the recovery key through the typed EXPORT
+    // An Admin downloaded the recovery key through the typed EXPORT
     // gate; the key itself is never part of the audit row (docs/SECURITY.md §11).
     public const string RecoveryKeyExported = "recovery_key.exported";
 
-    // M12-04: the explicit, age-based audit retention prune.
+    // The explicit, age-based audit retention prune.
     public const string AuditPruned = "audit.pruned";
 }
 
@@ -130,7 +129,7 @@ public static class AuditEventTypes
 /// (docs/DATABASE.md §10).
 /// </summary>
 /// <remarks>
-/// The vocabulary is intentionally open (see <see cref="AuditEventTypes"/>):
+/// The vocabulary is intentionally open (see <see cref="AuditEventTypes"/>)
 /// M12 extends both sets without service or schema changes; these constants
 /// are the canonical M2 reference-data set.
 /// </remarks>
@@ -148,7 +147,7 @@ public static class AuditEntityTypes
 
     public const string Recipe = "recipe";
 
-    // ---- M12 entity types (docs/M12_PLAN.md §2.1) ------------------------
+    // M12 entity types
 
     public const string CalendarEntry = "calendar_entry";
 
@@ -166,7 +165,7 @@ public static class AuditEntityTypes
 
     public const string Backup = "backup";
 
-    /// <summary>The recovery-key file (M13-07 export audit row).</summary>
+    /// <summary>The recovery-key file (export audit row).</summary>
     public const string RecoveryKey = "recovery_key";
 
     /// <summary>The audit log itself (used by the retention prune row).</summary>
@@ -208,7 +207,7 @@ public interface IAuditService
 }
 
 /// <summary>
-/// Minimal audit writer for reference-data changes (M2-02, docs/DATABASE.md §10).
+/// Minimal audit writer for reference-data changes (docs/DATABASE.md §10).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -218,7 +217,7 @@ public interface IAuditService
 /// transaction and commits atomically with the change.
 /// </para>
 /// <para>
-/// If staging fails the service logs the error and lets the exception propagate:
+/// If staging fails the service logs the error and lets the exception propagate
 /// the operation fails rather than commit unaudited. A caller transaction that
 /// rolls back therefore discards the audit row together with the change it
 /// describes.

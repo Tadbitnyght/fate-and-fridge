@@ -4,14 +4,14 @@ using FateAndFridge.Api.Errors;
 namespace FateAndFridge.Api.Endpoints;
 
 /// <summary>
-/// Reads JSON request bodies for the API (docs/API.md §3): a modest size cap,
+/// Reads JSON request bodies for the API (docs/API.md §3): a modest size cap
 /// the Content-Type policy, and JSON syntax are validated consistently and
 /// failures use the shared error envelope.
 /// </summary>
 /// <remarks>
 /// A missing or empty <c>Content-Type</c> is accepted for compatibility with
 /// existing clients; any other present media type is rejected with
-/// <c>415 UNSUPPORTED_MEDIA_TYPE</c>. The size cap is enforced while reading,
+/// <c>415 UNSUPPORTED_MEDIA_TYPE</c>. The size cap is enforced while reading
 /// so a missing or spoofed <c>Content-Length</c> cannot bypass it.
 /// </remarks>
 public static class JsonBodyReader

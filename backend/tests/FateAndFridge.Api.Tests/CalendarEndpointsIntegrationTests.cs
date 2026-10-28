@@ -18,14 +18,14 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// HTTP-level verification of the M5 calendar core routes (docs/M5_PLAN.md §4):
+/// HTTP-level verification of the M5 calendar core routes
 /// reads/writes, per-type validation, snapshots, lock semantics, the frozen
 /// historical boundary, range/horizon caps, the repeat check, and the full
 /// permission matrix. The clock is injected so "today" is deterministic.
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class CalendarEndpointsIntegrationTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class CalendarEndpointsIntegrationTests(SetupFixture fixture) : IAsyncLifetime
 {
     private const string CalendarPath = "/api/v1/calendar";
     private const string AdminPassword = "root horse battery staple";

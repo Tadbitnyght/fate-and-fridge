@@ -4,8 +4,7 @@ namespace FateAndFridge.Api.Imports;
 
 /// <summary>
 /// Extracts schema.org <c>Recipe</c> nodes from <c>&lt;script
-/// type="application/ld+json"&gt;</c> blocks (docs/M4_PLAN.md §1.5, §2.1;
-/// docs/PRODUCT_SPEC.md §28). JSON-LD is tried before the HTML fallback.
+/// type="application/ld+json"&gt;</c> blocks. JSON-LD is tried before the HTML fallback.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -15,7 +14,7 @@ namespace FateAndFridge.Api.Imports;
 /// block still yields the good recipe.
 /// </para>
 /// <para>
-/// The walk covers the whole document, so top-level objects, arrays,
+/// The walk covers the whole document, so top-level objects, arrays
 /// <c>@graph</c>, <c>mainEntity</c>, <c>itemListElement</c>, and arbitrarily
 /// nested wrappers are all handled uniformly. <c>@type</c> may be a string or
 /// an array and may be a bare name or a schema.org URL
@@ -50,7 +49,7 @@ public static class StructuredRecipeParser
     };
 
     /// <summary>
-    /// Parses every schema.org <c>Recipe</c> found in the page's JSON-LD blocks,
+    /// Parses every schema.org <c>Recipe</c> found in the page's JSON-LD blocks
     /// in document order. Returns an empty list when the page has none.
     /// </summary>
     /// <param name="html">Raw page HTML.</param>

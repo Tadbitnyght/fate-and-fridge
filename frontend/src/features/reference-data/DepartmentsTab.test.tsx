@@ -70,7 +70,7 @@ describe('departments tab', () => {
 
     fireEvent.click(screen.getByLabelText('Include retired'))
 
-    // Query the document again instead of reusing the captured table node:
+    // Query the document again instead of reusing the captured table node
     // the filter toggle is a state change, and re-querying keeps the assertions
     // honest even if React swaps the table subtree.
     expect(screen.getByRole('rowheader', { name: 'Spices' })).toBeInTheDocument()

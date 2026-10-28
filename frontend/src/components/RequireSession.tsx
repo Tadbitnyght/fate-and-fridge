@@ -5,8 +5,8 @@ import { useSetupStatus } from '../features/setup/useSetupStatus'
 import { ErrorScreen, LoadingScreen } from './Screens'
 
 /**
- * Routing/redirect rules (docs/PRODUCT_SPEC.md §5, docs/API.md §21):
- * setup incomplete → /setup; multiuser unauthenticated → /login;
+ * Routing/redirect rules (docs/PRODUCT_SPEC.md §5, docs/API.md §21)
+ * setup incomplete → /setup; multiuser unauthenticated → /login
  * forced password change → /change-password; otherwise the shell renders.
  */
 export function RequireSession() {

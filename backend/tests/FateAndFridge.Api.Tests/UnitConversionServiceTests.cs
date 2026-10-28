@@ -5,9 +5,8 @@ using FluentAssertions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// Exhaustive matrix for the M2-07 pure unit conversion service
-/// (docs/M2_PLAN.md §2 seed table, docs/DATABASE.md §5 factors,
-/// docs/ARCHITECTURE.md §15 families): exact decimal math for the seeded and
+/// Exhaustive matrix for the pure unit conversion service
+/// exact decimal math for the seeded and
 /// overridden factors, same-unit count identity, nonconvertible and
 /// null-quantity rules, and every <see cref="ConversionFailureReason"/>.
 /// Decimal assertions use exact <c>==</c>; no tolerance is needed or allowed.
@@ -22,7 +21,7 @@ public sealed class UnitConversionServiceTests
             unit => new ConversionUnit(null, unit.Symbol, unit.Dimension, unit.BaseFactor),
             StringComparer.Ordinal);
 
-    // ---- Seeded default table (docs/M2_PLAN.md §2) ---------------------------
+    // Seeded default table
 
     public static TheoryData<string, decimal> BaseFactorCases { get; } = new()
     {
@@ -100,7 +99,7 @@ public sealed class UnitConversionServiceTests
     [Fact]
     public void Seed_units_are_the_documented_twenty_one()
     {
-        // docs/M2_PLAN.md §2 oracle: the authoritative symbol list is hard-coded
+        // The authoritative symbol list is hard-coded
         // here so a catalog change cannot silently redefine the expectation.
         var documentedSymbols = new[]
         {
@@ -203,7 +202,7 @@ public sealed class UnitConversionServiceTests
         Converted(SeedUnits["tsp"], SeedUnits["cup"], 1m).Should().Be(1m / 48m);
     }
 
-    // ---- Overridden factors --------------------------------------------------
+    // Overridden factors
 
     [Fact]
     public void Overridden_factors_flow_through_conversion_and_base_normalization()
@@ -226,7 +225,7 @@ public sealed class UnitConversionServiceTests
         Converted(overriddenCup, SeedUnits["tsp"], 1m).Should().Be(240m / 4.92892159375m);
     }
 
-    // ---- Count units ---------------------------------------------------------
+    // Count units
 
     [Fact]
     public void Same_count_unit_by_id_converts_as_identity()
@@ -291,7 +290,7 @@ public sealed class UnitConversionServiceTests
         ToBase(SeedUnits["each"], decimal.MaxValue).Should().Be(decimal.MaxValue);
     }
 
-    // ---- Nonconvertible and quantity-less units ------------------------------
+    // Nonconvertible and quantity-less units
 
     [Fact]
     public void Nonconvertible_units_fail_every_conversion()
@@ -317,7 +316,7 @@ public sealed class UnitConversionServiceTests
         AssertConvertFailure(SeedUnits["to taste"], SeedUnits["tsp"], 1m, ConversionFailureReason.NonConvertible);
     }
 
-    // ---- Quantity validation -------------------------------------------------
+    // Quantity validation
 
     [Theory]
     [MemberData(nameof(NonPositiveQuantities))]
@@ -359,7 +358,7 @@ public sealed class UnitConversionServiceTests
         ToBase(SeedUnits["g"], 1e-28m).Should().Be(1e-28m);
     }
 
-    // ---- Missing and unusable factors ----------------------------------------
+    // Missing and unusable factors
 
     [Fact]
     public void Mass_and_volume_units_without_a_usable_factor_fail_as_missing()
@@ -380,7 +379,7 @@ public sealed class UnitConversionServiceTests
         AssertToBaseFailure(negativeFactor, 1m, ConversionFailureReason.MissingFactor);
     }
 
-    // ---- Overflow ------------------------------------------------------------
+    // Overflow
 
     [Fact]
     public void Overflow_is_reported_as_a_failure_and_never_throws()
@@ -395,7 +394,7 @@ public sealed class UnitConversionServiceTests
         AssertToBaseFailure(hugeFactorUnit, 2m, ConversionFailureReason.Overflow);
     }
 
-    // ---- Incompatible dimensions ---------------------------------------------
+    // Incompatible dimensions
 
     [Theory]
     [InlineData("tsp", "g")]
@@ -407,7 +406,7 @@ public sealed class UnitConversionServiceTests
         AssertConvertFailure(
             SeedUnits[fromSymbol], SeedUnits[toSymbol], 1m, ConversionFailureReason.IncompatibleDimensions);
 
-    // ---- CanCombine ----------------------------------------------------------
+    // CanCombine
 
     [Fact]
     public void CanCombine_is_true_for_mass_pairs_volume_pairs_and_same_count_units()
@@ -443,7 +442,7 @@ public sealed class UnitConversionServiceTests
         string bSymbol) =>
         _service.CanCombine(SeedUnits[aSymbol], SeedUnits[bSymbol]).Should().BeFalse();
 
-    // ---- Exhaustive seed-pair contract ---------------------------------------
+    // Exhaustive seed-pair contract
 
     [Fact]
     public void Every_seed_unit_pair_follows_the_documented_contract()
@@ -496,7 +495,7 @@ public sealed class UnitConversionServiceTests
         }
     }
 
-    // ---- Helpers -------------------------------------------------------------
+    // Helpers
 
     private decimal Converted(ConversionUnit from, ConversionUnit to, decimal quantity) =>
         _service.Convert(from, to, quantity)

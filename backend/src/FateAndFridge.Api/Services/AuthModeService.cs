@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 
 namespace FateAndFridge.Api.Services;
 
-/// <summary>Outcome of a household auth-mode switch (M1-10, docs/API.md §21).</summary>
+/// <summary>Outcome of a household auth-mode switch (docs/API.md §21).</summary>
 public abstract record AuthModeSwitchResult
 {
     private AuthModeSwitchResult()
@@ -29,7 +29,7 @@ public abstract record AuthModeSwitchResult
 }
 
 /// <summary>
-/// Single-user → multiuser conversion (M1-10, docs/API.md §21). Creates the
+/// Single-user → multiuser conversion (docs/API.md §21). Creates the
 /// first Admin and flips <c>household_settings.auth_mode</c> atomically under
 /// the admin-safety advisory lock, so concurrent switches create exactly one
 /// Admin. Multiuser → single-user stays unsupported.
@@ -121,7 +121,6 @@ public sealed class AuthModeService(
         // The settings switch and its audit row commit with the new Admin; the
         // credential (password/hash) is never part of the payload. The caller is
         // the single-user system actor, so actor_user_id stays null
-        // (docs/M9_PLAN.md §2.2).
         await auditService.WriteAsync(
             new AuditEventEntry(
                 AuditEventTypes.SettingsAuthModeSwitched,

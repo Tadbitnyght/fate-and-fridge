@@ -7,17 +7,17 @@ using Microsoft.Extensions.DependencyInjection;
 namespace FateAndFridge.Api.LiveSync;
 
 /// <summary>
-/// SignalR-backed <see cref="ILiveSyncPublisher"/> (docs/M9_PLAN.md §2.1).
-/// Broadcasts to the household through the single <c>event</c> client method;
+/// SignalR-backed <see cref="ILiveSyncPublisher"/>.
+/// Broadcasts to the household through the single <c>event</c> client method
 /// the revocation methods target one session's (or one user's) connections and
 /// abort them. Delivery is best-effort: failures are logged and swallowed and
 /// the methods are no-ops when nothing is connected, so a notification can never
-/// fail a committed write (M9-02…M9-06 call these after commit).
+/// fail a committed write (call these after commit).
 /// </summary>
 /// <remarks>
 /// Every broadcast re-validates the target connections' sessions against
-/// <c>user_sessions</c> before delivering (docs/M9_PLAN.md §1.13): a session
-/// revoked or expired out-of-band receives <c>session.revoked</c>, is aborted,
+/// <c>user_sessions</c> before delivering: a session
+/// revoked or expired out-of-band receives <c>session.revoked</c>, is aborted
 /// and is excluded from the broadcast. The single-user system actor has no
 /// session, so a system-actor connection is only valid while the household is
 /// still single-user; one that outlived a mode change is revoked the same way
@@ -205,9 +205,9 @@ public sealed class SignalRLiveSyncPublisher(
         }
         catch (Exception exception)
         {
-            // Fail closed (docs/M9_PLAN.md §1.13): a validation read failure
+            // Fail closed: a validation read failure
             // must never deliver household events to connections whose sessions
-            // could not be re-validated. Skip this event for every connection;
+            // could not be re-validated. Skip this event for every connection
             // delivery self-heals on the next event or client reconnect once the
             // read succeeds. The connections are not aborted — a read failure is
             // not proof of revocation.

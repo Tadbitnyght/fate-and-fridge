@@ -8,7 +8,7 @@ namespace FateAndFridge.Api.Services;
 
 /// <summary>
 /// The two row origins of the merged admin audit timeline
-/// (docs/M12_PLAN.md §1.5): <c>audit_events</c> rows and reroll
+/// <c>audit_events</c> rows and reroll
 /// <c>calendar_entry_history</c> rows.
 /// </summary>
 public static class AuditLogSources
@@ -23,7 +23,7 @@ public static class AuditLogSources
 /// <summary>
 /// The four reroll/batch <c>calendar_entry_history.metadata_json.kind</c> values
 /// (docs/DATABASE.md §7) and their canonical viewer event types
-/// (docs/M12_PLAN.md §1.4, §1.5). Rerolls are deliberately absent from
+/// Rerolls are deliberately absent from
 /// <c>audit_events</c>; the viewer maps the history kind to one of these event
 /// types so a reroll row reads like an audit row.
 /// </summary>
@@ -64,7 +64,7 @@ public static class AuditEntryHistoryKinds
 
 /// <summary>
 /// Short server-computed, human-readable one-line summaries for the audit
-/// viewer (docs/M12_PLAN.md §2.2). The mapping is deterministic and
+/// viewer. The mapping is deterministic and
 /// culture-independent; an event type outside the explicit map falls back to a
 /// humanized <c>entity_type + event_type</c> phrase, so a new open-string event
 /// type still renders sensibly without a service change.
@@ -94,7 +94,7 @@ public static class AuditEventSummaries
             [AuditEventTypes.GroceriesManualItemRemoved] = "Manual grocery item removed",
             [AuditEventTypes.AuditPruned] = "Audit log pruned",
             [AuditEventTypes.CalendarHistoricalCorrection] = "Historical calendar correction",
-            // Reserved for M12-08; harmless before it is emitted.
+            // Reserved for; harmless before it is emitted.
             ["recipe.hard_deleted"] = "Recipe permanently deleted",
         };
 
@@ -185,7 +185,7 @@ public abstract record AuditLogQueryOutcome
 }
 
 /// <summary>
-/// An audit export read (docs/M12_PLAN.md §1.7): the whole filtered view, the
+/// An audit export read: the whole filtered view, the
 /// resolved format, or the invalid fields (unknown format, over the row cap, or
 /// a malformed filter).
 /// </summary>
@@ -206,8 +206,7 @@ public abstract record AuditLogExportOutcome
 public sealed record AuditLogPruneResult(int DeletedCount, DateTimeOffset Cutoff, int RetentionDays);
 
 /// <summary>
-/// The read-only, merged admin audit timeline (docs/M12_PLAN.md §1.5, §1.6,
-/// §2.1, §2.2): newest-first <c>audit_events</c> rows ∪ the reroll/batch
+/// The read-only, merged admin audit timeline: newest-first <c>audit_events</c> rows ∪ the reroll/batch
 /// <c>calendar_entry_history</c> rows, with the filters, the deterministic
 /// keyset cursor, and the detail projection the Admin viewer needs.
 /// </summary>
@@ -241,7 +240,7 @@ public sealed class AuditLogQueryService(
     public const int MaxLimit = 200;
 
     /// <summary>
-    /// Hard cap on one export (docs/M12_PLAN.md §1.7): an over-cap filtered view
+    /// Hard cap on one export: an over-cap filtered view
     /// returns <c>400 VALIDATION_FAILED</c> instead of silently truncating.
     /// </summary>
     public const int MaxExportRows = 100_000;
@@ -335,7 +334,7 @@ public sealed class AuditLogQueryService(
     }
 
     /// <summary>
-    /// Reads the whole current filtered view for export (docs/M12_PLAN.md §1.7).
+    /// Reads the whole current filtered view for export.
     /// The same filters and ordering as <see cref="QueryAsync"/> are used; paging
     /// (<c>limit</c>/<c>cursor</c>) is ignored because an export is the full view.
     /// </summary>
@@ -386,8 +385,7 @@ public sealed class AuditLogQueryService(
     }
 
     /// <summary>
-    /// Executes the explicit, age-based audit retention prune (docs/M12_PLAN.md
-    /// §1.8): one <c>DELETE ... WHERE created_at &lt; cutoff</c> over
+    /// Executes the explicit, age-based audit retention prune: one <c>DELETE... WHERE created_at &lt; cutoff</c> over
     /// <c>audit_events</c> only, then an <c>audit.pruned</c> row, in one
     /// transaction. The prune row is written after the delete so it can never
     /// delete itself, and it survives the commit. Rows exactly at the cutoff are
@@ -505,7 +503,7 @@ public sealed class AuditLogQueryService(
         var toExclusive = filters.ToExclusive;
         var arguments = new List<object>();
         var auditConditions = new List<string>();
-        // Only rows that carry a reroll/batch kind belong to the timeline;
+        // Only rows that carry a reroll/batch kind belong to the timeline
         // ordinary entry edits already appear as calendar audit rows.
         var historyConditions = new List<string>
         {
@@ -722,7 +720,7 @@ public sealed class AuditLogQueryService(
 
     /// <summary>
     /// The opaque, stable, URL-safe keyset cursor: the last returned row's
-    /// <c>recorded_at</c>, <c>source</c>, and <c>id</c>. It contains no secret,
+    /// <c>recorded_at</c>, <c>source</c>, and <c>id</c>. It contains no secret
     /// so decoding it is a plain parse; a malformed value is a
     /// <c>400 VALIDATION_FAILED</c>.
     /// </summary>
@@ -798,8 +796,7 @@ public sealed class AuditLogQueryService(
 }
 
 /// <summary>
-/// RFC 4180 CSV projection of the audit export (docs/M12_PLAN.md §1.7,
-/// docs/API.md §16).
+/// RFC 4180 CSV projection of the audit export.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -808,12 +805,12 @@ public sealed class AuditLogQueryService(
 /// written, even for an empty view.
 /// </para>
 /// <para>
-/// <b>Quoting.</b> A cell is wrapped in double quotes when it contains a comma,
+/// <b>Quoting.</b> A cell is wrapped in double quotes when it contains a comma
 /// a double quote, a carriage return, or a line feed; embedded double quotes are
 /// doubled. Rows are separated by CRLF, with no trailing newline.
 /// </para>
 /// <para>
-/// <b>Formula injection.</b> A leading <c>=</c>, <c>+</c>, <c>-</c>, <c>@</c>,
+/// <b>Formula injection.</b> A leading <c>=</c>, <c>+</c>, <c>-</c>, <c>@</c>
 /// tab (U+0009), or carriage return (U+000D) would let a spreadsheet evaluate
 /// stored text as a formula. Such a cell is prefixed with a single apostrophe
 /// (<c>'</c>) before the normal quoting rule runs, so the value is displayed

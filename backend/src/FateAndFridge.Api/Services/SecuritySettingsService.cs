@@ -20,7 +20,7 @@ public sealed record SecuritySettings(
 
 /// <summary>
 /// Loads and persists the security settings from <c>application_settings</c>
-/// (docs/DATABASE.md §11): <c>ip_allowlist_enabled</c>,
+/// (docs/DATABASE.md §11): <c>ip_allowlist_enabled</c>
 /// <c>ip_allowlist_ranges</c>, and <c>trusted_proxies</c>. Values are read once
 /// per request and cached for a short TTL
 /// (<see cref="CacheTtl"/>), with the PATCH endpoint updating the cache
@@ -44,7 +44,7 @@ public sealed class SecuritySettingsService(
 
     /// <summary>
     /// Reserved <c>application_settings</c> key for the audit retention window
-    /// (docs/M12_PLAN.md §1.8). <c>0</c> means "keep forever"; otherwise a value
+    /// <c>0</c> means "keep forever"; otherwise a value
     /// between <see cref="MinAuditRetentionDays"/> and
     /// <see cref="MaxAuditRetentionDays"/> days.
     /// </summary>
@@ -117,7 +117,6 @@ public sealed class SecuritySettingsService(
     /// Persists the settings (upsert per key) and updates the cache so the
     /// change applies to the next request immediately. The upserts and the
     /// <c>settings.security_updated</c> audit row share one transaction
-    /// (docs/M12_PLAN.md §2.1).
     /// </summary>
     public async Task SaveAsync(
         SecuritySettings settings,

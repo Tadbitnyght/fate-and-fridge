@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { fetchAbout, type AboutInfo } from '../../api/about'
 
 /**
- * Query-key prefix for the version display (docs/API.md §24). M13-09's update
+ * Query-key prefix for the version display (docs/API.md §24). 's update
  * status reuses this prefix so the About section and the shell footer refresh
  * together.
  */

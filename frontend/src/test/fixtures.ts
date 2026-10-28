@@ -1,4 +1,4 @@
-/** Shared payload fixtures for the admin-console tests (M1-14). */
+/** Shared payload fixtures for the admin-console tests. */
 
 export const ALL_PERMISSIONS = [
   'calendar.view',

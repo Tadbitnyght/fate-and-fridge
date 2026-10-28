@@ -14,7 +14,7 @@ internal static class CalendarDateText
     public static string Format(DateOnly date) => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 }
 
-/// <summary>Calendar entry document (docs/M5_PLAN.md §2.4).</summary>
+/// <summary>Calendar entry document.</summary>
 public sealed record CalendarEntryResponse(
     long Id,
     string EntryType,
@@ -116,7 +116,7 @@ public sealed record CalendarRepeatCheckResponse(
     string WindowEnd,
     IReadOnlyList<CalendarOccurrenceResponse> Occurrences);
 
-/// <summary>Compact operation handle (docs/M6_PLAN.md §2.2).</summary>
+/// <summary>Compact operation handle.</summary>
 public sealed record CalendarOperationResponse(string Id, DateTimeOffset? UndoExpiresAt);
 
 /// <summary>Reroll response: the M5 day document plus the operation handle.</summary>
@@ -129,7 +129,7 @@ public sealed record CalendarRerollResponse(
     CalendarRepeatWarningResponse? RepeatWarning,
     CalendarOperationResponse Operation);
 
-/// <summary>Draft handle for a batch reroll preview (docs/M7_PLAN.md §2.2).</summary>
+/// <summary>Draft handle for a batch reroll preview.</summary>
 public sealed record BatchPreviewDraftResponse(
     string Token,
     string Mode,
@@ -148,19 +148,19 @@ public sealed record BatchPreviewDayResponse(
     CalendarEntryResponse? Current,
     BatchProposedEntryResponse? Proposed);
 
-/// <summary>Batch reroll preview response (docs/M7_PLAN.md §2.2).</summary>
+/// <summary>Batch reroll preview response.</summary>
 public sealed record BatchPreviewResponse(
     BatchPreviewDraftResponse Draft,
     IReadOnlyList<BatchPreviewDayResponse> Days);
 
-/// <summary>Batch reroll apply response (docs/M7_PLAN.md §2.2).</summary>
+/// <summary>Batch reroll apply response.</summary>
 public sealed record BatchApplyResponse(
     CalendarOperationResponse Operation,
     IReadOnlyList<CalendarDayResponse> Days,
     int ChangedCount);
 
 /// <summary>
-/// M5 calendar routes (docs/M5_PLAN.md §2.4): reads gated by
+/// M5 calendar routes: reads gated by
 /// <c>calendar.view</c>, writes by <c>calendar.edit</c>, with server-enforced
 /// historical immutability and range/horizon caps.
 /// </summary>
@@ -466,8 +466,7 @@ public static class CalendarEndpoints
     }
 
     /// <summary>
-    /// M12-06 historical correction of one past date (docs/M12_PLAN.md §1.9,
-    /// §2.2; docs/SECURITY.md §10). Admin-only with no new permission key: the
+    /// Historical correction of one past date. Admin-only with no new permission key: the
     /// shared dangerous-action guard verifies the reason and the typed date
     /// confirmation server-side, the correction is past-only, and a locked date
     /// needs the explicit <c>lock_acknowledged</c>.
@@ -501,7 +500,7 @@ public static class CalendarEndpoints
             return ApiResults.ValidationError(errors);
         }
 
-        // The correction types the date being corrected (docs/M12_PLAN.md §1.11).
+        // The correction types the date being corrected.
         var validation = DangerousActionGuard.Validate(
             reason,
             confirmation,

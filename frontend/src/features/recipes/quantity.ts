@@ -1,6 +1,6 @@
 /**
  * Formats stored decimal quantities as user-friendly cooking fractions for
- * display (docs/PRODUCT_SPEC.md §37). Decimals stay the storage/input format;
+ * display (docs/PRODUCT_SPEC.md §37). Decimals stay the storage/input format
  * this only affects presentation.
  */
 
@@ -41,7 +41,7 @@ function trimDecimal(value: number): string {
 }
 
 /**
- * Renders `0.5` -> `1/2`, `1.5` -> `1 1/2`, `2.25` -> `2 1/4`. Whole numbers,
+ * Renders `0.5` -> `1/2`, `1.5` -> `1 1/2`, `2.25` -> `2 1/4`. Whole numbers
  * `null`, `undefined`, and empty strings are returned unchanged (empty strings
  * and nulls render as `''`). Non-fraction decimals are shown as decimals.
  */

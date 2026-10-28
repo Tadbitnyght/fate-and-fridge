@@ -196,9 +196,7 @@ function restoreFailureMessage(error: unknown): string {
 type RestoreChoice = { kind: 'stored'; row: BackupRow } | { kind: 'upload' }
 
 /**
- * Admin-only Backups section (M13-06, docs/API.md §18, docs/M13_PLAN.md §1.8,
- * §1.9, §4).
- *
+ * Admin-only Backups section.
  * The list is the server's `backup_metadata` rows, newest first. Creating is a
  * long synchronous request; downloading saves the encrypted archive (useless
  * without the recovery key); deleting marks the row `deleted`; and restoring

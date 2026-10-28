@@ -1,9 +1,7 @@
 import { apiRequest } from './client'
 
 /**
- * Typed client for the M13 update-check contract (docs/API.md §25,
- * docs/M13_PLAN.md §1.13–§1.14).
- *
+ * Typed client for the M13 update-check contract.
  * The status read is available to every authenticated actor because the About
  * section and the dashboard notice are visible to members too. The forced check
  * and the enabled preference stay Admin-only on the existing `admin` role: the

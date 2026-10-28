@@ -1,8 +1,7 @@
 namespace FateAndFridge.Api.Domain;
 
 /// <summary>
-/// Household-shared checkbox state for one grocery line (docs/M8_PLAN.md §1.10,
-/// §2.3). The stable <see cref="ItemIdentityHash"/> is canonical ingredient +
+/// Household-shared checkbox state for one grocery line. The stable <see cref="ItemIdentityHash"/> is canonical ingredient +
 /// dimension (or <c>count</c>) for recipe-derived lines, and the manual item id
 /// for manual lines, so a check survives quantity and range changes. The unique
 /// hash means there is one shared row per line for the whole household.

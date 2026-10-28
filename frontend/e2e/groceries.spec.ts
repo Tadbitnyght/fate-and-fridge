@@ -496,7 +496,7 @@ test('groceries: checking an item strikes it through and moves it below unchecke
     .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label')))
   expect(labelsAfter).toEqual(['Mark Banana as bought', 'Mark Apple as not bought'])
 
-  // The checked line is struck through (M8-07 §1.12).
+  // The checked line is struck through (§1.12).
   await expect(page.getByText('Apple', { exact: true })).toHaveCSS(
     'text-decoration-line',
     'line-through',
@@ -646,7 +646,7 @@ test('groceries: mobile layout keeps department headers sticky and tap targets �
   await expect(page.getByText('Onion')).toBeVisible()
 
   // The department header is sticky so the group label stays anchored while the
-  // list scrolls (docs/M8_PLAN.md §2.4).
+  // list scrolls.
   await expect(page.locator('.grocery-department__header').first()).toHaveCSS('position', 'sticky')
 
   // The primary controls expose a ≥44px tap target on a phone viewport. The

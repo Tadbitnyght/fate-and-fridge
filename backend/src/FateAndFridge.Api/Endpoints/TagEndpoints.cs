@@ -20,7 +20,7 @@ public sealed record TagResponse(
 }
 
 /// <summary>
-/// M2-10 tags routes (docs/API.md §22): authenticated reads, writes gated by
+/// Tags routes (docs/API.md §22): authenticated reads, writes gated by
 /// <c>reference_data.edit</c>, Admin-only hard delete with <c>TAG_IN_USE</c>
 /// protection for referenced tags, and no retire concept.
 /// </summary>
@@ -290,7 +290,7 @@ public static class TagEndpoints
         var actor = await actorProvider.GetCurrentActorAsync(cancellationToken);
         if (actor is null)
         {
-            // The permission filter already rejected unauthenticated requests;
+            // The permission filter already rejected unauthenticated requests
             // keep the defensive envelope so the handler cannot fail open.
             return (null, null, ApiResults.Error(
                 StatusCodes.Status401Unauthorized,

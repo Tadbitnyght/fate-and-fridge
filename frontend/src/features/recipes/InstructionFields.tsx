@@ -17,7 +17,7 @@ function moveItem<T>(items: T[], index: number, delta: number): T[] {
 }
 
 /**
- * Ordered instruction sections and steps (M3-10). Sections and steps may be
+ * Ordered instruction sections and steps. Sections and steps may be
  * moved, and blank steps are dropped when the request is built.
  */
 export function InstructionFields({

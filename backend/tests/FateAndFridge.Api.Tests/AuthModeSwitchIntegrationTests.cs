@@ -15,15 +15,15 @@ using Microsoft.EntityFrameworkCore;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// HTTP-level verification of the M1-10 auth-mode switch (docs/API.md §21):
+/// HTTP-level verification of the auth-mode switch (docs/API.md §21)
 /// single-user → multiuser conversion with the first Admin signed in, repeat
 /// and downgrade responses, validation, and the concurrent-switch race.
 /// Requires a Docker daemon; run with
 /// <c>dotnet test --filter "Category!=Integration"</c> to skip locally.
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class AuthModeSwitchIntegrationTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class AuthModeSwitchIntegrationTests(SetupFixture fixture) : IAsyncLifetime
 {
     private const string AdminPassword = "root horse battery staple";
     private const string TestUserAgent = "auth-mode-switch-test";

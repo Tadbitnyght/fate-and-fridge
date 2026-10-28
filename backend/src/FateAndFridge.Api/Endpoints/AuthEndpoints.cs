@@ -49,9 +49,9 @@ public sealed record AuthSessionResponse(
 /// </summary>
 /// <remarks>
 /// Login CSRF note: <c>POST /auth/login</c> is unauthenticated and therefore
-/// exempt from the authenticated-only antiforgery check by design (M1-06
+/// exempt from the authenticated-only antiforgery check by design (
 /// decision). Requiring a JSON body and using SameSite=Lax cookies are the
-/// interim cross-site mitigations; M1-15 explicitly revisits login CSRF.
+/// interim cross-site mitigations; explicitly revisits login CSRF.
 /// </remarks>
 public static class AuthEndpoints
 {
@@ -72,7 +72,7 @@ public static class AuthEndpoints
         group.MapPost("/login", LoginAsync);
 
         // The CSRF middleware requires X-CSRF-TOKEN on this authenticated
-        // unsafe request; RequireAuthorization() yields 401 AUTH_REQUIRED
+        // unsafe request; RequireAuthorization yields 401 AUTH_REQUIRED
         // without a valid session.
         group.MapPost("/logout", LogoutAsync).RequireAuthorization();
 
@@ -141,7 +141,7 @@ public static class AuthEndpoints
         LoginResult.Success success,
         CancellationToken cancellationToken)
     {
-        // Shared with setup completion: persistent cookie, session principal,
+        // Shared with setup completion: persistent cookie, session principal
         // and a fresh antiforgery pair bound to the new session.
         SessionSignIn.Apply(context, success.User, success.Session, success.RawToken, antiforgery);
 

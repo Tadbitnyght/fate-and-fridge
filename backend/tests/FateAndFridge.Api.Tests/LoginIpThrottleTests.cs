@@ -6,9 +6,9 @@ using Microsoft.Extensions.Options;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// Fake-clock verification of the M1-07 part 2 per-IP throttle: attempts
+/// Fake-clock verification of the part 2 per-IP throttle: attempts
 /// atomically reserve a slot before verification (fixed 10-minute window by
-/// default), over-threshold attempts are blocked, success resets the address,
+/// default), over-threshold attempts are blocked, success resets the address
 /// and the address table stays bounded.
 /// </summary>
 public sealed class LoginIpThrottleTests

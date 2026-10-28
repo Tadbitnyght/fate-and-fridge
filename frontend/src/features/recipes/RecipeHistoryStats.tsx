@@ -20,7 +20,7 @@ function MetricRow({
 }
 
 /**
- * Read-only Last eaten / Next planned / Times eaten block (M11-06). Renders on
+ * Read-only Last eaten / Next planned / Times eaten block. Renders on
  * the recipe card (default `recipe-card__stats` styling) and the recipe
  * detail/editor's History section. Null metrics show the shared no-history
  * fallback, and a retired recipe keeps showing its past meals.

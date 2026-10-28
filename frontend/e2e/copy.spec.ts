@@ -1,18 +1,18 @@
 import { expect, test, type Page } from '@playwright/test'
 
+import { DEVELOPMENT_COPY } from './support/developmentCopy'
+
 /**
- * Product-copy regression gate (M15-03, docs/M15_PLAN.md §2.4).
- *
+ * Product-copy regression gate.
  * Every product route is rendered against a hermetic `/api/v1/**` mock and the
  * visible body text is scanned for development-language markers that must never
- * ship: milestone/roadmap vocabulary, bug ids, milestone ids, endpoint jargon,
- * and "not implemented" style promises. The check is a bounded body-text match
+ * ship: release-process/roadmap vocabulary, bug ids, internal ids, endpoint
+ * jargon and "not implemented" style promises. The check is a bounded body-text match
  * rather than a snapshot, so ordinary copy edits do not churn the gate while a
  * reintroduced development string fails loudly.
  */
 
-const BANNED =
-  /milestone|roadmap|manifest|BUG-|M\d+-\d+|not implemented yet|later milestone|endpoint|placeholder/gi
+const BANNED = DEVELOPMENT_COPY
 
 const TIMESTAMP = '2026-10-12T00:00:00+00:00'
 const TODAY = '2026-10-15'
@@ -693,8 +693,8 @@ test('setup wizard steps contain no development-language copy', async ({ page })
   await page.getByLabel('Household name').fill('The Smiths')
   await page.getByLabel('Timezone').fill('America/Chicago')
   await page.getByRole('button', { name: 'Next' }).click()
-  // Single-user mode skips the Admin step and lands on the network allowlist,
-  // whose guidance used to cite a milestone id.
+  // Single-user mode skips the Admin step and lands on the network allowlist
+  // whose guidance used to cite an internal release id.
   await expect(page.getByRole('heading', { level: 1, name: 'Network access' })).toBeVisible()
   await expectNoDevelopmentCopy(page, 'setup network-access step')
 })

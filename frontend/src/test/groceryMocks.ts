@@ -9,8 +9,8 @@ import { setupCompleteStatus } from './fixtures'
 import { installMockFetch, type MockFetch, type MockResponse, type MockRoute } from './mockFetch'
 
 /**
- * Stateful grocery API mock for the M8-07 UI tests. It mirrors the wire
- * contract in `docs/API.md §13` closely enough to drive check/uncheck,
+ * Stateful grocery API mock for the UI tests. It mirrors the wire
+ * contract in `docs/API.md §13` closely enough to drive check/uncheck
  * preferences, manual items, staples, and add-to-list flows: each mutation
  * updates the mocked server state so the following list read reflects it, and
  * list reads re-apply the server's unchecked-then-checked ordering.
@@ -352,7 +352,7 @@ export function installGroceryMocks(options: GroceryMockOptions = {}): GroceryMo
         if (options.preferencesPatchError) {
           return options.preferencesPatchError
         }
-        // The server caps a custom range at 366 days (docs/M8_PLAN.md §1.7);
+        // The server caps a custom range at 366 days
         // mirror that so range-boundary tests exercise the real error surface.
         if (
           body['range_preset'] === 'custom' &&

@@ -81,7 +81,7 @@ export function useSetCalendarLock() {
 }
 
 /**
- * Admin-only correction of one past date (M12-07, docs/API.md §17). On success
+ * Admin-only correction of one past date (docs/API.md §17). On success
  * the calendar, statistics (meal history/overview), and audit queries are all
  * invalidated locally, so the corrected row updates immediately even before the
  * coarse `calendar.updated` live-sync event arrives.
@@ -120,7 +120,7 @@ export function useUndoCalendarOperation() {
 }
 
 /**
- * Builds a batch reroll preview draft (M7). Preview persists no calendar state,
+ * Builds a batch reroll preview draft (M7). Preview persists no calendar state
  * so it does not invalidate any query; Try Another simply replaces the draft.
  */
 export function usePreviewBatchReroll() {

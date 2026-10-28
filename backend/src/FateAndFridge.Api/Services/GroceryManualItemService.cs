@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 namespace FateAndFridge.Api.Services;
 
 /// <summary>
-/// One stored manual grocery item (docs/M8_PLAN.md §1.8, §2.3). <see cref="RangeStart"/>
+/// One stored manual grocery item. <see cref="RangeStart"/>
 /// is the inclusive household-local first date of the item's range and
 /// <see cref="RangeDays"/> its length; the item is visible only while that pair
 /// exactly equals the resolved list range.
@@ -58,7 +58,7 @@ public abstract record GroceryManualItemDeleteOutcome
 }
 
 /// <summary>
-/// Range-scoped manual grocery CRUD (docs/M8_PLAN.md §1.8, §2.2). The service
+/// Range-scoped manual grocery CRUD. The service
 /// validates referenced units/ingredients/departments, canonicalizes an
 /// ingredient through its merge redirect, applies the department default, and
 /// promotes a household staple for <c>save_for_future</c> idempotently. Manual
@@ -110,7 +110,7 @@ public sealed class GroceryManualItemService(
         }
 
         // Department default: explicit department_id, else the linked canonical
-        // ingredient's department, else null ("Other", docs/M8_PLAN.md §1.8/§1.12).
+        // ingredient's department, else null.
         var departmentId = request.DepartmentId ?? ingredient?.DepartmentId;
 
         var now = timeProvider.GetUtcNow();
@@ -136,7 +136,7 @@ public sealed class GroceryManualItemService(
             staplePromoted = await PromoteStapleAsync(item, cancellationToken).ConfigureAwait(false);
         }
 
-        // Item, promotion, and audit commit atomically (docs/M12_PLAN.md §2.1).
+        // Item, promotion, and audit commit atomically.
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         await auditService.WriteAsync(
@@ -242,7 +242,7 @@ public sealed class GroceryManualItemService(
         item.UpdatedAt = timeProvider.GetUtcNow();
 
         // Transitioning save_for_future to true promotes the staple; the
-        // promotion is idempotent by normalized name (docs/M8_PLAN.md §1.8/§1.9).
+        // promotion is idempotent by normalized name.
         var staplePromoted = false;
         if (patch.SaveForFutureProvided && patch.SaveForFuture && !wasSaveForFuture)
         {

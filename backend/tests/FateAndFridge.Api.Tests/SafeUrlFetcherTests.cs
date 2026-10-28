@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// Fetch pipeline tests (docs/M4_PLAN.md §1.13–§1.14). All transports are
+/// Fetch pipeline tests. All transports are
 /// stubbed or loopback; no public network access occurs.
 /// </summary>
 public sealed class SafeUrlFetcherTests
@@ -491,7 +491,7 @@ public sealed class SafeUrlFetcherTests
     public async Task FetchPageAsync_fails_closed_when_dns_rebinds_to_private_at_connect_time()
     {
         // Public at the fail-fast pre-check, private when the production pinned
-        // transport re-resolves at connect time. No injected handler is used,
+        // transport re-resolves at connect time. No injected handler is used
         // so this exercises CreatePinnedHandler/ConnectAsync directly.
         var resolver = new StatefulDnsResolver(
             [IPAddress.Parse("93.184.216.34")],

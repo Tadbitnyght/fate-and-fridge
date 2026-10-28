@@ -17,7 +17,7 @@ function focusableWithin(panel: HTMLElement): HTMLElement[] {
 }
 
 /**
- * Accessible modal: rendered in a portal directly under `document.body`,
+ * Accessible modal: rendered in a portal directly under `document.body`
  * `role="dialog"` + `aria-modal`, Escape closes, focus moves into the panel on
  * open and returns to the trigger on close. The rest of the page is marked
  * `inert` (AT- and pointer-inert) while the dialog is open, and Tab/Shift+Tab

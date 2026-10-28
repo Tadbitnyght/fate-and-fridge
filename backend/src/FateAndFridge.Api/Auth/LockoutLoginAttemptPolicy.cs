@@ -1,8 +1,7 @@
 namespace FateAndFridge.Api.Auth;
 
 /// <summary>
-/// M1-07 part 2 lockout policy with the approved defaults from
-/// docs/SECURITY.md §3 and docs/MILESTONES.md:
+/// Lockout policy with the approved defaults from docs/SECURITY.md §3:
 /// <list type="bullet">
 /// <item>failures 1–4: no delay;</item>
 /// <item>failure 5+: progressive delay <c>min(250 ms × (failures − 4), 3 s)</c>;</item>
@@ -45,7 +44,7 @@ public sealed class LockoutLoginAttemptPolicy : ILoginAttemptPolicy
 
     /// <summary>
     /// Duration of the severe lock after repeated lockouts. The 24-hour window
-    /// is fixed in M1: M1-11 security settings will make the maximum lock
+    /// is fixed in M1: security settings will make the maximum lock
     /// window configurable (24 or 48 hours) per docs/SECURITY.md §3.
     /// </summary>
     public const int SevereLockMinutes = 24 * 60;
@@ -63,7 +62,7 @@ public sealed class LockoutLoginAttemptPolicy : ILoginAttemptPolicy
 
         // Engage or escalate only when the account is not currently locked.
         // Parallel failures that raced past the pre-verification lock check all
-        // reach this method, but the caller serializes them with a row lock:
+        // reach this method, but the caller serializes them with a row lock
         // the first one crossing the threshold owns the engagement, the rest
         // only increment the counter (no extra lock, no extra event).
         var isCurrentlyLocked = state.LockedUntil is { } existingLock && existingLock > now;

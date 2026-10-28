@@ -1,11 +1,11 @@
 import { expect, test, type Page, type WebSocketRoute } from '@playwright/test'
 
 /**
- * Hermetic live-sync test (docs/M9_PLAN.md §2.3, issue #127). The SignalR hub is
+ * Hermetic live-sync test. The SignalR hub is
  * mocked with `page.routeWebSocket` — no backend is involved — and the test
- * asserts the two observable provider effects:
- *   1. a `groceries.updated` frame invalidates/refetches `GET /api/v1/groceries`;
- *   2. the status indicator reflects the connected state.
+ * asserts the two observable provider effects
+ * 1. a `groceries.updated` frame invalidates/refetches `GET /api/v1/groceries`
+ * 2. the status indicator reflects the connected state.
  */
 
 const setupComplete = { setup_completed: true, auth_mode: 'multiuser', recovery_key_present: true }
@@ -27,7 +27,7 @@ interface HubSocket {
 /**
  * Minimal hermetic grocery API plus a hub mock. The hub answers the SignalR
  * JSON handshake (`{"protocol":"json","version":1}` + the record separator) so
- * the client's `start()` resolves, and keeps every routed socket so the test
+ * the client's `start` resolves, and keeps every routed socket so the test
  * can push a server-to-client `event` invocation.
  */
 async function mockLiveSync(page: Page): Promise<{
@@ -181,7 +181,7 @@ test('live sync: the status indicator stays non-blocking and REST keeps working'
   page,
 }) => {
   // A hub that never answers the handshake leaves the connection down; the
-  // groceries page must still render from REST (docs/M9_PLAN.md §1.9).
+  // groceries page must still render from REST.
   let listFetches = 0
   await page.route('**/api/v1/**', async (route) => {
     const url = new URL(route.request().url())

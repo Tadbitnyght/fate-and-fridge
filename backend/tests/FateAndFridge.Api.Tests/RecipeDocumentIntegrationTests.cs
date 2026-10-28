@@ -17,16 +17,15 @@ using Microsoft.EntityFrameworkCore;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// HTTP-level verification of the M3-05 … M3-09 recipe document (docs/M3_PLAN.md
-/// §1–§2): ingredient groups and ingredients, instruction sections and steps,
+/// HTTP-level verification of the recipe document: ingredient groups and ingredients, instruction sections and steps
 /// protein/tag associations, decimal/`to taste` handling, retired-reference
 /// rules, reference-data delete safety, list filters/sorts/paging, statistics
 /// placeholders, and nested-write rollback. Requires a Docker daemon; run with
 /// <c>dotnet test --filter "Category!=Integration"</c> to skip locally.
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class RecipeDocumentIntegrationTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class RecipeDocumentIntegrationTests(SetupFixture fixture) : IAsyncLifetime
 {
     private const string RecipesPath = "/api/v1/recipes";
     private const string IngredientsPath = "/api/v1/ingredients";
@@ -840,7 +839,7 @@ public sealed class RecipeDocumentIntegrationTests(M1SetupFixture fixture) : IAs
     {
         await using var context = fixture.CreateContext();
 
-        // M12-01 mirrors login/logout into audit_events; these suites assert the
+        // Mirrors login/logout into audit_events; these suites assert the
         // reference-data/recipe rows they themselves write, so the auth mirror is
         // excluded here.
         return await context.AuditEvents.AsNoTracking()

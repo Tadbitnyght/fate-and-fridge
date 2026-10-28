@@ -16,7 +16,7 @@ public sealed record LiveSyncConnection(
 
 /// <summary>
 /// Process-local, thread-safe registry of live-sync connections
-/// (docs/M9_PLAN.md §2.1). Maps a session id to its connection ids plus actor
+/// Maps a session id to its connection ids plus actor
 /// metadata so a revoked session's sockets can be found and aborted, and enforces
 /// the bounded per-session and household-wide connection caps. The single-user
 /// system actor has no database session and uses <see cref="SystemSessionId"/>.
@@ -30,10 +30,9 @@ public sealed class LiveSyncConnectionRegistry
     public const int MaxConnectionsPerSession = 8;
 
     /// <summary>
-    /// Bounded number of concurrent connections allowed for the whole household
-    /// (docs/M9_PLAN.md §1.11 caps connections "per session/household"). Four
-    /// sessions at the per-session cap: generous for a household with several
-    /// tabs and devices on the single instance, and still bounded.
+    /// Bounded number of concurrent connections allowed for the whole
+    /// household: four sessions at the per-session cap. Generous for a household
+    /// with several tabs and devices on the single instance, and still bounded.
     /// </summary>
     public const int MaxConnectionsPerHousehold = 32;
 
@@ -119,7 +118,7 @@ public sealed class LiveSyncConnectionRegistry
 
     /// <summary>
     /// Snapshot of every registered connection, used by the publisher's
-    /// per-broadcast session re-validation (docs/M9_PLAN.md §1.13).
+    /// per-broadcast session re-validation.
     /// </summary>
     public IReadOnlyList<LiveSyncConnection> GetAll() => _connections.Values.ToList();
 

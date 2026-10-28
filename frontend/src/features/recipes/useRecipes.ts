@@ -94,8 +94,8 @@ export function useDeleteRecipeImage() {
 }
 
 /**
- * Irreversible Admin-only hard delete (M12-09). A delete removes today/future
- * planned entries and tombstones past ones, so the recipe lists, the calendar,
+ * Irreversible Admin-only hard delete. A delete removes today/future
+ * planned entries and tombstones past ones, so the recipe lists, the calendar
  * the statistics/meal-history views, and the audit log all change at once.
  * (Live sync also emits `recipe.updated` and `calendar.updated`.)
  */

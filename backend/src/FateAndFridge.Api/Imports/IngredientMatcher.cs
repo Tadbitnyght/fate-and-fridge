@@ -4,7 +4,7 @@ namespace FateAndFridge.Api.Imports;
 
 /// <summary>
 /// One active canonical ingredient plus its aliases, as read from reference
-/// data for import matching (docs/M4_PLAN.md §1.10). Deliberately independent of
+/// data for import matching. Deliberately independent of
 /// EF Core so the matcher is testable without a database.
 /// </summary>
 /// <param name="Id">Ingredient primary key.</param>
@@ -22,7 +22,7 @@ public sealed record IngredientCandidate(
     IReadOnlyList<string> Aliases);
 
 /// <summary>
-/// One ingredient line's canonical match (docs/M4_PLAN.md §1.10 and §2.2). A
+/// One ingredient line's canonical match. A
 /// confident match sets <see cref="MatchedIngredientId"/> and
 /// <see cref="MatchKind"/>; otherwise <see cref="IsUnknown"/> is true and the
 /// review screen resolves it against <see cref="Suggestions"/>.
@@ -39,7 +39,7 @@ public sealed record IngredientMatchResult(
 
 /// <summary>
 /// Deterministic canonical/alias ingredient matching for imported lines
-/// (docs/M4_PLAN.md §1.10). It reads no database; a catalog of active
+/// It reads no database; a catalog of active
 /// ingredients is supplied by the caller once per import. Matching is
 /// <b>read-only</b> and never throws on adversarial names.
 /// </summary>
@@ -110,8 +110,8 @@ public sealed class IngredientMatcher
     public int ActiveCount => _active.Count;
 
     /// <summary>
-    /// Matches one imported ingredient name (docs/M4_PLAN.md §1.10). Returns an
-    /// unknown result with bounded suggestions when no confident match exists,
+    /// Matches one imported ingredient name. Returns an
+    /// unknown result with bounded suggestions when no confident match exists
     /// and never throws.
     /// </summary>
     public IngredientMatchResult Match(string? rawName)

@@ -5,7 +5,7 @@ namespace FateAndFridge.Api.Auth;
 
 /// <summary>
 /// Establishes the browser session after login or setup completion: writes the
-/// persistent session cookie, swaps the request principal to the new session,
+/// persistent session cookie, swaps the request principal to the new session
 /// and mints the antiforgery pair bound to the new token hash and user. Shared
 /// so the two entry points cannot drift.
 /// </summary>

@@ -1,5 +1,5 @@
 /**
- * Helpers for the M13-09 update notice (docs/M13_PLAN.md §1.14): the per-device
+ * Helpers for the update notice: the per-device
  * dismissal memory and the release-link guard. Kept out of the component file
  * so React Fast Refresh keeps working.
  */

@@ -2,7 +2,7 @@ namespace FateAndFridge.Api.Imports;
 
 /// <summary>
 /// One titled group of instruction steps in a parsed recipe
-/// (docs/M4_PLAN.md §2.2 <c>instruction_sections</c>). A <c>null</c>
+/// A <c>null</c>
 /// <see cref="Title"/> is the untitled group produced by plain strings or bare
 /// <c>HowToStep</c> objects.
 /// </summary>
@@ -11,7 +11,7 @@ public sealed record ParsedInstructionSection(string? Title, IReadOnlyList<strin
 /// <summary>
 /// Parser-agnostic intermediate recipe produced by both import parsers
 /// (<c>StructuredRecipeParser</c> and, later, <c>HtmlFallbackParser</c>) and
-/// consumed by the M4-04..M4-06 draft pipeline (docs/M4_PLAN.md §2.1–§2.2).
+/// consumed by the import draft pipeline.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -20,10 +20,10 @@ public sealed record ParsedInstructionSection(string? Title, IReadOnlyList<strin
 /// it is plain text with markup stripped, HTML entities decoded, control
 /// characters removed, and whitespace collapsed. A value that could not be
 /// parsed unambiguously is <c>null</c> (or omitted from a list) — parsers never
-/// invent data (docs/M4_PLAN.md §1.4).
+/// invent data.
 /// </para>
 /// <para>
-/// Length limits are M4-04/M4-05 concerns and are not enforced here.
+/// Length limits are concerns and are not enforced here.
 /// </para>
 /// </remarks>
 public sealed record ParsedRecipe
@@ -40,7 +40,7 @@ public sealed record ParsedRecipe
     /// <summary>The page URL the recipe was parsed from, when the caller supplied one.</summary>
     public string? SourceUrl { get; init; }
 
-    /// <summary>Resolved image URL for optional client-side preview; downloaded later (M4-07).</summary>
+    /// <summary>Resolved image URL for optional client-side preview; downloaded later.</summary>
     public string? ImageUrl { get; init; }
 
     /// <summary>Preparation time in whole minutes, or <c>null</c> when absent or ambiguous.</summary>

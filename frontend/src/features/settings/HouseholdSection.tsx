@@ -504,7 +504,7 @@ function HouseholdForm({
 }
 
 /**
- * Household settings (docs/API.md §21): any authenticated actor may read,
+ * Household settings (docs/API.md §21): any authenticated actor may read
  * only Admins may change. Members see the values read-only.
  */
 export function HouseholdSection() {

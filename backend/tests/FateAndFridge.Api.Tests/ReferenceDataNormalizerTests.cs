@@ -4,8 +4,8 @@ using FluentAssertions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// Adversarial matrix for the M2-03 reference-data normalization rule
-/// (docs/DATABASE.md §1, docs/M2_PLAN.md §1.4): case, diacritics, punctuation,
+/// Adversarial matrix for the reference-data normalization rule
+/// case, diacritics, punctuation
 /// whitespace, control characters, long input, and determinism/idempotence.
 /// </summary>
 public sealed class ReferenceDataNormalizerTests

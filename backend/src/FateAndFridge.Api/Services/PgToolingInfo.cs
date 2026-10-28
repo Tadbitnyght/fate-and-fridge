@@ -7,14 +7,12 @@ namespace FateAndFridge.Api.Services;
 
 /// <summary>
 /// The PostgreSQL server version as reported by the live connection
-/// (docs/M13_PLAN.md §1.3).
 /// </summary>
 public sealed record PgServerVersion(int? Major, string? Version);
 
 /// <summary>
 /// Result of the startup backup-tooling probe: the installed <c>pg_dump</c>
 /// client and the PostgreSQL server it would talk to
-/// (docs/M13_PLAN.md §1.3).
 /// </summary>
 public sealed record PgToolingStatus(
     string? ClientVersion,
@@ -25,7 +23,7 @@ public sealed record PgToolingStatus(
     /// <summary>
     /// A custom-format dump is readable by a client whose major is at least the
     /// server's; an older client cannot dump a newer server
-    /// (docs/M13_PLAN.md §1.3). An unknown version never counts as supported.
+    /// An unknown version never counts as supported.
     /// </summary>
     public bool SupportsBackup =>
         ClientMajor is { } client && ServerMajor is { } server && client >= server;
@@ -107,7 +105,7 @@ public interface IPgDumpVersionReader
 
 /// <summary>
 /// Runs <c>pg_dump --version</c> without a shell and with a bounded timeout
-/// (docs/M13_PLAN.md §1.3). A missing binary, a non-zero exit, or a timeout is
+/// A missing binary, a non-zero exit, or a timeout is
 /// reported as "unknown" rather than failing application startup.
 /// </summary>
 public sealed class PgDumpVersionReader : IPgDumpVersionReader
@@ -214,7 +212,7 @@ public interface IPgServerVersionReader
 
 /// <summary>
 /// Queries <c>server_version_num</c> and <c>server_version</c> over Npgsql
-/// (docs/M13_PLAN.md §1.3). Failures are handled by the caller so startup is
+/// Failures are handled by the caller so startup is
 /// never blocked by an unavailable database.
 /// </summary>
 public sealed class NpgsqlServerVersionReader(AppDbContext dbContext) : IPgServerVersionReader
@@ -255,9 +253,9 @@ public sealed class NpgsqlServerVersionReader(AppDbContext dbContext) : IPgServe
 
 /// <summary>
 /// Records whether the shipped <c>pg_dump</c> can dump the running PostgreSQL
-/// server (docs/M13_PLAN.md §1.3). The probe never throws for a missing client
+/// server. The probe never throws for a missing client
 /// or an unreachable server; it reports unknown versions and logs a warning so
-/// M13-03 can refuse to create a backup with a clear reason.
+/// Can refuse to create a backup with a clear reason.
 /// </summary>
 public sealed class PgToolingInfo(
     IPgDumpVersionReader dumpVersionReader,

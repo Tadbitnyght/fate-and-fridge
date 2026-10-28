@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 namespace FateAndFridge.Api.Auth;
 
 /// <summary>
-/// Session-aware <see cref="ICurrentActorProvider"/> (M1-06). Single-user mode
+/// Session-aware <see cref="ICurrentActorProvider"/>. Single-user mode
 /// always runs as the system actor without requiring a cookie; multiuser mode
 /// maps the validated session principal (see
 /// <see cref="SessionAuthenticationHandler"/>) to the actor and denies by
@@ -42,7 +42,7 @@ public sealed class SessionActorProvider(
     /// </summary>
     public static CurrentActor? FromPrincipal(ClaimsPrincipal? principal)
     {
-        // Mirror CsrfMiddleware.IsSessionAuthenticated / MustChangePasswordMiddleware.HasForcedChange:
+        // Mirror CsrfMiddleware.IsSessionAuthenticated / MustChangePasswordMiddleware.HasForcedChange
         // only the session scheme's own principal is trusted, so another
         // authenticated identity can never be mapped onto a session actor.
         if (principal?.Identity is not { IsAuthenticated: true } identity

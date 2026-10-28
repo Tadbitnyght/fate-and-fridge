@@ -9,7 +9,7 @@ using Microsoft.Extensions.Options;
 namespace FateAndFridge.Api.Endpoints;
 
 /// <summary>
-/// One row of the admin audit timeline (docs/API.md §16, docs/M12_PLAN.md §2.2).
+/// One row of the admin audit timeline.
 /// <c>before</c>, <c>after</c>, and <c>metadata</c> are the stored JSON documents
 /// (or null), embedded as JSON values rather than escaped strings.
 /// </summary>
@@ -85,9 +85,8 @@ public sealed record AuditPruneResponse(
     int RetentionDays);
 
 /// <summary>
-/// Admin-only administration routes (docs/M12_PLAN.md §2.1, §2.2). Read access to
+/// Admin-only administration routes. Read access to
 /// the audit log is the existing <c>admin</c> role — no new permission key
-/// (docs/M12_PLAN.md §1.1).
 /// </summary>
 public static class AdminEndpoints
 {
@@ -124,8 +123,8 @@ public static class AdminEndpoints
     }
 
     /// <summary>
-    /// Downloads the current filtered audit view as CSV or JSON (docs/API.md
-    /// §16, docs/M12_PLAN.md §1.7). Paging is ignored: an export is the whole
+    /// Downloads the current filtered audit view as CSV or JSON
+    /// Paging is ignored: an export is the whole
     /// filtered view, capped by <see cref="AuditLogQueryService.MaxExportRows"/>.
     /// </summary>
     private static async Task<IResult> ExportAuditAsync(
@@ -160,8 +159,7 @@ public static class AdminEndpoints
     }
 
     /// <summary>
-    /// The explicit, age-based audit retention prune (docs/API.md §16,
-    /// docs/M12_PLAN.md §1.8): the shared dangerous-action guard verifies the
+    /// The explicit, age-based audit retention prune: the shared dangerous-action guard verifies the
     /// reason and the exact <c>PRUNE</c> confirmation, then only
     /// <c>audit_events</c> rows older than the configured window are deleted and
     /// an <c>audit.pruned</c> row records the counts.

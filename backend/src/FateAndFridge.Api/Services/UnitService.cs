@@ -62,9 +62,9 @@ public abstract record UnitAliasMutationResult
 }
 
 /// <summary>
-/// M2-06 units management (docs/API.md §22, docs/DATABASE.md §5): searchable
+/// Units management (docs/API.md §22, docs/DATABASE.md §5): searchable
 /// reference data with an immutable dimension, base factors editable only for
-/// mass/volume units (bounds-checked and audited as <c>factor_changed</c>),
+/// mass/volume units (bounds-checked and audited as <c>factor_changed</c>)
 /// per-unit aliases, retire/delete semantics, and an audit row staged into the
 /// caller's <see cref="AppDbContext"/> for every write.
 /// </summary>
@@ -91,7 +91,7 @@ public sealed class UnitService(
 
     /// <summary>
     /// Lists units ordered by id, prefix matches first when searching. The
-    /// search matches the symbol, the normalized display name, and alias text,
+    /// search matches the symbol, the normalized display name, and alias text
     /// case-insensitively; retired units are excluded unless requested.
     /// </summary>
     public async Task<IReadOnlyList<UnitRecord>> ListAsync(
@@ -398,7 +398,7 @@ public sealed class UnitService(
 
     /// <summary>
     /// Hard-deletes a unit only while no recipe ingredient references it
-    /// (docs/M2_PLAN.md §1.11). The count comes from the usage seam.
+    /// The count comes from the usage seam.
     /// </summary>
     public async Task<UnitMutationResult> DeleteAsync(
         long id,
@@ -495,7 +495,7 @@ public sealed class UnitService(
 
         dbContext.UnitAliases.Add(row);
 
-        // Two saves (the generated id feeds the after snapshot and the response),
+        // Two saves (the generated id feeds the after snapshot and the response)
         // so they share one explicit transaction.
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         try
@@ -697,7 +697,7 @@ public sealed class UnitService(
     /// Stable 64-bit advisory-lock key for a folded unit symbol: the first eight
     /// bytes (big-endian) of SHA-256 over <c>"unit-symbol:" + foldedSymbol</c>.
     /// The prefix namespaces the key away from other advisory-lock users (for
-    /// example the M2-04 seeder's fixed key), and the fold makes every casing or
+    /// example the seeder's fixed key), and the fold makes every casing or
     /// diacritic variant of one symbol map to the same lock.
     /// </summary>
     private static long SymbolLockKey(string foldedSymbol)

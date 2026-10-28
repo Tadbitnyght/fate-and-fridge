@@ -1,9 +1,7 @@
 import { apiDownload, apiRequest, apiUpload, type DownloadedFile } from './client'
 
 /**
- * Typed client for the M13 admin backup contract (docs/API.md §18,
- * docs/M13_PLAN.md §2.2).
- *
+ * Typed client for the M13 admin backup contract.
  * Every route is under `/api/v1/admin` and is Admin-only on the existing
  * `admin` role (and the single-user system actor): no new permission key is
  * introduced. This module only describes the wire shapes; the server is the
@@ -43,7 +41,7 @@ export const BACKUP_DELETE_CONFIRMATION = 'DELETE'
 export const BACKUP_RESTORE_CONFIRMATION = 'RESTORE'
 
 /**
- * The archive size cap the restore route enforces (`RestoreService.MaximumUploadBytes`,
+ * The archive size cap the restore route enforces (`RestoreService.MaximumUploadBytes`
  * docs/API.md §18). Checked client-side only to give a clear message early.
  */
 export const MAX_BACKUP_RESTORE_BYTES = 2 * 1024 * 1024 * 1024
@@ -91,10 +89,10 @@ export function listBackups(signal?: AbortSignal): Promise<BackupRow[]> {
 }
 
 /**
- * Creates one manual backup. Creation is **synchronous** on the server (dump,
+ * Creates one manual backup. Creation is **synchronous** on the server (dump
  * encrypt, checksum), so a large household means a long request; the caller
  * must allow a generous timeout. Resolves `201` with the already-`completed`
- * row, or rejects with an {@link ApiError} (`BACKUP_CLIENT_TOO_OLD`,
+ * row, or rejects with an {@link ApiError} (`BACKUP_CLIENT_TOO_OLD`
  * `BACKUP_KEY_MISSING`, `BACKUP_IN_PROGRESS`, `BACKUP_FAILED`, reason guards).
  */
 export function createBackup(reason: string, signal?: AbortSignal): Promise<BackupRow> {

@@ -341,7 +341,7 @@ describe('AuthProvider', () => {
 })
 
 /**
- * BUG-007 (M14-09): the app-wide `QueryClient` outlives a session, so every
+ * BUG-007: the app-wide `QueryClient` outlives a session, so every
  * user-scoped read must be dropped whenever the identity behind the cache
  * changes. These tests seed the cache the way the groceries, recipes and
  * statistics screens would and then assert that a logout, a 401-driven session
@@ -491,7 +491,7 @@ describe('AuthProvider query cache isolation (BUG-007)', () => {
    * Regression (CI run 40145178694): the sweep must not destroy the router's own
    * prerequisite query. `removeQueries` on a query that still has a mounted
    * observer destroys the cache entry and cancels its fetch without telling the
-   * observer, so the gate re-renders against a fresh, permanently pending query:
+   * observer, so the gate re-renders against a fresh, permanently pending query
    * `/settings/users` stays on the "Loading Fate & Fridge…" screen instead of
    * redirecting to `/login`.
    */
@@ -527,7 +527,7 @@ describe('AuthProvider query cache isolation (BUG-007)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'sign out' }))
 
     await waitFor(() => expect(screen.getByTestId('screen')).toHaveTextContent('login'))
-    // The household setup status is routing plumbing shared by every identity,
+    // The household setup status is routing plumbing shared by every identity
     // not user data, so it legitimately survives the sweep.
     expect(screen.getByTestId('setup')).toHaveTextContent('ready')
     expect(queryClient.getQueryData(setupStatusQueryKey)).toEqual(setupStatus)
@@ -536,7 +536,7 @@ describe('AuthProvider query cache isolation (BUG-007)', () => {
   /**
    * A sign-out that already succeeded server-side must never be reported as a
    * failure by a follow-up read: an awaited, rejecting session refetch makes
-   * `logout()` reject ("Sign-out failed…") and leaves the session query in an
+   * `logout` reject ("Sign-out failed…") and leaves the session query in an
    * error state, which the router renders instead of `/login`.
    */
   it('completes sign-out even when a post-logout session re-read fails', async () => {

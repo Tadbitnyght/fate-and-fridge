@@ -17,15 +17,15 @@ using Microsoft.Extensions.Logging;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// HTTP-level verification of the M1-08 Admin password reset (docs/API.md §5,
-/// docs/SECURITY.md §2/§17): one-time temporary passwords, authorization,
+/// HTTP-level verification of the Admin password reset (docs/API.md §5
+/// docs/SECURITY.md §2/§17): one-time temporary passwords, authorization
 /// target-session revocation, the forced-change gate, and secret hygiene.
 /// Requires a Docker daemon; run with
 /// <c>dotnet test --filter "Category!=Integration"</c> to skip locally.
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class AdminResetPasswordIntegrationTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class AdminResetPasswordIntegrationTests(SetupFixture fixture) : IAsyncLifetime
 {
     private const string AdminPassword = "root horse battery staple";
     private const string TargetPassword = "correct horse battery staple";
@@ -176,7 +176,7 @@ public sealed class AdminResetPasswordIntegrationTests(M1SetupFixture fixture) :
         var temporaryPassword = (await ReadJsonAsync(response, cancellationToken))
             .GetProperty("temporary_password").GetString()!;
 
-        // ...and every lockout counter is cleared by the reset.
+        // and every lockout counter is cleared by the reset.
         await using (var context = fixture.CreateContext())
         {
             var stored = await context.Users

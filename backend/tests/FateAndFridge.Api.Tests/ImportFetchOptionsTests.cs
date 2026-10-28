@@ -4,7 +4,7 @@ using FluentAssertions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// Startup validation helpers for <see cref="ImportFetchOptions"/> (M4-01).
+/// Startup validation helpers for <see cref="ImportFetchOptions"/>.
 /// </summary>
 public sealed class ImportFetchOptionsTests
 {

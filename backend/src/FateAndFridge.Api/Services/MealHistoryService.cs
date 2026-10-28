@@ -6,15 +6,15 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FateAndFridge.Api.Services;
 
-/// <summary>The applied household-local history range (docs/M11_PLAN.md §1.26).</summary>
+/// <summary>The applied household-local history range.</summary>
 public sealed record MealHistoryRangeRecord(DateOnly Start, DateOnly End, string Timezone);
 
 /// <summary>One history page: the month key, its label, and its calendar bounds.</summary>
 public sealed record MealHistoryMonthRecord(string Key, string Label, DateOnly Start, DateOnly End);
 
 /// <summary>
-/// One day of the meal log (docs/M11_PLAN.md §1.26). Because
-/// <c>calendar_entries.meal_date</c> is unique, a day row <b>is</b> the entry:
+/// One day of the meal log. Because
+/// <c>calendar_entries.meal_date</c> is unique, a day row <b>is</b> the entry
 /// <see cref="RecipeId"/> is null for a tombstone, <see cref="Name"/> is the
 /// stored snapshot name for a tombstone and the recipe name (or the entry's own
 /// display text for a non-recipe entry) otherwise, and <see cref="Protein"/> is
@@ -30,7 +30,7 @@ public sealed record MealHistoryDayRecord(
 
 /// <summary>
 /// The month cursors, one month per step inside the applied range
-/// (docs/M11_PLAN.md §1.26). <see cref="Newer"/> is the next later month and
+/// <see cref="Newer"/> is the next later month and
 /// <see cref="Older"/> the next earlier one; both are null at the range ends.
 /// </summary>
 public sealed record MealHistoryPagingRecord(string? Newer, string? Older);
@@ -66,7 +66,7 @@ public abstract record MealHistoryOutcome
 
 /// <summary>
 /// The bounded, month-grouped, strictly-past meal-history read
-/// (docs/M11_PLAN.md §1.22, §1.23, §1.25, §1.26, §2.1). It is a pure read over
+/// It is a pure read over
 /// the current <c>calendar_entries</c> rows: past dates are immutable in normal
 /// use, so the current state is what was eaten (the change log is M12's
 /// concern).
@@ -81,14 +81,14 @@ public abstract record MealHistoryOutcome
 /// <para>
 /// <b>Page.</b> One month per request. <c>month</c> selects the page; by default
 /// it is the newest month in the range that holds at least one entry, falling
-/// back to the newest month in the range. Per docs/M11_PLAN.md §1.26 the
+/// back to the newest month in the range. Per the
 /// presence check is over the bounded, strictly-past entries and is not narrowed
 /// by the filters, so a filter may return an empty page and the caller pages
 /// with the cursors.
 /// </para>
 /// <para>
-/// <b>Days.</b> Only strictly past days (<c>meal_date &lt; household today</c>,
-/// the "eaten" rule) that have an entry — never blank filler — newest first,
+/// <b>Days.</b> Only strictly past days (<c>meal_date &lt; household today</c>
+/// the "eaten" rule) that have an entry — never blank filler — newest first
 /// clamped to the applied range.
 /// </para>
 /// <para>
@@ -101,7 +101,7 @@ public sealed class MealHistoryService(AppDbContext dbContext, HouseholdClock cl
 {
     /// <summary>
     /// Calendar months in the default range: the household's current month plus
-    /// the eleven before it (docs/M11_PLAN.md §1.10, §1.26).
+    /// the eleven before it.
     /// </summary>
     public const int DefaultRangeMonths = 12;
 
@@ -112,7 +112,7 @@ public sealed class MealHistoryService(AppDbContext dbContext, HouseholdClock cl
 
     /// <summary>
     /// Reads one month of the meal log inside the bounded range, applying the
-    /// optional server-side filters (docs/M11_PLAN.md §1.25, §1.26).
+    /// optional server-side filters.
     /// </summary>
     public async Task<MealHistoryOutcome> GetHistoryAsync(
         MealHistoryRequest request,
@@ -260,7 +260,7 @@ public sealed class MealHistoryService(AppDbContext dbContext, HouseholdClock cl
     /// <summary>
     /// The default page: the newest month in the range with at least one
     /// strictly-past entry, falling back to the newest month in the range when
-    /// no month has one (docs/M11_PLAN.md §1.26).
+    /// no month has one.
     /// </summary>
     private async Task<DateOnly> ResolveDefaultMonthAsync(
         DateOnly start,
@@ -283,7 +283,6 @@ public sealed class MealHistoryService(AppDbContext dbContext, HouseholdClock cl
     /// <summary>
     /// Each involved recipe's primary protein: the lowest protein id, chosen
     /// deterministically because a recipe may list several proteins
-    /// (docs/M11_PLAN.md §1.26).
     /// </summary>
     private async Task<Dictionary<long, ProteinRow>> LoadPrimaryProteinsAsync(
         IReadOnlyList<HistoryEntryRow> rows,
@@ -324,7 +323,7 @@ public sealed class MealHistoryService(AppDbContext dbContext, HouseholdClock cl
     }
 
     /// <summary>
-    /// The row's display name (docs/M11_PLAN.md §1.26): the live recipe name
+    /// The row's display name: the live recipe name
     /// when the recipe survives, else the stored snapshot name (a tombstone, or
     /// a recipe M12 hard-deleted), else the entry's own display text (a
     /// restaurant, host, or custom label).
@@ -423,7 +422,7 @@ public sealed class MealHistoryService(AppDbContext dbContext, HouseholdClock cl
 
     /// <summary>
     /// The recipe filter accepts a live recipe id or a stored snapshot name, so
-    /// a hard-deleted recipe's meals stay filterable (docs/M11_PLAN.md §1.25).
+    /// a hard-deleted recipe's meals stay filterable.
     /// </summary>
     private static (long? RecipeId, string? SnapshotName) ReadRecipe(
         string? raw,

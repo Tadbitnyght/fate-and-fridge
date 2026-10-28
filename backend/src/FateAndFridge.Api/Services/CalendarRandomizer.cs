@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FateAndFridge.Api.Services;
 
-/// <summary>Outcome of a single-date reroll (docs/M6_PLAN.md §1.11).</summary>
+/// <summary>Outcome of a single-date reroll.</summary>
 public abstract record CalendarRerollOutcome
 {
     /// <summary>The reroll committed; the day reflects the stored state.</summary>
@@ -17,7 +17,7 @@ public abstract record CalendarRerollOutcome
     public sealed record Failure(int StatusCode, string Code, string Message) : CalendarRerollOutcome;
 }
 
-/// <summary>Outcome of a single-date undo (docs/M6_PLAN.md §1.13).</summary>
+/// <summary>Outcome of a single-date undo.</summary>
 public abstract record CalendarUndoOutcome
 {
     /// <summary>The undo committed; the day reflects the restored state.</summary>
@@ -28,9 +28,9 @@ public abstract record CalendarUndoOutcome
 }
 
 /// <summary>
-/// M6 single-date reroll (docs/M6_PLAN.md §1.11, docs/RANDOMIZER.md §13). Builds
+/// M6 single-date reroll. Builds
 /// the scoring context from the stored calendar (candidates, exact-repeat
-/// occurrences, protein neighbors), calls the pure <see cref="RandomizerEngine"/>,
+/// occurrences, protein neighbors), calls the pure <see cref="RandomizerEngine"/>
 /// and persists the replacement plus exactly one history row atomically. It
 /// broadcasts nothing; live sync arrives in M9.
 /// </summary>
@@ -41,7 +41,7 @@ public sealed class CalendarRandomizer(
     RandomizerEngine engine,
     TimeProvider timeProvider)
 {
-    /// <summary>Documented defaults used only if no household settings row exists (docs/M6_PLAN.md §1.3).</summary>
+    /// <summary>Documented defaults used only if no household settings row exists.</summary>
     private static readonly RandomizerOptions DefaultOptions =
         new(7, 14, 0.10m, 0.02m, 0.70m, 1, 1.10m, 3, 8, 90);
 
@@ -54,7 +54,7 @@ public sealed class CalendarRandomizer(
     };
 
     /// <summary>
-    /// Rerolls one date: fills a blank date or replaces any non-locked,
+    /// Rerolls one date: fills a blank date or replaces any non-locked
     /// non-vacation entry with a randomly selected Normal recipe.
     /// </summary>
     public async Task<CalendarRerollOutcome> RerollAsync(
@@ -68,8 +68,7 @@ public sealed class CalendarRandomizer(
             return PastDate();
         }
 
-        // Serialize concurrent mutations of the same date (docs/M6_PLAN.md
-        // §1.11): the transaction-scoped advisory lock is released on
+        // Serialize concurrent mutations of the same date: the transaction-scoped advisory lock is released on
         // commit/rollback, so a second concurrent reroll waits here and then
         // re-reads the committed entry instead of racing it (blank-date
         // double-insert, lost updates).
@@ -210,7 +209,7 @@ public sealed class CalendarRandomizer(
             beforeJson = CalendarService.SnapshotJson(entry);
         }
 
-        // The replacement resets entry metadata (docs/M6_PLAN.md §1.11).
+        // The replacement resets entry metadata.
         entry.EntryType = CalendarEntryType.Recipe;
         entry.RecipeId = recipe.Id;
         entry.IsLocked = false;
@@ -279,7 +278,7 @@ public sealed class CalendarRandomizer(
 
     /// <summary>
     /// Serializes the score breakdown to the documented snake_case shape
-    /// (docs/M6_PLAN.md §2.3), including <c>"kind":"reroll"</c>.
+    /// including <c>"kind":"reroll"</c>.
     /// </summary>
     public static string SerializeMetadata(RandomizerMetadata metadata) =>
         JsonSerializer.Serialize(
@@ -330,7 +329,7 @@ public sealed class CalendarRandomizer(
 
     /// <summary>
     /// True when a history row's <c>metadata_json</c> is a reroll document
-    /// (<c>{"kind":"reroll",…}</c>, docs/M6_PLAN.md §2.3). Missing or malformed
+    /// Missing or malformed
     /// metadata is not an undoable reroll.
     /// </summary>
     private static bool IsRerollMetadata(string? metadataJson)
@@ -390,7 +389,7 @@ public sealed class CalendarRandomizer(
     }
 
     /// <summary>
-    /// Undoes one reroll operation (docs/M6_PLAN.md §1.13): restores the exact
+    /// Undoes one reroll operation: restores the exact
     /// pre-reroll state (the prior entry, or blank if the date was empty) and
     /// stages exactly one history row. A missing, non-reroll, or already-undone
     /// operation fails <c>UNDO_EXPIRED</c>; a later change to the date fails
@@ -423,8 +422,7 @@ public sealed class CalendarRandomizer(
             return UndoPastDate();
         }
 
-        // Serialize concurrent mutations of the same date (docs/M6_PLAN.md
-        // §1.11): the transaction-scoped advisory lock is released on
+        // Serialize concurrent mutations of the same date: the transaction-scoped advisory lock is released on
         // commit/rollback, so a concurrent second undo re-checks "already
         // undone" after the first commits instead of double-applying.
         await using var transaction = await dbContext.Database
@@ -527,7 +525,7 @@ public sealed class CalendarRandomizer(
     }
 
     /// <summary>
-    /// Serializes undo metadata in the documented snake_case shape:
+    /// Serializes undo metadata in the documented snake_case shape
     /// <c>{"kind":"undo","undone_operation_id":"..."}</c>.
     /// </summary>
     public static string SerializeUndoMetadata(Guid undoneOperationId) =>
@@ -593,10 +591,10 @@ public sealed class CalendarRandomizer(
     private static bool ReadBool(JsonElement root, string name) =>
         root.TryGetProperty(name, out var element) && element.ValueKind == JsonValueKind.True;
 
-    /// <summary>Snake_case serialization shape for undo metadata (docs/M6_PLAN.md §2.3).</summary>
+    /// <summary>Snake_case serialization shape for undo metadata.</summary>
     private sealed record UndoMetadataDocument(string Kind, Guid UndoneOperationId);
 
-    /// <summary>Snake_case serialization shape for <c>metadata_json</c> (docs/M6_PLAN.md §2.3).</summary>
+    /// <summary>Snake_case serialization shape for <c>metadata_json</c>.</summary>
     private sealed record RerollMetadataDocument(
         string Kind,
         int CandidateCount,

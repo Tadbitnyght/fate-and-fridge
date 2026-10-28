@@ -5,7 +5,7 @@ namespace FateAndFridge.Api.Services;
 
 /// <summary>
 /// One recipe ingredient line supplied to <see cref="GroceryAggregationService"/>
-/// (docs/M8_PLAN.md §1.4, §2.1). The caller resolves aliases to the canonical
+/// The caller resolves aliases to the canonical
 /// <paramref name="IngredientId"/> first; aggregation never sees aliases. There is
 /// deliberately no preparation-note field: a note can therefore never influence
 /// identity or math, and any representative note shown for a combined line is a
@@ -28,16 +28,16 @@ public sealed record GroceryIngredientInput(
     DateOnly MealDate);
 
 /// <summary>
-/// One contributing calendar meal for a recipe-derived line (docs/M8_PLAN.md §1.6).
+/// One contributing calendar meal for a recipe-derived line.
 /// Identical <c>(RecipeId, MealDate)</c> pairs are deduplicated, so a recipe that
 /// lists the same ingredient twice still contributes once per meal.
 /// </summary>
 public sealed record GroceryItemSource(long RecipeId, string RecipeName, DateOnly MealDate);
 
 /// <summary>
-/// One aggregated grocery line (docs/M8_PLAN.md §1.4–§1.6, §2.1). The
+/// One aggregated grocery line. The
 /// <see cref="IdentityHash"/> is the shared
-/// <see cref="GroceryItemIdentity"/> value the check API (M8-06) keys on.
+/// <see cref="GroceryItemIdentity"/> value the check API keys on.
 /// <see cref="Quantity"/> and <see cref="UnitSymbol"/> expose the numeric value
 /// and display unit; <see cref="QuantityText"/> is the ready-to-render text
 /// (exact common fraction, else up to two decimals, else empty for a
@@ -55,7 +55,7 @@ public sealed record GroceryAggregatedItem(
 
 /// <summary>
 /// Pure, stateless grocery aggregation over supplied recipe ingredients
-/// (docs/M8_PLAN.md §1.4–§1.6, §2.1; docs/PRODUCT_SPEC.md §20–§22). It performs
+/// It performs
 /// no database access and no I/O: callers project calendar/recipe/unit rows into
 /// <see cref="GroceryIngredientInput"/> and receive aggregated lines. The only
 /// dependency is the pure <see cref="UnitConversionService"/>, so the application
@@ -89,8 +89,8 @@ public sealed record GroceryAggregatedItem(
 /// the main line.
 /// </para>
 /// <para>
-/// Quantity handling (docs/M8_PLAN.md §1.4): a contribution carrying an explicit
-/// numeric quantity of zero or less contributes nothing at all — no arithmetic,
+/// Quantity handling: a contribution carrying an explicit
+/// numeric quantity of zero or less contributes nothing at all — no arithmetic
 /// no line, and no attribution row — because recipe/import validation permits a
 /// literal zero. A quantity-less (null) contribution is different: it always
 /// keeps its place, joining the shared line or, for an incompatible unit, its own
@@ -110,9 +110,9 @@ public sealed record GroceryAggregatedItem(
 /// overflow split is a never-guessed-at representation of an extreme input.
 /// </para>
 /// <para>
-/// Output is deterministic: items are ordered by ingredient name, then identity,
+/// Output is deterministic: items are ordered by ingredient name, then identity
 /// then display unit; attribution rows are chronological, then by recipe id.
-/// Final department/checked ordering belongs to the list service (M8-03).
+/// Final department/checked ordering belongs to the list service.
 /// </para>
 /// </remarks>
 public sealed class GroceryAggregationService
@@ -232,7 +232,7 @@ public sealed class GroceryAggregationService
             if (!main.TryAdd(input, value))
             {
                 // A running total that overflows decimal is split onto its own line
-                // rather than throwing (docs/M8_PLAN.md §1.4).
+                // rather than throwing.
                 overflowLines.Add(SingletonBucket(unit, input, value));
             }
         }
@@ -488,7 +488,7 @@ public sealed class GroceryAggregationService
 
     /// <summary>
     /// Renders a quantity as the ready-to-display grocery text using the same
-    /// fraction/decimal rule as aggregation (docs/M8_PLAN.md §1.5), so manual
+    /// fraction/decimal rule as aggregation, so manual
     /// lines and recipe-derived lines render identically. Returns an empty string
     /// for a quantity-less line.
     /// </summary>
@@ -497,10 +497,10 @@ public sealed class GroceryAggregationService
 
     /// <summary>
     /// Renders a quantity as the nearest common cooking fraction when the value is
-    /// exact within a small tolerance (0.5 → "1/2", 1.5 → "1 1/2", 2.25 → "2 1/4",
+    /// exact within a small tolerance (0.5 → "1/2", 1.5 → "1 1/2", 2.25 → "2 1/4"
     /// docs/PRODUCT_SPEC.md §37), otherwise as a decimal with up to two places
     /// (1.234 → "1.23", 0.3 → "0.3"). The two-decimal cap is the plan's grocery
-    /// display rule (docs/M8_PLAN.md §1.5); it intentionally differs from the
+    /// display rule; it intentionally differs from the
     /// frontend <c>formatQuantity</c> helper, which rounds to six decimals.
     /// </summary>
     private static string FormatQuantity(decimal value)

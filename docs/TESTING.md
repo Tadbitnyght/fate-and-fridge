@@ -201,7 +201,7 @@ Two-device behaviour is covered at three levels:
   real `HubConnection`s over the in-process TestServer (LongPolling) and assert
   every broadcast type reaches both clients (the originator included) and that
   revocation closes only the target session. Run:
-  `$ARTIFACTS -class "*M9LiveSync*" -class "*M9SessionRevocation*"`.
+  `$ARTIFACTS -class "*LiveSyncHubTests*" -class "*LiveSyncEventMatrixTests*"`.
 - **Hermetic frontend** — `frontend/e2e/live-sync.spec.ts` stubs the socket with
   Playwright's `page.routeWebSocket` (no backend) and asserts an inbound
   `groceries.updated` frame refetches the list, the status indicator shows

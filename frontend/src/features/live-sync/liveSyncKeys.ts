@@ -10,27 +10,23 @@ import { recipesQueryKey } from '../recipes/useRecipes'
 import { statisticsQueryKey } from '../statistics/useStatistics'
 
 /**
- * Live-sync event → query-key invalidation mapping (docs/M9_PLAN.md §2.3,
- * docs/ARCHITECTURE.md §17). The hub envelope is coarse: a client only
+ * Live-sync event → query-key invalidation mapping. The hub envelope is coarse: a client only
  * invalidates/refetches, it never applies an entity body. This module is the
  * single place that knows which queries an event affects, so no component
  * talks to the socket and no view duplicates server state from events.
- *
- * | Event                   | Invalidated query keys                       |
+ * | Event | Invalidated query keys |
  * |-------------------------|----------------------------------------------|
- * | `calendar.updated`      | calendar, operations, dashboard, statistics   |
- * | `calendar.lock_changed` | calendar, operations                          |
- * | `groceries.updated`     | groceries (list + staples)                    |
- * | `recipe.updated`        | recipes, groceries, calendar, statistics      |
- * | `settings.updated`      | settings, reference-data, groceries, recipes  |
- * | `session.revoked`       | force sign-out (handled by the provider)      |
- *
+ * | `calendar.updated` | calendar, operations, dashboard, statistics |
+ * | `calendar.lock_changed` | calendar, operations |
+ * | `groceries.updated` | groceries (list + staples) |
+ * | `recipe.updated` | recipes, groceries, calendar, statistics |
+ * | `settings.updated` | settings, reference-data, groceries, recipes |
+ * | `session.revoked` | force sign-out (handled by the provider) |
  * Statistics (overview + meal history) are on-demand reads derived from
- * calendar entries and recipes, so both events invalidate them (docs/M11_PLAN.md
- * §1.14).
+ * calendar entries and recipes, so both events invalidate them.
  */
 
-/** The six stable envelope types (docs/M9_PLAN.md §1.5). */
+/** The six stable envelope types. */
 export const liveSyncEventType = {
   calendarUpdated: 'calendar.updated',
   calendarLockChanged: 'calendar.lock_changed',
@@ -43,7 +39,7 @@ export const liveSyncEventType = {
 export type LiveSyncEventType = (typeof liveSyncEventType)[keyof typeof liveSyncEventType]
 
 /**
- * Coarse, stable envelope (docs/M9_PLAN.md §1.6). Only `type` is required;
+ * Coarse, stable envelope. Only `type` is required
  * the rest are nullable as applicable.
  */
 export interface LiveSyncEvent {
@@ -115,7 +111,7 @@ export async function invalidateForEvent(
 
 /**
  * Every distinct key across the whole mapping. Used for the full invalidation
- * pass on each (re)connect (docs/M9_PLAN.md §1.8), so anything missed while
+ * pass on each (re)connect, so anything missed while
  * offline is reconciled.
  */
 export const liveSyncInvalidationKeys: readonly QueryKey[] = [

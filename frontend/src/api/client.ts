@@ -75,7 +75,7 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
 
 /**
  * Multipart upload against `/api/v1` with the same credentials and CSRF echo
- * as {@link apiRequest}. Used for recipe image uploads (docs/API.md §23):
+ * as {@link apiRequest}. Used for recipe image uploads (docs/API.md §23)
  * `Content-Type` is intentionally left for the browser to set with the
  * multipart boundary.
  */
@@ -152,7 +152,7 @@ export interface DownloadedFile {
   filename: string
 }
 
-/** Optional shape for downloads that need a guarded POST (M13-07 export). */
+/** Optional shape for downloads that need a guarded POST (export). */
 export interface ApiDownloadOptions {
   method?: 'GET' | 'POST'
   body?: unknown
@@ -165,7 +165,6 @@ export interface ApiDownloadOptions {
  * envelope, so failures surface as an {@link ApiError} rather than a broken
  * download; the filename comes from `Content-Disposition` when present and
  * otherwise falls back to the caller's suggestion.
- *
  * `options` is optional; existing GET callers keep the original behaviour. A
  * guarded export (for example the recovery key) passes `method: 'POST'` and a
  * JSON body, and gets the same CSRF echo as every other unsafe request.

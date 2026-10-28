@@ -16,19 +16,17 @@ import { HistoricalCorrectionDialog } from '../calendar/HistoricalCorrectionDial
 import { useMealHistory } from './useStatistics'
 
 /**
- * Meal-history browser (M11-05, docs/M11_PLAN.md §1.8, §1.22, §1.25, §1.26,
- * docs/API.md §14): the read-only meal log, one month per page.
- *
+ * Meal-history browser: the read-only meal log, one month per page.
  * Every filter and month step is server-side — the component only builds the
  * query and renders what comes back, so paging stays stable and no household
  * date is ever reinterpreted client-side. Past dates are immutable in normal
- * use; the M12-07 admin correction flow is the only write reachable from here,
+ * use; the admin correction flow is the only write reachable from here
  * and its affordance is hidden from members (the server is the authority).
  */
 export function MealHistoryBrowser(): JSX.Element {
   const { canEditRecipes } = useStatisticsAccess()
   const { isAdmin } = useAdminAccess()
-  // Applied filter state (server-side) plus the unapplied recipe text input,
+  // Applied filter state (server-side) plus the unapplied recipe text input
   // mirroring the recipes browser: a select applies at once, free text on submit.
   const [entryType, setEntryType] = useState<'' | CalendarEntryType>('')
   const [proteinId, setProteinId] = useState('')
@@ -227,7 +225,7 @@ export function MealHistoryBrowser(): JSX.Element {
  * the reference is live **and** the caller may edit (`recipes.edit`); a
  * view-only member — and a tombstone — sees the same name as plain text, since
  * the edit page refuses a view-only member (issue #148). An Admin additionally
- * gets the M12-07 "Correct" affordance; members never see it (the server is the
+ * gets the "Correct" affordance; members never see it (the server is the
  * authority).
  */
 function HistoryDayRow({

@@ -3,7 +3,7 @@ namespace FateAndFridge.Api.Domain;
 /// <summary>
 /// Alternate spelling for a unit. Uniqueness is per unit, not global: the
 /// authoritative seed contains both "t" (teaspoon) and "T" (tablespoon), which
-/// normalize to the same alias text (docs/M2_PLAN.md §2).
+/// normalize to the same alias text.
 /// </summary>
 public sealed class UnitAlias
 {

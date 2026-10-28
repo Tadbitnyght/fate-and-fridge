@@ -19,10 +19,10 @@ public sealed record BackupManifestEntry
 }
 
 /// <summary>
-/// The authenticated <c>manifest.json</c> payload (docs/M13_PLAN.md §1.4).
+/// The authenticated <c>manifest.json</c> payload.
 /// When passed to <see cref="BackupArchiveWriter.WriteAsync(Stream, ReadOnlyMemory{byte}, BackupManifest, CancellationToken)"/>
 /// only <see cref="AppVersion"/>, <see cref="SchemaVersion"/>, and
-/// <see cref="CreatedAt"/> are used; the writer computes the entries, counts,
+/// <see cref="CreatedAt"/> are used; the writer computes the entries, counts
 /// and totals from the entries actually added.
 /// </summary>
 public sealed record BackupManifest

@@ -25,7 +25,7 @@ export interface PickerOption {
 }
 
 /**
- * Import-only resolution metadata for a row (M4-09/M4-10). `IngredientFields`
+ * Import-only resolution metadata for a row. `IngredientFields`
  * stays reusable for the normal recipe form, so every unknown-ingredient/unit
  * affordance is opt-in through {@link IngredientFieldsProps.unknownByRowKey}.
  */
@@ -34,7 +34,7 @@ export interface UnknownIngredientInfo {
   raw: string
   /** Parsed canonical-name text, offered as the default create name. */
   name: string
-  /** Draft suggestions the reviewer can map the line to in one tap. */
+  /** Draft suggestions the user can map the line to in one tap. */
   suggestions: PickerOption[]
   /** Unrecognized unit on the line, or `null` when the unit resolved. */
   unit: UnknownUnitInfo | null
@@ -42,8 +42,8 @@ export interface UnknownIngredientInfo {
 
 /**
  * Import-only resolution metadata for a raw unit the parser could not match
- * (M4-10). The suggested dimension is present only when the parser could infer
- * it; otherwise the reviewer must pick one. Package-size conversion is never
+ *The suggested dimension is present only when the parser could infer
+ * it; otherwise the user must pick one. Package-size conversion is never
  * guessed.
  */
 export interface UnknownUnitInfo {
@@ -51,7 +51,7 @@ export interface UnknownUnitInfo {
   raw: string
   /** Suggested dimension when obvious, otherwise `null`. */
   suggestedDimension: 'mass' | 'volume' | 'count' | null
-  /** Existing units the reviewer can map to in one tap. */
+  /** Existing units the user can map to in one tap. */
   suggestions: PickerOption[]
 }
 
@@ -67,8 +67,8 @@ export interface IngredientCreateControls {
 }
 
 /**
- * Inline "create unit" wiring (M4-10), only supplied when the actor holds
- * `reference_data.edit`. The chosen dimension is always explicit: the reviewer
+ * Inline "create unit" wiring, only supplied when the actor holds
+ * `reference_data.edit`. The chosen dimension is always explicit: the user
  * selects it (defaulting to the parser's suggestion when there was one) and
  * supplies a base factor for mass/volume units rather than having one guessed.
  */
@@ -121,7 +121,7 @@ function replaceAt<T>(items: T[], index: number, value: T): T[] {
 }
 
 /**
- * Permission-gated inline ingredient creation (M4-09). Only rendered when the
+ * Permission-gated inline ingredient creation. Only rendered when the
  * draft reports `capabilities.can_create_reference_data`; the call itself is
  * still authorised server-side by the M2 `POST /ingredients` endpoint.
  */
@@ -196,9 +196,9 @@ function CreateIngredientInline({
 }
 
 /**
- * Permission-gated inline unit creation (M4-10). The dimension is never
+ * Permission-gated inline unit creation. The dimension is never
  * inferred from packaging: it defaults to the parser's suggestion when one
- * exists, otherwise the reviewer must pick, and mass/volume units additionally
+ * exists, otherwise the user must pick, and mass/volume units additionally
  * require an explicit base factor. A duplicate create maps the row to the
  * existing unit server-side (`UNIT_EXISTS` with `details.existing_id`).
  */
@@ -383,7 +383,7 @@ function IngredientRowEditor({
   // reference; mapping it via the select, a suggestion, or inline creation
   // sets `ingredientId` and clears the state.
   const needsIngredient = unknown !== undefined && row.ingredientId === ''
-  // A genuinely unrecognized raw unit (M4-10) blocks saving until the reviewer
+  // A genuinely unrecognized raw unit blocks saving until the user
   // maps or creates a unit. Blank units (including a `raw: null` absent unit
   // from the server) and already-resolved units do not.
   const unknownUnit =
@@ -686,7 +686,7 @@ function IngredientRowList({
 }
 
 /**
- * Ungrouped ingredients plus optional ordered ingredient groups (M3-10). Every
+ * Ungrouped ingredients plus optional ordered ingredient groups. Every
  * picker selects an existing reference — no free-text creation (M3 §1.20).
  */
 export function IngredientFields({
@@ -708,7 +708,7 @@ export function IngredientFields({
   ingredientOptions: PickerOption[]
   unitOptions: PickerOption[]
   errors: FieldErrors
-  /** Import-only unknown-line resolution metadata (M4-09/M4-10). */
+  /** Import-only unknown-line resolution metadata. */
   unknownByRowKey?: RowUnknownByKey
   /** Import-only ingredient inline-create wiring, absent when not permitted. */
   createControls?: IngredientCreateControls

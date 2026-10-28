@@ -11,7 +11,7 @@ public enum ImportFetchKind
 }
 
 /// <summary>
-/// Structured failure reason for an import fetch (docs/M4_PLAN.md §1.13).
+/// Structured failure reason for an import fetch.
 /// <see cref="None"/> means success.
 /// </summary>
 public enum ImportFetchFailureReason
@@ -44,7 +44,7 @@ public enum ImportFetchFailureReason
 }
 
 /// <summary>
-/// Result of a validated fetch. On success <see cref="Content"/>, <see cref="FinalUrl"/>,
+/// Result of a validated fetch. On success <see cref="Content"/>, <see cref="FinalUrl"/>
 /// <see cref="StatusCode"/>, and <see cref="ContentType"/> are set; on failure
 /// <see cref="FailureReason"/> is non-<see cref="ImportFetchFailureReason.None"/>.
 /// </summary>
@@ -97,7 +97,7 @@ public sealed record ImportFetchResult
 }
 
 /// <summary>
-/// SSRF-hardened outbound fetch used by recipe import (docs/M4_PLAN.md §2.1).
+/// SSRF-hardened outbound fetch used by recipe import.
 /// </summary>
 public interface IImportFetcher
 {

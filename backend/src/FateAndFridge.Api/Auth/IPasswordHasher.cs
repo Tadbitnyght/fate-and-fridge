@@ -1,7 +1,7 @@
 namespace FateAndFridge.Api.Auth;
 
 /// <summary>
-/// Hashes and verifies local user passwords (docs/SECURITY.md section 2,
+/// Hashes and verifies local user passwords (docs/SECURITY.md section 2
 /// docs/ARCHITECTURE.md section 5).
 /// </summary>
 /// <remarks>
@@ -29,7 +29,7 @@ public interface IPasswordHasher
     /// <summary>
     /// Reports whether a stored hash was created with different parameters
     /// than the current production baseline, so callers can rehash after a
-    /// successful login (M1-07). Malformed or non-canonical hash strings
+    /// successful login. Malformed or non-canonical hash strings
     /// (anything libsodium itself would not verify) return <c>true</c>
     /// without throwing.
     /// </summary>

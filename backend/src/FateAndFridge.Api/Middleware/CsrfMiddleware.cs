@@ -33,7 +33,7 @@ public sealed class CsrfMiddleware(RequestDelegate next)
 
     public async Task InvokeAsync(HttpContext context, IAntiforgery antiforgery)
     {
-        // M9-01: the live-sync hub is exempt from antiforgery validation. The
+        // The live-sync hub is exempt from antiforgery validation. The
         // SPA connects with skipNegotiation over WebSockets only, so the connect
         // request is a body-less, same-origin, cookie-authenticated upgrade with
         // no state-changing form to forge; the exemption also keeps a future

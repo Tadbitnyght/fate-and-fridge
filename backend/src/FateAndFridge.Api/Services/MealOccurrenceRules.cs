@@ -5,8 +5,8 @@ namespace FateAndFridge.Api.Services;
 
 /// <summary>
 /// The shared occurrence rules for the statistics and meal-history reads
-/// (docs/M11_PLAN.md §1.3, §1.4, §1.20). The household overview (M11-01), the
-/// per-recipe metrics (M11-02), and the meal-history browser (M11-03) all derive
+/// The household overview, the
+/// per-recipe metrics, and the meal-history browser all derive
 /// from these helpers so the "eaten vs planned" split and the
 /// recipe-occurrence eligibility can never drift.
 /// </summary>
@@ -17,7 +17,7 @@ namespace FateAndFridge.Api.Services;
 /// <c>IncludeGroceries &amp;&amp; RecipeId != null</c>
 /// (<see cref="GroceryListService"/> <c>BuildListAsync</c>) because it needs a
 /// live recipe to join its ingredient rows. Statistics must keep counting a meal
-/// after M12 hard-deletes its recipe (docs/M11_PLAN.md §1.5, §1.20), so the
+/// after M12 hard-deletes its recipe, so the
 /// occurrence predicate here is <see cref="CalendarEntry.IncludeGroceries"/>
 /// alone — the flag M5 derives on write from the entry type and any attached
 /// recipe — and the grouping identity falls back to the stored snapshot name
@@ -27,7 +27,7 @@ namespace FateAndFridge.Api.Services;
 /// <para>
 /// <b>Eaten vs planned.</b> An occurrence is eaten only when its
 /// household-local <see cref="CalendarEntry.MealDate"/> is strictly before the
-/// household's today (docs/M11_PLAN.md §1.3); today's dinner is not yet eaten.
+/// household's today; today's dinner is not yet eaten.
 /// The household today comes from <see cref="HouseholdClock"/>, never the server
 /// wall clock. Planned occurrences are today and later.
 /// </para>
@@ -36,7 +36,7 @@ internal static class MealOccurrenceRules
 {
     /// <summary>
     /// EF-translatable predicate for a recipe occurrence — an entry that carries
-    /// a recipe (docs/M11_PLAN.md §1.4).
+    /// a recipe.
     /// </summary>
     public static Expression<Func<CalendarEntry, bool>> IsRecipeOccurrence =>
         entry => entry.IncludeGroceries;
@@ -44,7 +44,6 @@ internal static class MealOccurrenceRules
     /// <summary>
     /// EF-translatable predicate for an eaten occurrence: strictly before the
     /// household-local <paramref name="householdToday"/>
-    /// (docs/M11_PLAN.md §1.3).
     /// </summary>
     public static Expression<Func<CalendarEntry, bool>> EatenBefore(DateOnly householdToday) =>
         entry => entry.MealDate < householdToday;
@@ -58,8 +57,8 @@ internal static class MealOccurrenceRules
 
     /// <summary>
     /// Stable grouping identity for an occurrence: the live recipe id when one
-    /// survives, otherwise the normalized stored snapshot name (a tombstone;
-    /// hard delete is M12). Returns null only when neither identity exists,
+    /// survives, otherwise the normalized stored snapshot name (a tombstone
+    /// hard delete is M12). Returns null only when neither identity exists
     /// which M5's write-time derivation makes unreachable.
     /// </summary>
     public static string? GroupKey(long? recipeId, string? snapshotRecipeName)
@@ -91,7 +90,7 @@ internal static class MealOccurrenceRules
     }
 
     /// <summary>
-    /// The display form of a snapshot name (caller case and diacritics kept,
+    /// The display form of a snapshot name (caller case and diacritics kept
     /// whitespace collapsed). Null when the snapshot is blank or unusable.
     /// </summary>
     public static string? SnapshotDisplayName(string? snapshotRecipeName)

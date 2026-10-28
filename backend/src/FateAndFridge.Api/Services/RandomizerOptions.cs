@@ -4,7 +4,7 @@ namespace FateAndFridge.Api.Services;
 
 /// <summary>
 /// Immutable projection of the household randomizer settings
-/// (docs/M6_PLAN.md §1.3). Scoring is pure: the caller reads the stored row once
+/// Scoring is pure: the caller reads the stored row once
 /// per operation and passes these values to <see cref="RandomizerEngine"/>.
 /// </summary>
 public sealed record RandomizerOptions(

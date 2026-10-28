@@ -6,14 +6,14 @@ using FateAndFridge.Api.Services;
 
 namespace FateAndFridge.Api.Endpoints;
 
-/// <summary>Batch undo response (docs/M7_PLAN.md §2.2): the operation handle plus the restored days.</summary>
+/// <summary>Batch undo response: the operation handle plus the restored days.</summary>
 public sealed record BatchUndoResponse(
     CalendarOperationResponse Operation,
     IReadOnlyList<CalendarDayResponse> Days,
     int RevertedCount);
 
 /// <summary>
-/// Operation routes (docs/M6_PLAN.md §2.2, docs/M7_PLAN.md §2.2): the temporary
+/// Operation routes: the temporary
 /// Undo for a single reroll and the batch undo for an M7 apply. Both are gated by
 /// <c>calendar.edit</c> and return the restored day document(s).
 /// </summary>

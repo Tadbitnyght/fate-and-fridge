@@ -4,8 +4,7 @@ using FluentAssertions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// Best-effort HTML/microdata fallback parser matrix (docs/M4_PLAN.md §1.5, §4;
-/// docs/PRODUCT_SPEC.md §28; docs/SECURITY.md §7–§8). All fixtures are inline;
+/// Best-effort HTML/microdata fallback parser matrix. All fixtures are inline
 /// no network or browser automation is involved.
 /// </summary>
 public sealed class HtmlFallbackParserTests

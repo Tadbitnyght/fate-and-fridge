@@ -12,8 +12,7 @@ import type { RecipeImage } from '../../api/recipes'
 import { recipesQueryKey } from '../recipes/useRecipes'
 
 /**
- * TanStack Query mutations for the M4 import flow (docs/M4_PLAN.md §2.3).
- *
+ * TanStack Query mutations for the M4 import flow.
  * Parsing/checking are stateless requests with no cache to invalidate. The
  * image-from-URL mutation invalidates the recipe prefix so a freshly downloaded
  * photo appears in lists and detail views.

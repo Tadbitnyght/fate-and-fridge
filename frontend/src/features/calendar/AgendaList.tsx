@@ -3,7 +3,7 @@ import { formatHouseholdWeekday } from '../../lib/dateFormat'
 import type { MonthGridDay } from './calendarDates'
 import { EventIcon } from './icons'
 
-/** Agenda (mobile) list of the visible month's days (M5-10). */
+/** Agenda (mobile) list of the visible month's days. */
 export function AgendaList({
   days,
   entriesByDate,

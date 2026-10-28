@@ -1,4 +1,4 @@
-/** Calendar date helpers (M5-09). Dates are household-local ISO `YYYY-MM-DD`. */
+/** Calendar date helpers. Dates are household-local ISO `YYYY-MM-DD`. */
 
 import { formatHouseholdDate } from '../../lib/dateFormat'
 
@@ -111,9 +111,8 @@ const WEEKDAY_NAMES_LONG = [
 
 /**
  * A spoken-friendly date for accessible names, e.g. `Thursday 1 October 2026`.
- *
  * The month grid renders the day-of-month as visible text, so the accessible
- * name has to contain that number as its own word (WCAG 2.1 SC 2.5.3,
+ * name has to contain that number as its own word (WCAG 2.1 SC 2.5.3
  * label-content-name-mismatch): the numeric `MM-DD-YY` form would not. This is
  * display-only and never parsed back into a date.
  */

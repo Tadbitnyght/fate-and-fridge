@@ -1,7 +1,7 @@
 namespace FateAndFridge.Api.LiveSync;
 
 /// <summary>
-/// Stable type names for live-sync events (docs/M9_PLAN.md §1.5/§2.2). The value
+/// Stable type names for live-sync events. The value
 /// is the single discriminator on the client's <c>event</c> handler, so adding
 /// an event type never requires a new client method.
 /// </summary>
@@ -28,7 +28,7 @@ public static class LiveSyncEventType
 
 /// <summary>
 /// The coarse, stable live-sync envelope broadcast over the SignalR <c>event</c>
-/// client method (docs/M9_PLAN.md §1.6/§2.2). Clients use <see cref="Type"/> as
+/// client method. Clients use <see cref="Type"/> as
 /// the discriminator and refetch; the envelope never carries entity bodies or
 /// diffs. It is serialized snake_case to match the rest of the internal API
 /// (docs/API.md §3).

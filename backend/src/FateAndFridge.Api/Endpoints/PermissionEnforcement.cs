@@ -24,7 +24,7 @@ public sealed record PermissionRequirement(
     string? PermissionKey = null);
 
 /// <summary>
-/// Endpoint-filter enforcement for permission-protected routes (M1-09).
+/// Endpoint-filter enforcement for permission-protected routes.
 /// Every attached <see cref="PermissionRequirement"/> is enforced with AND
 /// semantics in metadata order; the first failure wins.
 /// Unauthenticated requests receive <c>401 AUTH_REQUIRED</c> (with
@@ -104,7 +104,7 @@ public sealed class PermissionEndpointFilter(
 }
 
 /// <summary>
-/// Route-builder helpers that attach the M1-09 access requirement and the
+/// Route-builder helpers that attach the access requirement and the
 /// enforcing filter to an endpoint. Enforcement is server-side and independent
 /// of the frontend.
 /// </summary>

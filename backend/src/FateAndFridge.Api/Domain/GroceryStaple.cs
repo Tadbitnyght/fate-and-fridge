@@ -1,7 +1,7 @@
 namespace FateAndFridge.Api.Domain;
 
 /// <summary>
-/// Household-wide reusable grocery staple (docs/M8_PLAN.md §1.9, §2.3). A
+/// Household-wide reusable grocery staple. A
 /// staple is never added to the active list automatically; the user explicitly
 /// adds it to the current range, which creates a manual item. The optional
 /// <see cref="IngredientId"/>, <see cref="DepartmentId"/>, and

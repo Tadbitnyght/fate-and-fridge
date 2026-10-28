@@ -25,10 +25,9 @@ export interface DangerousActionValues {
 
 /**
  * Shared confirmation dialog for destructive/administrative actions
- * (docs/M12_PLAN.md §1.11): a reason, explicit warnings, an acknowledgement
+ * a reason, explicit warnings, an acknowledgement
  * checkbox, and an optional typed confirmation, all of which must be satisfied
  * before Confirm is enabled.
- *
  * The dialog is a convenience, never the authority: every caller's endpoint
  * must also run `DangerousActionGuard` (and enforce the Admin role) so a direct
  * API request without the dialog still fails. It builds on `Modal`, which owns

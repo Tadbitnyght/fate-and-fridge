@@ -9,7 +9,7 @@ import {
 } from '../../api/statistics'
 
 /**
- * Query-key prefix for every statistics read. M11-05's meal-history browser
+ * Query-key prefix for every statistics read. 's meal-history browser
  * adds siblings under it, so live-sync invalidation can target the whole
  * prefix.
  */
@@ -31,8 +31,8 @@ export function useStatisticsOverview(enabled = true) {
 
 /**
  * One month page of the read-only meal log (docs/API.md §14). The params object
- * is part of the key, so each filter/month combination caches separately;
- * `calendar.view` gates the read (docs/M11_PLAN.md §1.7).
+ * is part of the key, so each filter/month combination caches separately
+ * `calendar.view` gates the read.
  */
 export function useMealHistory(params: MealHistoryParams = {}, enabled = true) {
   return useQuery<MealHistoryResponse>({

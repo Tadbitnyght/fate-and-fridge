@@ -8,14 +8,14 @@ namespace FateAndFridge.Api.Auth;
 public sealed record ResolvedSession(UserSession Session, User User);
 
 /// <summary>
-/// Database-backed opaque session lifecycle (docs/SECURITY.md §2,
-/// docs/DATABASE.md §2): 30-day idle window, 90-day absolute cap, rotation,
+/// Database-backed opaque session lifecycle (docs/SECURITY.md §2
+/// docs/DATABASE.md §2): 30-day idle window, 90-day absolute cap, rotation
 /// and explicit revocation. Only a SHA-256 hash of the token is stored; the raw
 /// token exists only in transit and is never logged.
 /// </summary>
 public sealed class SessionService(AppDbContext dbContext, TimeProvider timeProvider)
 {
-    /// <summary>Sliding idle window (docs/MILESTONES.md M1 decisions).</summary>
+    /// <summary>Sliding idle window.</summary>
     public static readonly TimeSpan IdleTimeout = TimeSpan.FromDays(30);
 
     /// <summary>Hard session lifetime cap.</summary>
@@ -56,7 +56,7 @@ public sealed class SessionService(AppDbContext dbContext, TimeProvider timeProv
     }
 
     /// <summary>
-    /// Resolves a raw token to its session and user. Revoked, idle-expired,
+    /// Resolves a raw token to its session and user. Revoked, idle-expired
     /// absolute-expired, and inactive-user sessions resolve to null. Activity
     /// refreshes <c>last_seen_at</c>/<c>idle_expires_at</c> at most once per
     /// <see cref="TouchThrottle"/> so request traffic does not amplify writes.
@@ -172,7 +172,7 @@ public sealed class SessionService(AppDbContext dbContext, TimeProvider timeProv
     }
 
     /// <summary>
-    /// Revokes every active session of a user (password reset, disable,
+    /// Revokes every active session of a user (password reset, disable
     /// privilege change) and returns the number of sessions revoked.
     /// </summary>
     public async Task<int> RevokeAllForUserAsync(
@@ -195,7 +195,7 @@ public sealed class SessionService(AppDbContext dbContext, TimeProvider timeProv
     /// <summary>
     /// Revokes every active session of a user except <paramref name="exceptSessionId"/>
     /// (used by password change so the rotating session stays valid) and returns
-    /// the number of sessions revoked. M1-10 reuses this for privilege changes.
+    /// the number of sessions revoked. reuses this for privilege changes.
     /// </summary>
     public async Task<int> RevokeOthersForUserAsync(
         long userId,

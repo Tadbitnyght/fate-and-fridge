@@ -7,7 +7,7 @@ namespace FateAndFridge.Api.Imports;
 
 /// <summary>
 /// One active unit plus its aliases, as read from reference data for import
-/// matching (docs/M4_PLAN.md §1.11). Deliberately independent of EF Core so the
+/// matching. Deliberately independent of EF Core so the
 /// normalizer is testable without a database.
 /// </summary>
 /// <param name="Id">Unit primary key.</param>
@@ -24,7 +24,7 @@ public sealed record ImportUnitCandidate(
 
 /// <summary>
 /// Folded unit-text helpers shared by <see cref="IngredientLineParser"/> and
-/// <see cref="ImportNormalizer"/> (docs/M4_PLAN.md §1.11–§1.12). Folding uses
+/// <see cref="ImportNormalizer"/>. Folding uses
 /// <see cref="ReferenceDataNormalizer"/> (never <c>String.Normalize</c>) and
 /// additionally removes periods so <c>fl. oz.</c> and <c>Tbsp.</c> match their
 /// seeded symbols.
@@ -156,7 +156,7 @@ public static class ImportUnitText
 
 /// <summary>
 /// Deterministic quantity clamping and unit resolution for imported ingredients
-/// (docs/M4_PLAN.md §1.11–§1.12). Reads no database; a catalog of active units
+/// Reads no database; a catalog of active units
 /// is supplied by the caller.
 /// </summary>
 public sealed class ImportNormalizer
@@ -207,7 +207,7 @@ public sealed class ImportNormalizer
 
     /// <summary>
     /// Resolves raw unit text against the catalog. An exact, case-sensitive
-    /// match is tried first (so <c>T</c> → tablespoon and <c>t</c> → teaspoon);
+    /// match is tried first (so <c>T</c> → tablespoon and <c>t</c> → teaspoon)
     /// a folded key shared by multiple units stays <c>is_unknown = true</c>
     /// with the colliding units as suggestions rather than guessing. Unknown
     /// text reports a suggested dimension when obvious and up to
@@ -278,7 +278,7 @@ public sealed class ImportNormalizer
     }
 
     /// <summary>
-    /// Clamps a parsed quantity to the M3 bounds (<c>0 ≤ q ≤ 1,000,000</c>,
+    /// Clamps a parsed quantity to the M3 bounds (<c>0 ≤ q ≤ 1,000,000</c>
     /// at most <see cref="RecipeService.MaxQuantityScale"/> decimal places).
     /// </summary>
     public static decimal? ClampQuantity(decimal? quantity)

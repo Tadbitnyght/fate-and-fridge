@@ -18,7 +18,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// HTTP-level verification of M2-10 proteins and tags (docs/API.md §22,
+/// HTTP-level verification of proteins and tags (docs/API.md §22
 /// docs/DATABASE.md §7): CRUD, normalized-name conflicts with
 /// <c>existing_id</c>, search/limit/autocomplete behavior, protein retire
 /// idempotence, tags without a retire concept, Admin-only hard deletes through
@@ -27,8 +27,8 @@ namespace FateAndFridge.Api.Tests;
 /// <c>dotnet test --filter "Category!=Integration"</c> to skip locally.
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class ProteinTagEndpointsIntegrationTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class ProteinTagEndpointsIntegrationTests(SetupFixture fixture) : IAsyncLifetime
 {
     private const string ProteinsPath = "/api/v1/proteins";
     private const string TagsPath = "/api/v1/tags";
@@ -868,7 +868,7 @@ public sealed class ProteinTagEndpointsIntegrationTests(M1SetupFixture fixture) 
         SendJsonAsync(session.Client, HttpMethod.Delete, path, json: null, session.CsrfToken, cancellationToken);
 
     /// <summary>
-    /// Boots the host (which runs the M2-04 startup seeder), then clears
+    /// Boots the host (which runs the startup seeder), then clears
     /// proteins and tags so each test controls its own reference data. Pass a
     /// counting <see cref="IReferenceUsageChecker"/> fake to exercise the
     /// delete-usage seam; the default registration returns zero for every
@@ -981,7 +981,7 @@ public sealed class ProteinTagEndpointsIntegrationTests(M1SetupFixture fixture) 
     {
         await using var context = fixture.CreateContext();
 
-        // M12-01 mirrors login/logout into audit_events; these suites assert the
+        // Mirrors login/logout into audit_events; these suites assert the
         // reference-data/recipe rows they themselves write, so the auth mirror is
         // excluded here.
         return await context.AuditEvents.AsNoTracking()

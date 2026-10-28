@@ -6,7 +6,7 @@ namespace FateAndFridge.Api.LiveSync;
 /// </summary>
 public static class LiveSyncPaths
 {
-    /// <summary>The hub route (docs/M9_PLAN.md §1.2), mapped before the SPA fallback.</summary>
+    /// <summary>The hub route, mapped before the SPA fallback.</summary>
     public const string HubPath = "/hub/live";
 
     private static readonly PathString Hub = new(HubPath);

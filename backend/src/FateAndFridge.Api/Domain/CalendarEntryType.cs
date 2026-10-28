@@ -1,7 +1,7 @@
 namespace FateAndFridge.Api.Domain;
 
 /// <summary>
-/// The meal/special-event type of a calendar entry (docs/DATABASE.md §8,
+/// The meal/special-event type of a calendar entry (docs/DATABASE.md §8
 /// docs/PRODUCT_SPEC.md §7). Stored as the stable snake_case text below.
 /// </summary>
 public enum CalendarEntryType

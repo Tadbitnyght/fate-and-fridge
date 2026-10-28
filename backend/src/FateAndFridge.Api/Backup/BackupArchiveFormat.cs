@@ -5,7 +5,6 @@ namespace FateAndFridge.Api.Backup;
 
 /// <summary>
 /// Constants and key-derivation rules for the <c>.ffbackup</c> archive format
-/// (docs/M13_PLAN.md §1.4, docs/SECURITY.md §11).
 /// </summary>
 /// <remarks>
 /// <para>Wire layout (all integers big-endian):</para>
@@ -13,15 +12,15 @@ namespace FateAndFridge.Api.Backup;
 /// <item>48-byte cleartext header:</item>
 /// </list>
 /// <code>
-/// offset  size  field
-///      0     4  magic "FFBK"
-///      4     2  format_version (1)
-///      6     1  kdf_id (1 = HKDF-SHA256)
-///      7     1  reserved (0; a non-zero value is a future-format guard)
-///      8    16  salt (CSPRNG)
-///     24     4  chunk_size in bytes (64 KiB..8 MiB)
-///     28     4  nonce_prefix (CSPRNG; first 4 bytes of every record nonce)
-///     32    16  key_check (HMAC-SHA256 tag, see <see cref="ComputeKeyCheck"/>)
+/// offset size field
+/// 0 4 magic "FFBK"
+/// 4 2 format_version (1)
+/// 6 1 kdf_id (1 = HKDF-SHA256)
+/// 7 1 reserved (0; a non-zero value is a future-format guard)
+/// 8 16 salt (CSPRNG)
+/// 24 4 chunk_size in bytes (64 KiB..8 MiB)
+/// 28 4 nonce_prefix (CSPRNG; first 4 bytes of every record nonce)
+/// 32 16 key_check (HMAC-SHA256 tag, see <see cref="ComputeKeyCheck"/>)
 /// </code>
 /// <para>
 /// The key-check tag is derived with the header salt and a distinct HKDF info

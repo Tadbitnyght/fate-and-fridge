@@ -13,7 +13,6 @@ interface QuickLink {
  * Product dashboard (docs/PRODUCT_SPEC.md §5): the household's starting points
  * for the three questions the app answers — what's for dinner, what's coming
  * up, and what do we need from the store.
- *
  * The links are static, so this page reads nothing of its own beyond the
  * system-status panel that was already here.
  */

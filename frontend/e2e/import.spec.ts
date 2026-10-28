@@ -29,15 +29,15 @@ interface ImportDraftOptions {
   candidates?: number
   /** Include an unmatched "salt" line that must be resolved in review. */
   unknownIngredient?: boolean
-  /** Give the matched flour line an unrecognized unit ("pkg") (M4-10). */
+  /** Give the matched flour line an unrecognized unit ("pkg"). */
   unknownUnit?: boolean
   /** Report that the actor may create reference data inline. */
   canCreateReferenceData?: boolean
-  /** Report that the page's exact normalized source URL already exists (M4-11). */
+  /** Report that the page's exact normalized source URL already exists. */
   sourceUrlMatch?: boolean
-  /** Similar-name candidates on the parsed draft (M4-12). */
+  /** Similar-name candidates on the parsed draft. */
   nameMatches?: Array<{ id: number; name: string }>
-  /** Similar-name candidates returned by the rename recheck (M4-12). */
+  /** Similar-name candidates returned by the rename recheck. */
   checkNameMatches?: Array<{ id: number; name: string }>
 }
 

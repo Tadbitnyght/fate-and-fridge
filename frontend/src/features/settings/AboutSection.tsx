@@ -10,10 +10,9 @@ import { useAbout } from './useAbout'
 import { useCheckForUpdates, useSetUpdateChecksEnabled, useUpdates } from './useUpdates'
 
 /**
- * Settings → About (docs/M13_PLAN.md §1.12–§1.14; docs/API.md §24, §25).
+ * Settings → About.
  * Visible to every authenticated actor — there is no Admin gate and no
  * permission key for reading the versions or the update status.
- *
  * The update status read is shared with the shell notice. **Check now** is
  * shown to everyone because the server decides who may force a check: a member
  * gets the server's `403` and this section renders it readably. The

@@ -141,7 +141,7 @@ function IngredientAliasEditor({
 }
 
 /**
- * Ingredients tab (docs/API.md §22): canonical names, grocery departments,
+ * Ingredients tab (docs/API.md §22): canonical names, grocery departments
  * aliases, retire/delete, and the merge workflow. Reads are open to every
  * authenticated actor; writes need `reference_data.edit` and hard delete is
  * Admin-only — the server enforces all of it.

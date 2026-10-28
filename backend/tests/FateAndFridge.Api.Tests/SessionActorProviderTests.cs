@@ -7,7 +7,7 @@ using FluentAssertions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// The session-principal → actor mapping (M1-06 / M9-01). The mapping must
+/// The session-principal → actor mapping. The mapping must
 /// trust only the session authentication scheme, exactly like
 /// <c>CsrfMiddleware.IsSessionAuthenticated</c> and
 /// <c>MustChangePasswordMiddleware.HasForcedChange</c>, so a principal

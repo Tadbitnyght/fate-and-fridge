@@ -16,7 +16,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// M1-15 request-shape hardening (issue #19): JSON body size cap and
+/// Request-shape hardening (issue #19): JSON body size cap and
 /// Content-Type policy, plus the last-resort 500 envelope.
 /// </summary>
 public sealed class JsonBodyReaderTests
@@ -105,8 +105,8 @@ public sealed class JsonBodyReaderTests
 }
 
 /// <summary>HTTP-pipeline coverage for the request-shape and 500 envelope items.</summary>
-[Collection(M1SetupCollection.Name)]
-public sealed class RequestShapeIntegrationTests(M1SetupFixture fixture)
+[Collection(SetupCollection.Name)]
+public sealed class RequestShapeIntegrationTests(SetupFixture fixture)
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 

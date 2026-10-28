@@ -33,7 +33,7 @@ export const ErrorCodes = {
   TagInUse: 'TAG_IN_USE',
   // M3 recipe codes (docs/API.md §23).
   RecipeExists: 'RECIPE_EXISTS',
-  // M4 import codes (docs/API.md §15). Consumption lands with the M4-08 review screen.
+  // M4 import codes (docs/API.md §15). Consumption lands with the review screen.
   ImportUrlInvalid: 'IMPORT_URL_INVALID',
   ImportUrlBlocked: 'IMPORT_URL_BLOCKED',
   ImportFetchFailed: 'IMPORT_FETCH_FAILED',
@@ -41,16 +41,16 @@ export const ErrorCodes = {
   ImportTooLarge: 'IMPORT_TOO_LARGE',
   ImportNoRecipe: 'IMPORT_NO_RECIPE',
   ImportRateLimited: 'IMPORT_RATE_LIMITED',
-  // M5 calendar codes (docs/M5_PLAN.md §1.12).
+  // M5 calendar codes.
   CalendarDateInPast: 'CALENDAR_DATE_IN_PAST',
   CalendarBlankCannotLock: 'CALENDAR_BLANK_CANNOT_LOCK',
   CalendarEntryLocked: 'CALENDAR_ENTRY_LOCKED',
   CalendarRecipeRequired: 'CALENDAR_RECIPE_REQUIRED',
   CalendarMiscLabelRequired: 'CALENDAR_MISC_LABEL_REQUIRED',
-  // M12-06 historical-correction codes (docs/API.md §7, §17).
+  // Historical-correction codes (docs/API.md §7, §17).
   CalendarDateNotPast: 'CALENDAR_DATE_NOT_PAST',
   CalendarDateLocked: 'CALENDAR_DATE_LOCKED',
-  // M12-05/M12-11 dangerous-action guard codes (docs/API.md §4).
+  // Dangerous-action guard codes (docs/API.md §4).
   ReasonRequired: 'REASON_REQUIRED',
   ReasonTooLong: 'REASON_TOO_LONG',
   ReasonInvalid: 'REASON_INVALID',

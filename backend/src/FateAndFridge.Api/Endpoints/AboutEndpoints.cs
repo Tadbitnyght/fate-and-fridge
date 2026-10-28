@@ -4,20 +4,19 @@ using Microsoft.EntityFrameworkCore;
 namespace FateAndFridge.Api.Endpoints;
 
 /// <summary>
-/// The authenticated About payload (docs/M13_PLAN.md §1.12, §2.2;
-/// docs/API.md §24): the application version and the last applied EF Core
+/// The authenticated About payload: the application version and the last applied EF Core
 /// migration id.
 /// </summary>
 /// <remarks>
 /// <c>schema_version</c> is the last <em>applied</em> migration. When the
-/// database cannot be read it is <c>null</c> rather than a fabricated value,
+/// database cannot be read it is <c>null</c> rather than a fabricated value
 /// and the route still answers <c>200</c>: a version display must never make
 /// the app look broken.
 /// </remarks>
 public sealed record AboutResponse(string AppVersion, string? SchemaVersion);
 
 /// <summary>
-/// Version display route (M13-08). Any authenticated actor may read it — the
+/// Version display route. Any authenticated actor may read it — the
 /// single-user system actor and members included — so the shell footer and the
 /// About section work for everyone. Health (<c>/api/v1/health</c>) keeps its
 /// existing unauthenticated contract.

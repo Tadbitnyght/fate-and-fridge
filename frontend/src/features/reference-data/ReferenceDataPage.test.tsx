@@ -101,7 +101,7 @@ describe('reference data shell', () => {
     expect(await screen.findByRole('heading', { name: 'Units' })).toBeInTheDocument()
     const table = await screen.findByRole('table', { name: 'Units of measure' })
     expect(within(table).getByRole('rowheader', { name: 'g' })).toBeInTheDocument()
-    expect(screen.queryByText(/coming in this milestone/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/coming soon|coming in this/i)).not.toBeInTheDocument()
     expect(screen.getByRole('navigation', { name: 'Reference data sections' })).toBeInTheDocument()
   })
 
@@ -118,7 +118,7 @@ describe('reference data shell', () => {
     expect(await screen.findByRole('heading', { name: 'Ingredients' })).toBeInTheDocument()
     const table = await screen.findByRole('table', { name: 'Ingredients' })
     expect(within(table).getByRole('rowheader', { name: 'Tomato' })).toBeInTheDocument()
-    expect(screen.queryByText(/coming in this milestone/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/coming soon|coming in this/i)).not.toBeInTheDocument()
     expect(screen.getByRole('navigation', { name: 'Reference data sections' })).toBeInTheDocument()
   })
 
@@ -134,7 +134,7 @@ describe('reference data shell', () => {
     expect(await screen.findByRole('heading', { name: 'Proteins' })).toBeInTheDocument()
     const table = await screen.findByRole('table', { name: 'Proteins' })
     expect(within(table).getByRole('rowheader', { name: 'Chicken' })).toBeInTheDocument()
-    expect(screen.queryByText(/coming in this milestone/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/coming soon|coming in this/i)).not.toBeInTheDocument()
     expect(screen.getByRole('navigation', { name: 'Reference data sections' })).toBeInTheDocument()
   })
 
@@ -150,7 +150,7 @@ describe('reference data shell', () => {
     expect(await screen.findByRole('heading', { name: 'Tags' })).toBeInTheDocument()
     const table = await screen.findByRole('table', { name: 'Tags' })
     expect(within(table).getByRole('rowheader', { name: 'Weeknight' })).toBeInTheDocument()
-    expect(screen.queryByText(/coming in this milestone/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/coming soon|coming in this/i)).not.toBeInTheDocument()
     expect(screen.getByRole('navigation', { name: 'Reference data sections' })).toBeInTheDocument()
   })
 

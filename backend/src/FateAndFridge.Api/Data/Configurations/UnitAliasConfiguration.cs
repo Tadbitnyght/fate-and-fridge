@@ -15,7 +15,7 @@ public sealed class UnitAliasConfiguration : IEntityTypeConfiguration<UnitAlias>
         builder.Property(alias => alias.NormalizedAlias).IsRequired();
 
         // Per-unit uniqueness: seeded "t" (teaspoon) and "T" (tablespoon) both
-        // normalize to "t" but belong to different units (docs/M2_PLAN.md §2).
+        // normalize to "t" but belong to different units.
         builder.HasIndex(alias => new { alias.UnitId, alias.NormalizedAlias }).IsUnique();
 
         builder.HasOne<Unit>()

@@ -5,7 +5,7 @@ namespace FateAndFridge.Api.Tests;
 
 /// <summary>
 /// Pure unit verification of canonical/alias ingredient matching
-/// (docs/M4_PLAN.md §1.10): exact canonical, exact alias, folding, bounded
+/// exact canonical, exact alias, folding, bounded
 /// deterministic suggestions, retired exclusion, ambiguity, and adversarial
 /// input. Reads no database and touches no network.
 /// </summary>

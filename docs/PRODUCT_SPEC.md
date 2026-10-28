@@ -849,11 +849,11 @@ Scheduled/offsite backups deferred.
 
 ---
 
-## 47. V1 Non-Goals
-Not in V1:
+## 47. Out of Scope
+Not in 1.x:
 - pantry inventory
 - serving scaling
-- AI parsing
+- recipe parsing through an external service
 - Alexa/Google Home
 - public API keys
 - 2FA

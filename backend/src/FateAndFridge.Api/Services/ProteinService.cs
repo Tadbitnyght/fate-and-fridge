@@ -31,7 +31,7 @@ public abstract record ProteinMutationResult
 }
 
 /// <summary>
-/// M2-10 proteins management (docs/API.md §22, docs/DATABASE.md §7):
+/// Proteins management (docs/API.md §22, docs/DATABASE.md §7)
 /// normalized-name uniqueness with <c>PROTEIN_EXISTS</c> conflicts, retire and
 /// Admin-only hard-delete semantics, and an audit row staged into the caller's
 /// <see cref="AppDbContext"/> for every write.

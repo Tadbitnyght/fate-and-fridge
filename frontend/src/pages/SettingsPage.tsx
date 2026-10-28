@@ -17,7 +17,7 @@ const SETTINGS_NAV: SettingsNavItem[] = [
   { to: '/settings/audit', label: 'Audit log', adminOnly: true },
   { to: '/settings/backups', label: 'Backups', adminOnly: true },
   { to: '/settings/account', label: 'Account' },
-  // Version display is for every authenticated actor (M13-08).
+  // Version display is for every authenticated actor.
   { to: '/settings/about', label: 'About' },
 ]
 
@@ -25,7 +25,7 @@ function navClass({ isActive }: { isActive: boolean }): string {
   return isActive ? 'settings-nav__link settings-nav__link--active' : 'settings-nav__link'
 }
 
-/** Settings layout: section navigation plus the active section (M1-14). */
+/** Settings layout: section navigation plus the active section. */
 export function SettingsPage() {
   const { isAdmin } = useAdminAccess()
 

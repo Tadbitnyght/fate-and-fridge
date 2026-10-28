@@ -7,7 +7,7 @@ namespace FateAndFridge.Api.Tests.Support;
 public sealed record RecordedUserRevocation(long UserId, long? ExceptSessionId);
 
 /// <summary>
-/// Recording <see cref="ILiveSyncPublisher"/> test double (M9-01). It can be
+/// Recording <see cref="ILiveSyncPublisher"/> test double. It can be
 /// registered through the test host (see <c>ApiFactory</c>) so later M9 issues
 /// assert the exact events a write path emitted without opening a socket.
 /// </summary>

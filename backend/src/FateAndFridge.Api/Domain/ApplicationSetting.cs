@@ -1,7 +1,7 @@
 namespace FateAndFridge.Api.Domain;
 
 /// <summary>
-/// Key/value application setting. Structured values are stored as JSONB;
+/// Key/value application setting. Structured values are stored as JSONB
 /// <see cref="UpdatedAt"/> is set by the application and is always UTC.
 /// </summary>
 public sealed class ApplicationSetting

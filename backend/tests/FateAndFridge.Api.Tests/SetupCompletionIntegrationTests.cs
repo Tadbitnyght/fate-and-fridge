@@ -20,15 +20,15 @@ using Microsoft.Extensions.Logging;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// PostgreSQL-backed verification of <c>POST /setup/complete</c> (M1-04,
+/// PostgreSQL-backed verification of <c>POST /setup/complete</c> (
 /// docs/API.md §21): single-shot atomic completion, first-Admin session
-/// establishment, recovery key file handling, concurrent completion, rollback,
+/// establishment, recovery key file handling, concurrent completion, rollback
 /// and secret hygiene. Requires a Docker daemon; run with
 /// <c>dotnet test --filter "Category!=Integration"</c> to skip locally.
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class SetupCompletionIntegrationTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class SetupCompletionIntegrationTests(SetupFixture fixture) : IAsyncLifetime
 {
     private const string AdminPassword = "correct horse battery staple";
 

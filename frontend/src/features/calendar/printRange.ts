@@ -1,8 +1,7 @@
 import { monthLabel } from './calendarDates'
 
 /**
- * Pure month-range helpers for the calendar print view (M10-01, docs/M10_PLAN.md
- * §2.1). The print view selects a start month and a month count of 1–12 and
+ * Pure month-range helpers for the calendar print view. The print view selects a start month and a month count of 1–12 and
  * prints one month per page in chronological order, including jobs that cross a
  * year boundary. No dates are invented: a month is always a real calendar month.
  */
@@ -15,7 +14,7 @@ export const PRINT_MONTH_MAX = 12
 export interface PrintMonth {
   /** Calendar year, e.g. 2026. */
   year: number
-  /** Zero-based month index, matching `Date.getMonth()` (0 = January). */
+  /** Zero-based month index, matching `Date.getMonth` (0 = January). */
   monthIndex: number
   /** Canonical `YYYY-MM` key, used for the URL param and React keys. */
   key: string

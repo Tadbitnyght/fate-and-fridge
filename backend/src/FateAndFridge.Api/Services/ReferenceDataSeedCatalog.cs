@@ -4,7 +4,7 @@ namespace FateAndFridge.Api.Services;
 
 /// <summary>
 /// Authoritative M2 default reference data, transcribed from
-/// <c>docs/M2_PLAN.md</c> §2. Values are kept exactly as documented; the seeder
+/// Values are kept exactly as documented; the seeder
 /// normalizes every name and alias with <see cref="ReferenceDataNormalizer"/>
 /// before insert, so no normalized form is hard-coded here.
 /// </summary>
@@ -70,7 +70,7 @@ internal static class ReferenceDataSeedCatalog
     ];
 }
 
-/// <summary>One documented unit plus its aliases (docs/M2_PLAN.md §2).</summary>
+/// <summary>One documented unit plus its aliases.</summary>
 internal sealed record SeedUnit(
     string Symbol,
     string DisplayName,

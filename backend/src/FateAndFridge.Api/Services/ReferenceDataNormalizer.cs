@@ -4,7 +4,7 @@ using System.Text;
 namespace FateAndFridge.Api.Services;
 
 /// <summary>
-/// Why a reference-data name or alias cannot be normalized (M2-03). Endpoints
+/// Why a reference-data name or alias cannot be normalized. Endpoints
 /// map these reasons to <c>400 VALIDATION_FAILED</c> field errors.
 /// </summary>
 public enum ReferenceDataNormalizationFailureReason
@@ -16,7 +16,7 @@ public enum ReferenceDataNormalizationFailureReason
     ControlCharacters,
 }
 
-/// <summary>Outcome of <see cref="ReferenceDataNormalizer.Normalize"/> (M2-03).</summary>
+/// <summary>Outcome of <see cref="ReferenceDataNormalizer.Normalize"/>.</summary>
 public abstract record ReferenceDataNormalizationResult
 {
     private ReferenceDataNormalizationResult()
@@ -24,7 +24,7 @@ public abstract record ReferenceDataNormalizationResult
     }
 
     /// <summary>
-    /// The valid pair stored by reference-data writes and used for matching:
+    /// The valid pair stored by reference-data writes and used for matching
     /// <see cref="Display"/> keeps the caller's case and diacritics (only
     /// trimming and whitespace collapse applied), while <see cref="Normalized"/>
     /// is the canonical lookup form that drives uniqueness and search.
@@ -36,8 +36,7 @@ public abstract record ReferenceDataNormalizationResult
 }
 
 /// <summary>
-/// Canonical normalization for reference-data names and aliases (docs/DATABASE.md §1,
-/// docs/M2_PLAN.md §1.4): trim, collapse internal whitespace, fold Unicode
+/// Canonical normalization for reference-data names and aliases: trim, collapse internal whitespace, fold Unicode
 /// diacritics, and lowercase with the invariant culture. Plurals are explicit
 /// aliases, so there is no plural folding, punctuation removal, or any other
 /// transformation.
@@ -53,7 +52,7 @@ public abstract record ReferenceDataNormalizationResult
 /// </para>
 /// <para>
 /// Diacritic folding is table-driven and ICU-independent, so it also works when
-/// .NET runs in globalization-invariant mode (<c>String.Normalize</c> is a
+/// NET runs in globalization-invariant mode (<c>String.Normalize</c> is a
 /// no-op there). Folding strips non-spacing marks in every script: that handles
 /// decomposed input such as <c>Jalapeño</c>, but it also folds marked
 /// forms of mark-based scripts onto their unmarked form (for example Devanagari
@@ -62,10 +61,10 @@ public abstract record ReferenceDataNormalizationResult
 /// </para>
 /// <para>
 /// The composed-letter table maps Latin-1 Supplement letters (all letters
-/// U+00C0–U+00FF except × and ÷), all of Latin Extended-A (U+0100–U+017F,
+/// U+00C0–U+00FF except × and ÷), all of Latin Extended-A (U+0100–U+017F
 /// including Ø, Æ, Œ, ß, Đ, Ł, ı, İ, Ŋ, and ſ), and Greek tonos/dialytika
 /// vowels in U+0370–U+03FF (including final sigma and the upsilon hook symbols
-/// U+03D3/U+03D4) to their base letters: <c>Jalapeño</c> → <c>jalapeno</c>,
+/// U+03D3/U+03D4) to their base letters: <c>Jalapeño</c> → <c>jalapeno</c>
 /// <c>Łódź</c> → <c>lodz</c>, <c>Σόφια</c> → <c>σοφια</c>. Composed Latin
 /// Extended-B and Latin Extended Additional letters are not folded and pass
 /// through; their decomposed forms still fold through non-spacing-mark

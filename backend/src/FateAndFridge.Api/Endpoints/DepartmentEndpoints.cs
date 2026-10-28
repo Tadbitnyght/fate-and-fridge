@@ -28,7 +28,7 @@ public sealed record DepartmentResponse(
 }
 
 /// <summary>
-/// M2-05 departments routes (docs/API.md §22): authenticated reads, writes
+/// Departments routes (docs/API.md §22): authenticated reads, writes
 /// gated by <c>reference_data.edit</c>, Admin-only hard delete, and the
 /// complete-permutation order update.
 /// </summary>
@@ -418,7 +418,7 @@ public static class DepartmentEndpoints
         var actor = await actorProvider.GetCurrentActorAsync(cancellationToken);
         if (actor is null)
         {
-            // The permission filter already rejected unauthenticated requests;
+            // The permission filter already rejected unauthenticated requests
             // keep the defensive envelope so the handler cannot fail open.
             return (null, null, ApiResults.Error(
                 StatusCodes.Status401Unauthorized,

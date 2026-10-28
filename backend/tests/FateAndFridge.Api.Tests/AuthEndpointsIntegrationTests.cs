@@ -22,20 +22,20 @@ using Microsoft.Extensions.Logging;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// HTTP-level verification of the M1-07 auth endpoints (docs/API.md §5,
-/// docs/SECURITY.md §2/§3): login/session/logout shapes, cookie flags,
-/// generic credential failures, validation, normalization, lock handling,
+/// HTTP-level verification of the auth endpoints (docs/API.md §5
+/// docs/SECURITY.md §2/§3): login/session/logout shapes, cookie flags
+/// generic credential failures, validation, normalization, lock handling
 /// rehash-on-login, counters, and auth-event hygiene. Lockout thresholds and
 /// per-IP rate limits are part 2 and are not exercised here. Requires a Docker
 /// daemon; run with <c>dotnet test --filter "Category!=Integration"</c> to skip
 /// locally.
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class AuthEndpointsIntegrationTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class AuthEndpointsIntegrationTests(SetupFixture fixture) : IAsyncLifetime
 {
     private const string Password = "correct horse battery staple";
-    private const string TestUserAgent = "M1-07 test agent";
+    private const string TestUserAgent = "auth-endpoints-test-agent";
     private const string TestRemoteIp = "203.0.113.7";
 
     private static readonly DateTimeOffset SeedTimestamp =
@@ -920,7 +920,7 @@ public sealed class AuthEndpointsIntegrationTests(M1SetupFixture fixture) : IAsy
     }
 
     /// <summary>
-    /// TestServer leaves the client address unset; the M1-07 event tests need a
+    /// TestServer leaves the client address unset; the event tests need a
     /// deterministic one, so this filter sets it before the app pipeline runs.
     /// </summary>
     private sealed class RemoteIpStartupFilter(IPAddress remoteIpAddress) : IStartupFilter

@@ -131,7 +131,7 @@ describe('invalidateAllLiveSyncQueries', () => {
 
     const keys = await invalidateAllLiveSyncQueries(queryClient)
 
-    // calendar, operations, dashboard, groceries/list, groceries/staples,
+    // calendar, operations, dashboard, groceries/list, groceries/staples
     // recipes, groceries, settings, reference-data, statistics.
     expect(new Set(liveSyncInvalidationKeys.map((key) => JSON.stringify(key))).size).toBe(10)
     expect(keys).toEqual(liveSyncInvalidationKeys)

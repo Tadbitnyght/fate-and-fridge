@@ -5,8 +5,8 @@ using System.Text.Json;
 namespace FateAndFridge.Api.Services;
 
 /// <summary>
-/// Parsed <c>POST /groceries/staples</c> body (docs/M8_PLAN.md §1.9, §2.2).
-/// Type/format/range checks are done by the validator; reference-data existence,
+/// Parsed <c>POST /groceries/staples</c> body.
+/// Type/format/range checks are done by the validator; reference-data existence
 /// canonicalization, and the department default run in
 /// <see cref="GroceryStapleService"/> where the database is available.
 /// </summary>
@@ -18,7 +18,7 @@ public sealed record GroceryStapleCreateRequest(
     long? UnitId);
 
 /// <summary>
-/// Parsed partial update of a household staple (docs/M8_PLAN.md §2.2). Each
+/// Parsed partial update of a household staple. Each
 /// member carries a "provided" flag so the service can tell an absent field from
 /// an explicit <c>null</c> that clears a nullable value.
 /// </summary>
@@ -65,8 +65,7 @@ public sealed record GroceryStapleAddToListValidation(
     IReadOnlyDictionary<string, string[]> FieldErrors);
 
 /// <summary>
-/// Parses and type-validates the staple request bodies (docs/M8_PLAN.md §1.9,
-/// §2.2). Only the name length/control rules, the positive quantity, the id
+/// Parses and type-validates the staple request bodies. Only the name length/control rules, the positive quantity, the id
 /// types, and the static range are enforced here; referenced ids, the
 /// canonicalization, the department default, and the household-today check run in
 /// <see cref="GroceryStapleService"/>. Unknown JSON fields are ignored; a patch
@@ -74,7 +73,7 @@ public sealed record GroceryStapleAddToListValidation(
 /// </summary>
 public static class GroceryStaplePayloadValidator
 {
-    /// <summary>Maximum staple name length (docs/M8_PLAN.md §2.2).</summary>
+    /// <summary>Maximum staple name length.</summary>
     public const int MaxNameLength = 200;
 
     /// <summary>Inclusive lower bound for the add-to-list <c>range_days</c>.</summary>

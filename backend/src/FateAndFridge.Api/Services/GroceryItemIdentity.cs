@@ -7,7 +7,7 @@ namespace FateAndFridge.Api.Services;
 
 /// <summary>
 /// The stable, deterministic identity shared by the grocery list projection and
-/// the household check API (docs/M8_PLAN.md §1.4, §1.10, §2.1). The identity is
+/// the household check API. The identity is
 /// derived only from the <b>canonical ingredient id</b> plus the
 /// <b>unit dimension</b> — never from the quantity, the displayed unit of a
 /// mass/volume line, or a preparation note — so a checked item survives quantity
@@ -17,7 +17,7 @@ namespace FateAndFridge.Api.Services;
 /// <remarks>
 /// <para>
 /// Canonical string format (ordinal, culture-invariant; hashed with SHA-256 and
-/// rendered as lowercase hex, 64 characters):
+/// rendered as lowercase hex, 64 characters)
 /// </para>
 /// <list type="bullet">
 /// <item><description>Mass: <c>recipe|{ingredientId}|mass</c></description></item>
@@ -27,7 +27,7 @@ namespace FateAndFridge.Api.Services;
 /// <item><description>Manual item: <c>manual|{manualItemId}</c></description></item>
 /// </list>
 /// <para>
-/// The <c>unitToken</c> is <c>id:{countUnitId}</c> when the unit is persisted,
+/// The <c>unitToken</c> is <c>id:{countUnitId}</c> when the unit is persisted
 /// otherwise <c>sym:{lowercased symbol}</c> when only a symbol is available, and
 /// otherwise <c>none</c> for a unitless count. Mass and volume deliberately omit
 /// the unit: every lb/oz/g line for one ingredient shares a single identity, and
@@ -38,7 +38,7 @@ namespace FateAndFridge.Api.Services;
 /// identical under invariant globalization.
 /// </para>
 /// <para>
-/// M8-06 persists exactly this string in
+/// Persists exactly this string in
 /// <c>grocery_check_state.item_identity_hash</c> and uses it in the
 /// check/uncheck request body, so the list and the check API must always agree.
 /// </para>
@@ -70,7 +70,7 @@ public static class GroceryItemIdentity
 
     /// <summary>
     /// The exact pre-hash canonical string for a recipe-derived line. Exposed
-    /// internals-only so tests can pin the format that M8-06 must reproduce.
+    /// internals-only so tests can pin the format that must reproduce.
     /// </summary>
     internal static string CanonicalForRecipeItem(
         long ingredientId,

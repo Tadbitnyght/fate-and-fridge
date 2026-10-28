@@ -21,7 +21,7 @@ function tabClass({ isActive }: { isActive: boolean }): string {
 }
 
 /**
- * Reference-data shell (M2-11): route-based tabs over the household
+ * Reference-data shell: route-based tabs over the household
  * vocabulary. Reads are open to every authenticated actor; without
  * `reference_data.edit` the page shows a read-only notice (the server
  * enforces writes regardless).

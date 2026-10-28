@@ -6,7 +6,7 @@ namespace FateAndFridge.Api.Imports;
 
 /// <summary>
 /// Outcome of <c>POST /api/v1/recipes/{id}/image/from-url</c> before HTTP
-/// mapping (docs/M4_PLAN.md §1.8/§2.2).
+/// mapping.
 /// </summary>
 public abstract record ImportImageResult
 {
@@ -37,8 +37,8 @@ public abstract record ImportImageResult
 
 /// <summary>
 /// Downloads a recipe image from a user-supplied URL and stores it through the
-/// M3 image path (docs/M4_PLAN.md §1.8/§2.2, docs/SECURITY.md §6–§9):
-/// the SSRF-hardened <see cref="IImportFetcher"/> enforces URL policy, redirects,
+/// M3 image path
+/// the SSRF-hardened <see cref="IImportFetcher"/> enforces URL policy, redirects
 /// timeouts, and the 5 MiB image ceiling; the bytes must then pass the M3
 /// format/signature/dimension policy before anything is written. A failed
 /// download never touches the existing image, and a successful replacement is

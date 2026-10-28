@@ -18,17 +18,16 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// HTTP-level verification of the M7 batch reroll preview (docs/M7_PLAN.md
-/// §1.3–§1.7, §2.2): ranges, past/horizon/mode/no-candidate failures, the
-/// preserved-entry reasons, the sequential engine pass, draft TTL/supersede,
+/// HTTP-level verification of the M7 batch reroll preview: ranges, past/horizon/mode/no-candidate failures, the
+/// preserved-entry reasons, the sequential engine pass, draft TTL/supersede
 /// zero calendar writes, and the permission matrix. The clock is injected so
 /// "today" is deterministic; the injected RNG is irrelevant because every valid
 /// assertion holds regardless of which Normal recipe wins (the sequential-context
 /// test uses a single candidate).
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class BatchRerollPreviewIntegrationTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class BatchRerollPreviewIntegrationTests(SetupFixture fixture) : IAsyncLifetime
 {
     private const string PreviewPath = "/api/v1/calendar/reroll/preview";
     private const string AdminPassword = "root horse battery staple";

@@ -1,8 +1,7 @@
 namespace FateAndFridge.Api.Domain;
 
 /// <summary>
-/// Metadata for one backup archive (docs/DATABASE.md §12,
-/// docs/M13_PLAN.md §1.7). The archive file itself lives in the mounted
+/// Metadata for one backup archive. The archive file itself lives in the mounted
 /// <c>/data/backups</c> directory; only its identifying facts are stored here.
 /// <see cref="Checksum"/> is the lowercase SHA-256 hex digest of the encrypted
 /// file, so a download can be verified without decrypting it.

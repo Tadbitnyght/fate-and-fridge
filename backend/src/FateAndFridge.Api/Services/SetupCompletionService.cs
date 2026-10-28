@@ -38,7 +38,7 @@ public abstract record SetupCompletionResult
 }
 
 /// <summary>
-/// Single-shot, atomic setup completion (docs/API.md §21): household settings,
+/// Single-shot, atomic setup completion (docs/API.md §21): household settings
 /// application settings, the first Admin (multiuser), its session, and the
 /// recovery key are committed as one unit. Concurrent completions are
 /// serialized with a transaction-scoped advisory lock, so exactly one caller
@@ -58,7 +58,7 @@ public sealed class SetupCompletionService(
 
     public const string IpAllowlistRangesKey = "ip_allowlist_ranges";
 
-    /// <summary>Empty list for M1-11 trusted-proxy configuration.</summary>
+    /// <summary>Empty list for trusted-proxy configuration.</summary>
     public const string TrustedProxiesKey = "trusted_proxies";
 
     /// <summary>

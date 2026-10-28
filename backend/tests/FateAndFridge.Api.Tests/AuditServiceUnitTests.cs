@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// Docker-free checks for the M2-02 audit writer: constants, argument guards,
+/// Docker-free checks for the audit writer: constants, argument guards
 /// entry defaults, and the row staged before the caller's SaveChanges.
 /// </summary>
 public sealed class AuditServiceUnitTests

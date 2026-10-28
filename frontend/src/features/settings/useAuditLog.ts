@@ -10,7 +10,7 @@ import {
 } from '../../api/audit'
 
 /**
- * Query-key prefix for every audit read (docs/API.md §16). M12-04's export and
+ * Query-key prefix for every audit read (docs/API.md §16). 's export and
  * prune reuse the prefix so live-sync invalidation can target the whole family.
  */
 export const auditQueryKey = ['audit'] as const
@@ -35,7 +35,7 @@ export function useAuditLog(params: AuditLogParams = {}, enabled = true) {
 }
 
 /**
- * The confirmed, age-based audit retention prune (M12-04). On success the
+ * The confirmed, age-based audit retention prune. On success the
  * viewer is invalidated so the pruned rows disappear without a reload. The
  * export is an imperative download rather than a query, so it has no hook here.
  */

@@ -77,7 +77,7 @@ describe('print auto-shrink scale', () => {
 /**
  * The page geometry has a single source of truth: the `:root` custom properties
  * in `index.css`, which the print rules and `printScale.ts` both read. This
- * guard fails if the fallback geometry, or the `@page calendar-print` margin,
+ * guard fails if the fallback geometry, or the `@page calendar-print` margin
  * drifts from the stylesheet.
  */
 describe('print geometry single source of truth', () => {

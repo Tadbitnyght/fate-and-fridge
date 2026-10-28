@@ -5,15 +5,14 @@ using System.Text;
 namespace FateAndFridge.Api.Imports;
 
 /// <summary>
-/// Plain-text sanitization for untrusted imported content (docs/M4_PLAN.md §1.7,
-/// docs/SECURITY.md §8). Shared by <c>StructuredRecipeParser</c> and the later
+/// Plain-text sanitization for untrusted imported content. Shared by <c>StructuredRecipeParser</c> and the later
 /// HTML fallback parser.
 /// </summary>
 /// <remarks>
 /// <para>
 /// The pipeline is fixed and idempotent: strip markup, decode HTML entities
 /// (bounded to catch entity-encoded markup), remove control and format
-/// characters except tab/newline, collapse every whitespace run to one space,
+/// characters except tab/newline, collapse every whitespace run to one space
 /// trim, and optionally truncate to a caller-supplied limit. The result is
 /// plain text and never markup: the output cannot contain a <c>&lt;…&gt;</c>
 /// tag and is safe to render as text.
@@ -26,7 +25,7 @@ namespace FateAndFridge.Api.Imports;
 /// </para>
 /// <para>
 /// Length limits (M3: name 200, long text 20,000, preparation note 300) are
-/// applied by M4-04/M4-05. The optional <paramref name="maxLength"/> on
+/// applied by. The optional <paramref name="maxLength"/> on
 /// <see cref="Sanitize(string?, int?)"/> is the shared truncation helper those
 /// issues can use.
 /// </para>
@@ -143,7 +142,7 @@ public static class ImportTextSanitizer
     /// <summary>
     /// Removes anything that looks like an HTML tag, replacing it with a space
     /// so removed block/inline tags cannot join two words. A <c>&lt;</c> only
-    /// starts a tag when followed by a letter, <c>/</c>, <c>!</c>, or <c>?</c>,
+    /// starts a tag when followed by a letter, <c>/</c>, <c>!</c>, or <c>?</c>
     /// so a decoded or literal comparison such as <c>1 &lt; 2 &gt; 0</c> is kept
     /// as text. An unterminated tag-start drops the remainder rather than
     /// leaking a partial tag; this keeps the function total and guarantees the

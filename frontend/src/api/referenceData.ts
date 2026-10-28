@@ -2,7 +2,6 @@ import { apiRequest } from './client'
 
 /**
  * Typed client for the M2 reference-data contract (docs/API.md §22).
- *
  * Reads require any authenticated actor; writes require `reference_data.edit`
  * and hard deletes are Admin-only. The server enforces all of that — these
  * functions only describe the wire shapes.
@@ -30,7 +29,7 @@ function listQuery(params: ReferenceListParams): string {
   return text.length > 0 ? `?${text}` : ''
 }
 
-/* ---------- departments ---------- */
+/* departments ---------- */
 
 export interface Department {
   id: number
@@ -81,7 +80,7 @@ export function reorderDepartments(ids: number[]): Promise<Department[]> {
   return apiRequest<Department[]>('/departments/order', { method: 'PUT', body: { ids } })
 }
 
-/* ---------- units ---------- */
+/* units ---------- */
 
 export type UnitDimension = 'mass' | 'volume' | 'count' | 'nonconvertible'
 
@@ -143,7 +142,7 @@ export function removeUnitAlias(id: number, aliasId: number): Promise<void> {
   return apiRequest<void>(`/units/${id}/aliases/${aliasId}`, { method: 'DELETE' })
 }
 
-/* ---------- ingredients ---------- */
+/* ingredients ---------- */
 
 export interface IngredientAlias {
   id: number
@@ -221,7 +220,7 @@ export function mergeIngredients(request: IngredientMergeRequest): Promise<Ingre
   return apiRequest<IngredientMergeResult>('/ingredients/merge', { method: 'POST', body: request })
 }
 
-/* ---------- proteins ---------- */
+/* proteins ---------- */
 
 export interface Protein {
   id: number
@@ -258,7 +257,7 @@ export function deleteProtein(id: number): Promise<void> {
   return apiRequest<void>(`/proteins/${id}`, { method: 'DELETE' })
 }
 
-/* ---------- tags ---------- */
+/* tags ---------- */
 
 export interface Tag {
   id: number

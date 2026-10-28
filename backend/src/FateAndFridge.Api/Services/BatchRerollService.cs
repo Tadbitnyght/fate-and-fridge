@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FateAndFridge.Api.Services;
 
-/// <summary>Outcome of a batch reroll preview (docs/M7_PLAN.md §1.3–§1.7).</summary>
+/// <summary>Outcome of a batch reroll preview.</summary>
 public abstract record BatchPreviewOutcome
 {
     /// <summary>The preview draft was persisted; <see cref="Days"/> is the ordered diff.</summary>
@@ -18,7 +18,7 @@ public abstract record BatchPreviewOutcome
     public sealed record Failure(int StatusCode, string Code, string Message) : BatchPreviewOutcome;
 }
 
-/// <summary>Outcome of a batch reroll apply (docs/M7_PLAN.md §1.8–§1.12).</summary>
+/// <summary>Outcome of a batch reroll apply.</summary>
 public abstract record BatchApplyOutcome
 {
     /// <summary>The batch committed; <see cref="Days"/> are the changed day documents.</summary>
@@ -28,7 +28,7 @@ public abstract record BatchApplyOutcome
     public sealed record Failure(int StatusCode, string Code, string Message) : BatchApplyOutcome;
 }
 
-/// <summary>Outcome of a batch undo (docs/M7_PLAN.md §1.10).</summary>
+/// <summary>Outcome of a batch undo.</summary>
 public abstract record BatchUndoOutcome
 {
     /// <summary>The batch was reverted; <see cref="Days"/> are the restored day documents, in date order.</summary>
@@ -50,7 +50,7 @@ public sealed record BatchPreviewDay(
 public sealed record BatchProposedEntry(string EntryType, long RecipeId, string DisplayText);
 
 /// <summary>
-/// M7 batch reroll preview (docs/M7_PLAN.md §1.3–§1.7, docs/RANDOMIZER.md §9–§12).
+/// M7 batch reroll preview.
 /// Builds a date range, runs the sequential engine pass in ascending date order
 /// (earlier picks in the same preview count as occurrences/neighbors for later
 /// dates), persists one draft with a 15-minute TTL, and returns the diff. Preview
@@ -70,7 +70,7 @@ public sealed class BatchRerollService(
 
     public const string ModeFillEmpty = "fill_empty";
 
-    /// <summary>Server-side preview draft lifetime (docs/M7_PLAN.md §1.7).</summary>
+    /// <summary>Server-side preview draft lifetime.</summary>
     public static readonly TimeSpan PreviewTtl = TimeSpan.FromMinutes(15);
 
     private static readonly string[] Modes = [ModeSevenDays, ModeRestOfMonth, ModeFillEmpty];
@@ -264,8 +264,8 @@ public sealed class BatchRerollService(
     }
 
     /// <summary>
-    /// Applies a stored preview draft atomically (docs/M7_PLAN.md §1.8–§1.12).
-    /// One transaction acquires the per-date advisory locks in ascending order,
+    /// Applies a stored preview draft atomically.
+    /// One transaction acquires the per-date advisory locks in ascending order
     /// re-checks every proposed target date against the stored before-state, and
     /// writes the previewed recipes plus exactly one history row per changed date
     /// sharing a single batch operation id. A missing/expired/consumed draft fails
@@ -324,7 +324,7 @@ public sealed class BatchRerollService(
             .ConfigureAwait(false);
 
         // Serialize per target date with the same advisory lock as M6, acquired
-        // in ascending date order to avoid deadlocks (docs/M7_PLAN.md §1.12).
+        // in ascending date order to avoid deadlocks.
         foreach (var day in proposed)
         {
             await LockDateAsync(day.Date, cancellationToken).ConfigureAwait(false);
@@ -333,7 +333,7 @@ public sealed class BatchRerollService(
         // Re-check the household boundary under the CURRENT context inside the
         // lock: a preview created before household midnight must not commit a
         // target date that is now historical, since such an entry could never be
-        // undone (docs/M7_PLAN.md §1.10). Any now-past target aborts the whole
+        // undone. Any now-past target aborts the whole
         // apply with nothing written.
         var context = await clock.GetContextAsync(cancellationToken).ConfigureAwait(false);
         if (proposed.Any(day => HouseholdClock.IsHistorical(day.Date, context)))
@@ -342,7 +342,7 @@ public sealed class BatchRerollService(
         }
 
         // Re-check every target date against the before-state captured at preview
-        // time; a single mismatch aborts the whole apply (docs/M7_PLAN.md §1.8).
+        // time; a single mismatch aborts the whole apply.
         var currentByDate = new Dictionary<DateOnly, CalendarEntry?>();
         foreach (var day in proposed)
         {
@@ -363,7 +363,7 @@ public sealed class BatchRerollService(
 
         // Take the same per-recipe advisory lock as the M12 hard delete before
         // reading the names, in ascending id order to avoid deadlocks
-        // (docs/M12_PLAN.md §4, BUG-011). A delete either commits before this
+        // A delete either commits before this
         // point (the name lookup below misses and the apply conflicts) or waits
         // until this transaction commits, then reconciles the new rows.
         foreach (var recipeId in recipeIds)
@@ -411,7 +411,6 @@ public sealed class BatchRerollService(
             }
 
             // The replacement resets entry metadata exactly like single reroll
-            // (docs/M7_PLAN.md §1.11).
             entry.EntryType = CalendarEntryType.Recipe;
             entry.RecipeId = day.RecipeId!.Value;
             entry.IsLocked = false;
@@ -486,8 +485,8 @@ public sealed class BatchRerollService(
     }
 
     /// <summary>
-    /// Undoes an entire batch apply (docs/M7_PLAN.md §1.10): reverts every date
-    /// the apply changed to its exact prior state (the previous entry, or blank),
+    /// Undoes an entire batch apply: reverts every date
+    /// the apply changed to its exact prior state (the previous entry, or blank)
     /// but only while each affected date is still exactly as the apply left it.
     /// A missing or already-undone batch fails <c>UNDO_EXPIRED</c>; a later change
     /// to any affected date fails <c>UNDO_CONFLICT</c> and reverts nothing; a date
@@ -525,8 +524,8 @@ public sealed class BatchRerollService(
             .BeginTransactionAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        // Serialize per affected date with the same advisory lock as M6/M7 apply,
-        // acquired in ascending date order (docs/M7_PLAN.md §1.12).
+        // Serialize per affected date with the same advisory lock as M6/M7 apply
+        // acquired in ascending date order.
         foreach (var row in applyRows)
         {
             await LockDateAsync(row.MealDate, cancellationToken).ConfigureAwait(false);
@@ -713,8 +712,7 @@ public sealed class BatchRerollService(
 
     /// <summary>
     /// Takes the per-date transaction-scoped advisory lock so concurrent apply
-    /// and single-date mutations of the same date serialize (docs/M7_PLAN.md
-    /// §1.12). The lock is released on commit/rollback.
+    /// and single-date mutations of the same date serialize. The lock is released on commit/rollback.
     /// </summary>
     private Task LockDateAsync(DateOnly date, CancellationToken cancellationToken) =>
         AdvisoryLocks.LockDateAsync(db.Database, date, cancellationToken);
@@ -809,7 +807,7 @@ public sealed class BatchRerollService(
         $"undo:{batchOperationId:D}";
 
     /// <summary>
-    /// Serializes batch undo metadata in the documented snake_case shape:
+    /// Serializes batch undo metadata in the documented snake_case shape
     /// <c>{"kind":"undo","undone_batch_operation_id":"..."}</c>.
     /// </summary>
     private static string SerializeBatchUndoMetadata(Guid batchOperationId) =>
@@ -952,7 +950,7 @@ public sealed class BatchRerollService(
         }
 
         // Recipes chosen earlier in this same preview count as occurrences at
-        // their proposed dates (docs/RANDOMIZER.md §9, docs/M7_PLAN.md §1.6).
+        // their proposed dates.
         foreach (var (proposedDate, recipeId) in proposedByDate)
         {
             if (Math.Abs(proposedDate.DayNumber - date.DayNumber) > radius)
@@ -1057,7 +1055,7 @@ public sealed class BatchRerollService(
     /// <summary>One day's preview action.</summary>
     private sealed record DayDecision(bool Propose, string? Reason);
 
-    /// <summary>The persisted <c>proposal_json</c> document (docs/M7_PLAN.md §2.3).</summary>
+    /// <summary>The persisted <c>proposal_json</c> document.</summary>
     private sealed record ProposalDocument(
         string Mode,
         DateOnly StartDate,

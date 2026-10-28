@@ -1,12 +1,10 @@
 /**
  * Shared household date/time labels for every product surface (issue #160).
- *
  * Household-local dates reach the client as bare `yyyy-MM-dd` strings. They are
  * labelled straight from that string — never through `new Date(value)`, which
  * parses a bare date as UTC midnight and can shift the day in a negative-offset
  * timezone, and never through `toLocale*`, which is culture-dependent and a
  * silent no-op under this workstation's invariant globalization.
- *
  * Product dates render as `MM-DD-YY` (e.g. `2026-10-05` → `10-05-26`). The API
  * wire format stays ISO `yyyy-MM-dd`; this module is display-only.
  */
@@ -77,12 +75,11 @@ export function formatHouseholdDate(value: string): string {
 }
 
 /**
- * Renders the English short weekday of a household-local `yyyy-MM-dd` string,
+ * Renders the English short weekday of a household-local `yyyy-MM-dd` string
  * e.g. `2026-10-05` → `Mon`. Used where the weekday is the label (the mobile
  * agenda gutter) so it never comes from `toLocaleDateString`, which is
  * culture-dependent in the browser and unavailable under invariant
  * globalization.
- *
  * A value that is not a plain, plausible date yields an empty label: there is no
  * verbatim weekday to fall back to, and a guessed day would be worse than none.
  */

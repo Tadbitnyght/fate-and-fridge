@@ -8,8 +8,7 @@ using Microsoft.EntityFrameworkCore;
 namespace FateAndFridge.Api.Services;
 
 /// <summary>
-/// Outcome of an M12-08 hard recipe delete (docs/M12_PLAN.md §1.10, §2.2,
-/// docs/DATABASE.md §14).
+/// Outcome of an hard recipe delete.
 /// </summary>
 public abstract record RecipeHardDeleteOutcome
 {
@@ -34,8 +33,8 @@ public abstract record RecipeHardDeleteOutcome
 }
 
 /// <summary>
-/// M12-08 irreversibility delivery: an Admin may hard-delete a recipe at any
-/// time (docs/M12_PLAN.md §1.10, docs/DATABASE.md §14; docs/SECURITY.md §4).
+/// Irreversibility delivery: an Admin may hard-delete a recipe at any
+/// time.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -46,12 +45,12 @@ public abstract record RecipeHardDeleteOutcome
 /// entries are tombstoned (<c>recipe_id</c> becomes null while
 /// <c>snapshot_recipe_name</c>/<c>snapshot_display_text</c> are preserved and
 /// <c>include_groceries</c> stays true, the M11 guarantee), and exactly one
-/// <c>recipe.hard_deleted</c> audit row records the before-image, the reason,
+/// <c>recipe.hard_deleted</c> audit row records the before-image, the reason
 /// and the affected counts. There is no undo and no soft-delete flag.
 /// </para>
 /// <para>
 /// The caller (the endpoint) has already resolved the actor; the
-/// <see cref="DangerousActionGuard"/> confirmation is the exact recipe name,
+/// <see cref="DangerousActionGuard"/> confirmation is the exact recipe name
 /// which is only known once the recipe is loaded, so the guard runs here. A
 /// missing recipe is reported before the guard so an unknown id is always
 /// <c>404</c>.
@@ -66,7 +65,7 @@ public sealed class RecipeHardDeleteService(
     ILogger<RecipeHardDeleteService> logger)
 {
     /// <summary>
-    /// Irreversibly deletes the recipe and reconciles its calendar references,
+    /// Irreversibly deletes the recipe and reconciles its calendar references
     /// image, and audit row in one transaction.
     /// </summary>
     public async Task<RecipeHardDeleteOutcome> DeleteAsync(
@@ -85,7 +84,7 @@ public sealed class RecipeHardDeleteService(
             .ConfigureAwait(false);
 
         // Serialize two hard deletes of the same recipe so the loser reports 404
-        // instead of racing the delete (docs/M12_PLAN.md §4 concurrency).
+        // instead of racing the delete.
         await LockRecipeAsync(recipeId, cancellationToken).ConfigureAwait(false);
 
         var recipe = await dbContext.Recipes
@@ -96,8 +95,7 @@ public sealed class RecipeHardDeleteService(
             return new RecipeHardDeleteOutcome.NotFound();
         }
 
-        // The typed confirmation is the exact recipe name (docs/M12_PLAN.md
-        // §1.11), ordinal after trimming; the reason is required and bounded.
+        // The typed confirmation is the exact recipe name, ordinal after trimming; the reason is required and bounded.
         var validation = DangerousActionGuard.Validate(reason, confirmation, recipe.Name);
         if (validation is DangerousActionValidation.Failure guardFailure)
         {
@@ -145,8 +143,7 @@ public sealed class RecipeHardDeleteService(
         foreach (var entry in entries)
         {
             // "Today or later" is defined by the household-local today: a recipe
-            // that no longer exists must not stay planned (docs/M12_PLAN.md
-            // §1.10), even when the frozen historical boundary would otherwise
+            // that no longer exists must not stay planned, even when the frozen historical boundary would otherwise
             // call today historical.
             if (entry.MealDate >= context.Today)
             {

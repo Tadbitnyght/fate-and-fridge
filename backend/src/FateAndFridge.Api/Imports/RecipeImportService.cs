@@ -9,14 +9,14 @@ using Microsoft.Extensions.Logging;
 
 namespace FateAndFridge.Api.Imports;
 
-/// <summary>Stable warning strings carried on an import draft (docs/M4_PLAN.md §2.2).</summary>
+/// <summary>Stable warning strings carried on an import draft.</summary>
 public static class ImportWarningCodes
 {
     /// <summary>At least one ingredient line could not be matched to canonical reference data.</summary>
     public const string IngredientUnknown = "ingredient_unknown";
 }
 
-/// <summary>Outcome of <c>POST /api/v1/import/check</c> (docs/M4_PLAN.md §2.2).</summary>
+/// <summary>Outcome of <c>POST /api/v1/import/check</c>.</summary>
 public sealed record ImportCheckResult(
     ImportDraftReference? SourceUrlMatch,
     IReadOnlyList<ImportDraftReference> NameMatches);
@@ -35,7 +35,7 @@ public abstract record ImportRecipeUrlResult
 }
 
 /// <summary>
-/// Orchestrates the draft-only import pipeline (docs/M4_PLAN.md §2.1–§2.2):
+/// Orchestrates the draft-only import pipeline
 /// safe fetch, JSON-LD first with an HTML fallback, then draft assembly.
 /// </summary>
 /// <remarks>
@@ -46,8 +46,8 @@ public abstract record ImportRecipeUrlResult
 /// </para>
 /// <para>
 /// Ingredient lines are split into quantity/unit/name/preparation note and the
-/// unit text is resolved against active reference data (M4-05). The canonical
-/// ingredient name is then matched (M4-06) against active
+/// unit text is resolved against active reference data. The canonical
+/// ingredient name is then matched against active
 /// <see cref="IngredientCandidate"/>s: folded canonical-name exact, then folded
 /// alias exact, and otherwise a bounded suggestion list with
 /// <c>is_unknown = true</c>. Retired/merged ingredients are never matched or
@@ -65,14 +65,14 @@ public sealed class RecipeImportService(
 
     /// <summary>
     /// Upper bound on same-origin rows re-folded in memory by the legacy
-    /// source-URL fallback (M4-11). Bounds the read for installs that saved
+    /// source-URL fallback. Bounds the read for installs that saved
     /// recipes before the canonical trailing-slash/query-order folding.
     /// </summary>
     private const int MaxLegacySourceUrlScan = 200;
 
     /// <summary>
     /// Upper bound on recipe names scored in memory for the similar-name
-    /// warning (M4-12). A bounded scan keeps a warning from becoming an
+    /// warning. A bounded scan keeps a warning from becoming an
     /// unbounded read; a catalog larger than this could miss a warning for a
     /// recipe outside the window.
     /// </summary>
@@ -138,8 +138,8 @@ public sealed class RecipeImportService(
 
     /// <summary>
     /// Re-runs the duplicate diagnostics after the user edits the draft
-    /// (docs/M4_PLAN.md §2.2). M4-04 does exact normalized-URL and bounded
-    /// normalized-name queries; M4-11/M4-12 add full scoring.
+    /// Does exact normalized-URL and bounded
+    /// normalized-name queries; add full scoring.
     /// </summary>
     public async Task<ImportCheckResult> CheckAsync(
         string? rawSourceUrl,
@@ -245,7 +245,7 @@ public sealed class RecipeImportService(
             warnings);
     }
 
-    /// <summary>Loads active units (and their aliases) for folded import matching (M4-05).</summary>
+    /// <summary>Loads active units (and their aliases) for folded import matching.</summary>
     private async Task<IReadOnlyList<ImportUnitCandidate>> LoadUnitCatalogAsync(CancellationToken cancellationToken)
     {
         var units = await dbContext.Units
@@ -286,7 +286,7 @@ public sealed class RecipeImportService(
 
     /// <summary>
     /// Loads active ingredients (and their aliases) for folded import matching
-    /// (M4-06). Retired and merged ingredients are excluded at the source, and
+    ///Retired and merged ingredients are excluded at the source, and
     /// the ordering is deterministic so suggestions are stable.
     /// </summary>
     private async Task<IReadOnlyList<IngredientCandidate>> LoadIngredientCatalogAsync(
@@ -330,14 +330,14 @@ public sealed class RecipeImportService(
 
     /// <summary>
     /// Exact normalized-URL match against <c>recipes.normalized_source_url</c>
-    /// (docs/M4_PLAN.md §1.9). The incoming URL is folded with the same
+    /// The incoming URL is folded with the same
     /// <see cref="RecipeService.BuildNormalizedSourceUrl"/> used when a recipe is
     /// saved, so import detection and recipe save agree: trailing slash, query
     /// parameter order, fragment, case, and default port do not affect equality.
     /// This is a strictly read-only lookup.
     /// </summary>
     /// <remarks>
-    /// Recipes saved before M4-11 stored the earlier minimal form (no trailing
+    /// Recipes saved before stored the earlier minimal form (no trailing
     /// slash / query-order folding). Equality on the new canonical key misses
     /// those rows, so a bounded fallback re-folds candidate rows that share the
     /// incoming origin and compares in memory. It never writes and is ordered by
@@ -362,7 +362,7 @@ public sealed class RecipeImportService(
             return exact;
         }
 
-        // Legacy rows may predate the M4-11 canonicalization. Re-fold a bounded
+        // Legacy rows may predate the canonicalization. Re-fold a bounded
         // set of same-origin candidates in memory and compare against the key.
         var originPrefixes = BuildOriginPrefixes(uri);
         var candidates = await dbContext.Recipes
@@ -396,7 +396,7 @@ public sealed class RecipeImportService(
 
     /// <summary>
     /// The <c>scheme://host</c> prefixes (http and https) used to bound the
-    /// legacy-row fallback. The host is lowercased and a default port omitted,
+    /// legacy-row fallback. The host is lowercased and a default port omitted
     /// matching <see cref="RecipeService.BuildNormalizedSourceUrl"/>.
     /// </summary>
     private static string[] BuildOriginPrefixes(Uri uri)
@@ -414,7 +414,7 @@ public sealed class RecipeImportService(
     }
 
     /// <summary>
-    /// Scores existing recipes against the draft name (docs/M4_PLAN.md §1.9):
+    /// Scores existing recipes against the draft name
     /// folded exact equality, whole-word containment, shared tokens, or a small
     /// edit distance, ranked by <see cref="RecipeNameSimilarity"/> and bounded
     /// to <see cref="MaxNameMatches"/>. It re-runs for a rename through
@@ -424,7 +424,7 @@ public sealed class RecipeImportService(
     /// The candidate read is a bounded, id-ordered window
     /// (<see cref="MaxNameScanCandidates"/>) that is scored in memory, so all
     /// four signals are evaluated uniformly. The window holds the lowest-id
-    /// recipes, so a catalog beyond it could miss a warning for a newer,
+    /// recipes, so a catalog beyond it could miss a warning for a newer
     /// higher-id recipe; that is preferred over an unbounded scan for a
     /// non-blocking warning.
     /// </remarks>
@@ -499,7 +499,7 @@ public sealed class RecipeImportService(
 
         if (absolute.Scheme != Uri.UriSchemeHttp && absolute.Scheme != Uri.UriSchemeHttps)
         {
-            // On Unix, a leading-slash string parses as an absolute file: URI,
+            // On Unix, a leading-slash string parses as an absolute file: URI
             // which would otherwise mask a same-site relative reference. Retry
             // the reference against the page URL before giving up.
             if (!Uri.TryCreate(baseUri, sanitized, out var resolved))

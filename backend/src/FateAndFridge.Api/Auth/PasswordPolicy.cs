@@ -1,7 +1,7 @@
 namespace FateAndFridge.Api.Auth;
 
 /// <summary>
-/// V1 password policy (docs/SECURITY.md §2, docs/MILESTONES.md M1 decisions):
+/// V1 password policy
 /// 12–128 characters, no composition rules, no trimming, pasting allowed.
 /// </summary>
 public static class PasswordPolicy

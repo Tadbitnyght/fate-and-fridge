@@ -6,8 +6,7 @@ using Microsoft.Extensions.Options;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// Unit coverage of the per-actor import throttle (docs/M4_PLAN.md §1.15,
-/// docs/API.md §15): fixed-window boundaries, expiry, page/image isolation,
+/// Unit coverage of the per-actor import throttle: fixed-window boundaries, expiry, page/image isolation
 /// bounded eviction, and the single-user/system actor.
 /// </summary>
 public sealed class ImportThrottleTests

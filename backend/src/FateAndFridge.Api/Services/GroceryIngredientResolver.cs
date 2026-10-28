@@ -5,7 +5,7 @@ namespace FateAndFridge.Api.Services;
 
 /// <summary>
 /// Shared, loop-safe canonical-ingredient resolution for the grocery services
-/// (docs/M8_PLAN.md §1.4, §1.8, §1.9). A merged source ingredient follows its
+/// A merged source ingredient follows its
 /// <c>merged_into_ingredient_id</c> redirect to the canonical ingredient so
 /// writes and the grocery list projection agree on identity; a visited set
 /// makes a cyclic or self redirect terminate.

@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace FateAndFridge.Api.Data.Configurations;
 
-/// <summary>Maps the <c>calendar_reroll_drafts</c> table (docs/M7_PLAN.md §2.3).</summary>
+/// <summary>Maps the <c>calendar_reroll_drafts</c> table.</summary>
 public sealed class CalendarRerollDraftConfiguration : IEntityTypeConfiguration<CalendarRerollDraft>
 {
     public void Configure(EntityTypeBuilder<CalendarRerollDraft> builder)

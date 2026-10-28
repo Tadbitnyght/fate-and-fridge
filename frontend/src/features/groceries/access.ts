@@ -12,7 +12,7 @@ export interface GroceriesAccess {
 
 /**
  * UI visibility only: every grocery write is enforced server-side
- * (docs/M8_PLAN.md §1.13). This hook must never be the sole gate for an action.
+ * This hook must never be the sole gate for an action.
  */
 export function useGroceriesAccess(): GroceriesAccess {
   const { permissions } = useAuth()

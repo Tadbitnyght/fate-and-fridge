@@ -6,8 +6,8 @@ namespace FateAndFridge.Api.Tests;
 
 /// <summary>
 /// Deterministic matrix for the M6 pure randomizer engine
-/// (docs/M6_PLAN.md §1.5–§1.10, docs/RANDOMIZER.md §7): exact-repeat windows,
-/// special-day contribution, protein adjacency, spacing buckets, favorites,
+/// exact-repeat windows
+/// special-day contribution, protein adjacency, spacing buckets, favorites
 /// secure weighted selection, and the small-pool fallback. All draws go through
 /// a controlled <see cref="IRandomSource"/>, so no test depends on OS entropy.
 /// </summary>
@@ -27,7 +27,7 @@ public sealed class RandomizerEngineTests
         SpacingFarDays: 8,
         SpacingSearchDays: 90);
 
-    // ---- Scoring helpers -----------------------------------------------------
+    // Scoring helpers
 
     private static RandomizerCandidate Candidate(long recipeId, bool favorite = false, params string[] proteins) =>
         new(recipeId, favorite, new HashSet<string>(proteins, StringComparer.Ordinal));
@@ -51,7 +51,7 @@ public sealed class RandomizerEngineTests
         RandomizerOptions? options = null) =>
         new RandomizerEngine(new FixedRandomSource(0m)).ScoreCandidate(options ?? Defaults, request, candidate);
 
-    // ---- Normal scoring ------------------------------------------------------
+    // Normal scoring
 
     [Fact]
     public void A_clean_candidate_scores_the_neutral_product()
@@ -100,7 +100,7 @@ public sealed class RandomizerEngineTests
         metadata.FinalWeight.Should().Be(0.0385m);
     }
 
-    // ---- Exact-repeat window -------------------------------------------------
+    // Exact-repeat window
 
     [Theory]
     [InlineData(-7, true, 0.10)]
@@ -172,7 +172,7 @@ public sealed class RandomizerEngineTests
         Score(request, candidate).RepeatMultiplier.Should().Be(1.0m);
     }
 
-    // ---- Protein adjacency ---------------------------------------------------
+    // Protein adjacency
 
     [Fact]
     public void A_shared_protein_with_the_previous_day_is_penalized_once()
@@ -250,7 +250,7 @@ public sealed class RandomizerEngineTests
         Score(request, candidate).ProteinMultiplier.Should().Be(1.0m);
     }
 
-    // ---- Spacing -------------------------------------------------------------
+    // Spacing
 
     [Theory]
     [InlineData(3, 0.5)]
@@ -313,7 +313,7 @@ public sealed class RandomizerEngineTests
         metadata.SpacingMultiplier.Should().Be(0.5m);
     }
 
-    // ---- Weighted selection --------------------------------------------------
+    // Weighted selection
 
     [Fact]
     public void A_forced_repeat_prefers_the_candidate_with_the_larger_nearest_spacing()
@@ -367,7 +367,7 @@ public sealed class RandomizerEngineTests
             new[] { new RandomizerOccurrence(2, D.AddDays(-7), false) },
             Array.Empty<RandomizerNeighbor>());
 
-        // Weights 1.0 and 0.075 (total 1.075): below the boundary picks recipe 1,
+        // Weights 1.0 and 0.075 (total 1.075): below the boundary picks recipe 1
         // above it picks recipe 2.
         new RandomizerEngine(new FixedRandomSource(0.9m)).Select(Defaults, request).RecipeId.Should().Be(1);
         new RandomizerEngine(new FixedRandomSource(0.96m)).Select(Defaults, request).RecipeId.Should().Be(2);
@@ -428,7 +428,7 @@ public sealed class RandomizerEngineTests
         first.Metadata.FinalWeight.Should().Be(second.Metadata.FinalWeight);
     }
 
-    // ---- Options projection --------------------------------------------------
+    // Options projection
 
     [Fact]
     public void Options_from_maps_every_household_field()

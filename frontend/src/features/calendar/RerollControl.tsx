@@ -6,8 +6,8 @@ import { rerollAvailability } from './rerollAvailability'
 import { useRerollCalendarDay } from './useCalendar'
 
 /**
- * Reroll action for the date-detail dialog (M6-10). Disabled with an
- * AT/keyboard-reachable explanation on historical, locked, and vacation dates,
+ * Reroll action for the date-detail dialog. Disabled with an
+ * AT/keyboard-reachable explanation on historical, locked, and vacation dates
  * and without `calendar.edit`. On success the operation is handed up so the
  * page can surface the Undo banner.
  */

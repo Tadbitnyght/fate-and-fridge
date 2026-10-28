@@ -3,8 +3,8 @@ import type { JSX } from 'react'
 import type { CalendarIconKey } from '../../api/calendar'
 
 /**
- * Curated special-event icons (docs/M5_PLAN.md §1.14). A small inline-SVG set
- * keyed to the backend catalog; decorative (the entry text carries the meaning),
+ * Curated special-event icons. A small inline-SVG set
+ * keyed to the backend catalog; decorative (the entry text carries the meaning)
  * so each icon is `aria-hidden`.
  */
 const PATHS: Record<CalendarIconKey, string> = {

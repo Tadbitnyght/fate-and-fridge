@@ -46,7 +46,7 @@ public sealed class SetupGatingTests
         SetupGating.ShouldGate(new PathString(path)).Should().BeFalse();
 
     /// <summary>
-    /// The hub is gated only as a whole path segment, never as a string prefix:
+    /// The hub is gated only as a whole path segment, never as a string prefix
     /// a typo route such as <c>/hub/liveevil</c> must not inherit the hub's
     /// guards, while the hub's own subpaths (for example <c>/negotiate</c>)
     /// must.

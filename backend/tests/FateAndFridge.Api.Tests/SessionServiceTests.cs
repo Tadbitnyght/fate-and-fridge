@@ -13,14 +13,14 @@ using Microsoft.Extensions.Logging;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// PostgreSQL-backed verification of session creation, resolution, expiry,
-/// rotation, revocation, and logging hygiene (docs/SECURITY.md §2,
+/// PostgreSQL-backed verification of session creation, resolution, expiry
+/// rotation, revocation, and logging hygiene (docs/SECURITY.md §2
 /// docs/DATABASE.md §2). Requires a Docker daemon; run with
 /// <c>dotnet test --filter "Category!=Integration"</c> to skip locally.
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class SessionServiceTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class SessionServiceTests(SetupFixture fixture) : IAsyncLifetime
 {
     private static readonly DateTimeOffset Start = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
 

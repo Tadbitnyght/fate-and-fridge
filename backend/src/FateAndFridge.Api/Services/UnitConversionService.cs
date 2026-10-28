@@ -3,7 +3,7 @@ using FateAndFridge.Api.Domain;
 namespace FateAndFridge.Api.Services;
 
 /// <summary>
-/// One unit as the conversion service needs it (M2-07). This is a pure input
+/// One unit as the conversion service needs it. This is a pure input
 /// record, deliberately decoupled from the EF Core <c>Unit</c> entity and
 /// <c>AppDbContext</c>: consumers (M8 grocery aggregation) project unit rows
 /// into it before calling the service.
@@ -59,7 +59,7 @@ public abstract record ConversionResult
 }
 
 /// <summary>
-/// Pure, dependency-free unit conversion (M2-07; docs/DATABASE.md §5,
+/// Pure, dependency-free unit conversion (docs/DATABASE.md §5
 /// docs/ARCHITECTURE.md §15). It operates only on <see cref="ConversionUnit"/>
 /// values — never on <c>AppDbContext</c> — and is stateless/thread-safe, so the
 /// application registers it as a singleton.
@@ -86,14 +86,14 @@ public abstract record ConversionResult
 /// <para>
 /// Rounding policy: all arithmetic uses <see cref="decimal"/> only (no
 /// <c>double</c>/<c>float</c> anywhere). The service never rounds or truncates
-/// on its own. Identity conversions are exact and bypass arithmetic entirely:
+/// on its own. Identity conversions are exact and bypass arithmetic entirely
 /// the same persisted <c>Id</c>, an equal symbol when either id is absent, or
 /// two equal non-null base factors return the quantity unchanged. Only when
 /// factors differ does the service compute
 /// <c>quantity * from.BaseFactor / to.BaseFactor</c> and inherit
 /// <see cref="decimal"/> division semantics — a non-terminating quotient is
 /// rounded to the nearest representable decimal by the runtime, and an
-/// intermediate product may overflow even when the final quotient would fit,
+/// intermediate product may overflow even when the final quotient would fit
 /// which surfaces as <see cref="ConversionFailureReason.Overflow"/>. Display
 /// formatting and any presentation rounding belong to the caller.
 /// </para>

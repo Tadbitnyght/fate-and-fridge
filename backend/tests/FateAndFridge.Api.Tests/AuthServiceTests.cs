@@ -18,8 +18,8 @@ namespace FateAndFridge.Api.Tests;
 /// with <c>dotnet test --filter "Category!=Integration"</c> to skip locally.
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class AuthServiceTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class AuthServiceTests(SetupFixture fixture) : IAsyncLifetime
 {
     private const string Password = "correct horse battery staple";
 

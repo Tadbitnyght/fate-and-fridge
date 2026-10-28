@@ -26,8 +26,8 @@ function describeError(error: unknown): string {
 }
 
 /**
- * One active local recipe photo per recipe (M3 §1.7): upload, replace, remove,
- * alt text, and a preview. The server re-validates the file signature, size,
+ * One active local recipe photo per recipe (M3 §1.7): upload, replace, remove
+ * alt text, and a preview. The server re-validates the file signature, size
  * and dimensions — the client checks are only a courtesy.
  */
 export function RecipeImageField({

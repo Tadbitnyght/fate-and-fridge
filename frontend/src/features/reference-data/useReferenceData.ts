@@ -122,7 +122,7 @@ export function useReorderDepartments() {
   })
 }
 
-/* ---------- units ---------- */
+/* units ---------- */
 
 /** Query-key prefix for every units variant. */
 export const unitsQueryKey = ['reference-data', 'units'] as const
@@ -196,7 +196,7 @@ export function useRemoveUnitAlias() {
   })
 }
 
-/* ---------- ingredients ---------- */
+/* ingredients ---------- */
 
 /** Query-key prefix for every ingredient-list variant. */
 export const ingredientsQueryKey = ['reference-data', 'ingredients'] as const
@@ -284,7 +284,7 @@ export function useMergeIngredients() {
   })
 }
 
-/* ---------- proteins ---------- */
+/* proteins ---------- */
 
 /** Query-key prefix for every protein-list variant. */
 export const proteinsQueryKey = ['reference-data', 'proteins'] as const
@@ -342,7 +342,7 @@ export function useDeleteProtein() {
   })
 }
 
-/* ---------- tags ---------- */
+/* tags ---------- */
 
 /**
  * Query-key prefix for every tag-list variant. Tags have no retirement or

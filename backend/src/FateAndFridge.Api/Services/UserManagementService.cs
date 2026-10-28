@@ -21,7 +21,7 @@ public sealed record UserRecord(
     DateTimeOffset? LastLoginAt,
     IReadOnlyList<string> Permissions);
 
-/// <summary>Outcome of a user-management mutation (M1-10).</summary>
+/// <summary>Outcome of a user-management mutation.</summary>
 public abstract record UserMutationResult
 {
     private UserMutationResult()
@@ -46,7 +46,7 @@ public abstract record UserMutationResult
 }
 
 /// <summary>
-/// User management (M1-10, docs/API.md §6/§21): listing, creation, detail,
+/// User management (docs/API.md §6/§21): listing, creation, detail
 /// rename/role changes, permission replacement, and enable/disable with
 /// last-active-Admin safety. Role and enable/disable mutations run in a
 /// transaction holding an advisory lock so two concurrent mutations can never
@@ -201,7 +201,6 @@ public sealed class UserManagementService(
         var grantedKeys = role == UserRole.Member ? PermissionKeys.MemberViewOnly : [];
 
         // Account, default grants, and the audit row commit atomically
-        // (docs/M12_PLAN.md §2.1).
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         try
         {
@@ -417,7 +416,7 @@ public sealed class UserManagementService(
         if (roleChanged)
         {
             // Only after the commit: notify the revoked sessions' live-sync
-            // connections and abort them (docs/M9_PLAN.md §1.13).
+            // connections and abort them.
             await liveSync.PublishSessionRevokedForUserAsync(id, exceptSessionId: null, cancellationToken);
         }
 
@@ -427,7 +426,7 @@ public sealed class UserManagementService(
     }
 
     /// <summary>
-    /// Replaces a member's granted permission rows. Unknown keys are rejected;
+    /// Replaces a member's granted permission rows. Unknown keys are rejected
     /// Admins always hold all keys and cannot have rows set. Grants are read
     /// per request, so the change takes effect immediately. The before/after
     /// key sets are audited; no other user field is included.
@@ -583,7 +582,7 @@ public sealed class UserManagementService(
         if (!activate)
         {
             // Only after the commit: notify the revoked sessions' live-sync
-            // connections and abort them (docs/M9_PLAN.md §1.13).
+            // connections and abort them.
             await liveSync.PublishSessionRevokedForUserAsync(id, exceptSessionId: null, cancellationToken);
         }
 

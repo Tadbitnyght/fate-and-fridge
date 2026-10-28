@@ -2,8 +2,7 @@ namespace FateAndFridge.Api.Services;
 
 /// <summary>
 /// The filesystem operations a restore may use to replace the contents of the
-/// live <c>images/</c> and <c>config/dp-keys/</c> directories (docs/API.md §18;
-/// docs/M13_VERIFICATION.md).
+/// live <c>images/</c> and <c>config/dp-keys/</c> directories.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -47,7 +46,7 @@ public interface IRestoreFileOperations
     UnixFileMode? GetDirectoryMode(string directory);
 
     /// <summary>
-    /// Re-applies a mode captured by <see cref="GetDirectoryMode"/>. Best effort:
+    /// Re-applies a mode captured by <see cref="GetDirectoryMode"/>. Best effort
     /// the contents are already in place, so a mode that cannot be re-applied is
     /// not fatal. Ownership is deliberately never touched.
     /// </summary>
@@ -55,7 +54,7 @@ public interface IRestoreFileOperations
 }
 
 /// <summary>
-/// The production <see cref="IRestoreFileOperations"/>: plain <see cref="Directory"/>,
+/// The production <see cref="IRestoreFileOperations"/>: plain <see cref="Directory"/>
 /// <see cref="File"/> copy/delete calls, with Unix file modes carried over.
 /// </summary>
 internal sealed class SystemRestoreFileOperations : IRestoreFileOperations
@@ -124,7 +123,7 @@ internal sealed class SystemRestoreFileOperations : IRestoreFileOperations
 
     /// <summary>
     /// Reads the directory's mode, or null when it cannot be read. The swap
-    /// captures it before emptying the directory and re-applies it afterwards,
+    /// captures it before emptying the directory and re-applies it afterwards
     /// because the deployment's <c>images/</c> is a bind-mounted SMB share whose
     /// mode is set by the mount options, not by this application.
     /// </summary>

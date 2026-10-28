@@ -6,7 +6,7 @@ using FateAndFridge.Api.Services;
 namespace FateAndFridge.Api.Endpoints;
 
 /// <summary>
-/// Update status routes (docs/M13_PLAN.md §1.13–§1.14, §2.2; docs/API.md §25).
+/// Update status routes.
 /// </summary>
 /// <remarks>
 /// The status read is for every authenticated actor — the About section and the

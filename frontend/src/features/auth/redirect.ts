@@ -2,7 +2,7 @@ export const DEFAULT_RETURN_TO = '/'
 
 /**
  * Defense-in-depth for post-login navigation: only internal, same-origin
- * paths are accepted. Absolute URLs, protocol-relative URLs (`//host`),
+ * paths are accepted. Absolute URLs, protocol-relative URLs (`//host`)
  * backslash variants (`/\host`), and non-path schemes (`javascript:`, …) all
  * fall back to {@link DEFAULT_RETURN_TO}. The value is resolved with the URL
  * parser the browser uses, so the origin comparison cannot be bypassed with

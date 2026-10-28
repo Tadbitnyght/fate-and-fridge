@@ -3,11 +3,11 @@ using FateAndFridge.Api.Domain;
 namespace FateAndFridge.Api.Tests.Support;
 
 /// <summary>
-/// Test-side oracle for the M1-09 permission matrix (docs/DATABASE.md §2,
+/// Test-side oracle for the permission matrix (docs/DATABASE.md §2
 /// docs/ARCHITECTURE.md §10). It recomputes expected effective sets from the
 /// specification instead of calling the production evaluator, so tests compare
-/// enforcement against the documented rules. Reusable by later issues (M1-10
-/// user management, M1-15 verification).
+/// enforcement against the documented rules. Reusable by later issues (
+/// user management, verification).
 /// </summary>
 public static class PermissionMatrix
 {

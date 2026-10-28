@@ -2,9 +2,7 @@ import { formatHouseholdDate } from '../../lib/dateFormat'
 
 /**
  * Formatting for the per-recipe history metrics shared by the recipe browser
- * (photo cards and the compact list) and the recipe detail/editor (M11-06,
- * docs/M11_PLAN.md §1.2, docs/API.md §14/§23).
- *
+ * (photo cards and the compact list) and the recipe detail/editor.
  * Values arrive on the recipes list items and the detail document's
  * `statistics` object. Each is `null` when the recipe has no such history —
  * never a fake zero — and the dates are household-local `yyyy-MM-dd` strings

@@ -6,17 +6,17 @@ using Microsoft.EntityFrameworkCore;
 namespace FateAndFridge.Api.Services;
 
 /// <summary>
-/// The raw grocery range query (docs/M8_PLAN.md §1.7, §2.2). Each member is the
+/// The raw grocery range query. Each member is the
 /// literal query-string value (or null when absent), so the service can tell
 /// "absent" from "malformed" and enforce the preset xor start/days rules.
 /// </summary>
 public sealed record GroceryRangeRequest(string? Preset, string? Start, string? Days);
 
-/// <summary>One resolved, concrete grocery range (docs/M8_PLAN.md §1.7).</summary>
+/// <summary>One resolved, concrete grocery range.</summary>
 public sealed record GroceryRangeResolution(string Preset, DateOnly Start, DateOnly End, int DayCount);
 
 /// <summary>
-/// One projected grocery line (docs/M8_PLAN.md §2.2). <see cref="Identity"/> is
+/// One projected grocery line. <see cref="Identity"/> is
 /// the <see cref="GroceryItemIdentity"/> value shared with the check API; recipe
 /// lines reuse the aggregation identity while manual lines hash their own id.
 /// The department is null when the line belongs to the trailing "Other" group.
@@ -34,7 +34,7 @@ public sealed record GroceryListItemRecord(
     long? ManualItemId,
     IReadOnlyList<GroceryItemSource> Sources);
 
-/// <summary>One department bucket of ordered grocery lines (docs/M8_PLAN.md §1.12).</summary>
+/// <summary>One department bucket of ordered grocery lines.</summary>
 public sealed record GroceryDepartmentRecord(
     long? DepartmentId,
     string Name,
@@ -42,7 +42,7 @@ public sealed record GroceryDepartmentRecord(
     bool IsOther,
     IReadOnlyList<GroceryListItemRecord> Items);
 
-/// <summary>The full grocery projection for a resolved range (docs/M8_PLAN.md §2.2).</summary>
+/// <summary>The full grocery projection for a resolved range.</summary>
 public sealed record GroceryListRecord(
     GroceryRangeResolution Range,
     IReadOnlyList<GroceryDepartmentRecord> Departments);
@@ -63,7 +63,7 @@ public abstract record GroceryListOutcome
 }
 
 /// <summary>
-/// Builds the live grocery projection (docs/M8_PLAN.md §1.3–§1.12, §2.1). It
+/// Builds the live grocery projection. It
 /// resolves the requested range (preset or explicit start/days, falling back to
 /// the caller's remembered range and then Next 7 Days), gathers the
 /// <c>include_groceries</c> calendar entries in the range, projects their recipe
@@ -113,7 +113,7 @@ public sealed class GroceryListService(
     /// <summary>
     /// Resolves the range and builds the ordered projection for the actor. When
     /// the query supplies nothing, the actor's remembered range is used, falling
-    /// back to Next 7 Days; reads never write the preference (M8-04 owns that).
+    /// back to Next 7 Days; reads never write the preference (owns that).
     /// </summary>
     public async Task<GroceryListOutcome> GetListAsync(
         GroceryRangeRequest request,
@@ -143,7 +143,7 @@ public sealed class GroceryListService(
         CancellationToken cancellationToken)
     {
         // Only include_groceries entries carrying a recipe contribute
-        // (docs/M8_PLAN.md §1.3): eat_out/fend/go_to/vacation never do.
+        // eat_out/fend/go_to/vacation never do.
         var entries = await dbContext.CalendarEntries
             .AsNoTracking()
             .Where(entry =>
@@ -189,7 +189,7 @@ public sealed class GroceryListService(
 
         // Manual items show only for the exact active range: the stored
         // (range_start, range_days) must equal the resolved range, so a manual
-        // item is hidden the moment the range changes (docs/M8_PLAN.md §1.8).
+        // item is hidden the moment the range changes.
         var manualItems = await dbContext.ManualGroceryItems
             .AsNoTracking()
             .Where(item => item.RangeStart == range.Start && item.RangeDays == range.DayCount)
@@ -305,7 +305,7 @@ public sealed class GroceryListService(
                 : (long?)null;
 
             // Department defaults to the linked (canonical) ingredient, else the
-            // line falls to the trailing "Other" group (docs/M8_PLAN.md §1.8, §1.12).
+            // line falls to the trailing "Other" group.
             var departmentId = manual.DepartmentId
                 ?? (canonicalId is { } canonical ? LookupDepartment(canonical, ingredientMap) : null);
 
@@ -402,7 +402,7 @@ public sealed class GroceryListService(
         }
 
         // Departments follow sort_order then name; the null-department "Other"
-        // group carries int.MaxValue so it always sorts last (docs/M8_PLAN.md §1.12).
+        // group carries int.MaxValue so it always sorts last.
         return groups
             .OrderBy(group => group.SortOrder)
             .ThenBy(group => group.Name, StringComparer.OrdinalIgnoreCase)

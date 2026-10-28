@@ -2,8 +2,7 @@ import { apiRequest } from './client'
 import type { RecipeStatus } from './recipes'
 
 /**
- * Typed client for the M5 calendar contract (docs/M5_PLAN.md §2.4).
- *
+ * Typed client for the M5 calendar contract.
  * Reads require `calendar.view`; writes require `calendar.edit`. The server
  * enforces historical immutability, range caps, and permissions — these
  * functions only describe the wire shapes. JSON property names are snake_case.
@@ -41,7 +40,7 @@ export const CALENDAR_ENTRY_LABELS: Record<CalendarEntryType, string> = {
   vacation: 'Vacation',
 }
 
-/** Special types that may carry a curated icon (docs/M5_PLAN.md §1.14). */
+/** Special types that may carry a curated icon. */
 export const ICON_ENTRY_TYPES: CalendarEntryType[] = [
   'holiday',
   'misc',
@@ -154,7 +153,7 @@ export interface BatchProposedEntry {
 export type BatchPreviewDayStatus = 'proposed' | 'unchanged'
 
 /**
- * Why a day is left unchanged: locked, vacation, a special/non-recipe entry,
+ * Why a day is left unchanged: locked, vacation, a special/non-recipe entry
  * or an existing plain non-recipe (eat out / fend) entry.
  */
 export type BatchUnchangedReason = 'locked' | 'vacation' | 'special' | 'existing_non_recipe'

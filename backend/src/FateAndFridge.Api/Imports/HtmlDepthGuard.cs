@@ -1,8 +1,7 @@
 namespace FateAndFridge.Api.Imports;
 
 /// <summary>
-/// Cheap pre-parse budget guard for the HTML fallback (docs/M4_PLAN.md §1.5,
-/// §2.1). AngleSharp's DOM construction is superlinear on extremely deep
+/// Cheap pre-parse budget guard for the HTML fallback. AngleSharp's DOM construction is superlinear on extremely deep
 /// nesting, so the import service estimates the maximum tag nesting depth from
 /// the raw HTML before handing it to <see cref="HtmlFallbackParser"/> and skips
 /// the fallback when the document is absurdly deep.
@@ -10,10 +9,10 @@ namespace FateAndFridge.Api.Imports;
 /// <remarks>
 /// <para>
 /// The estimator is a single forward scan with no allocations: it counts
-/// opening tags, decrements on closing tags, and ignores comments, doctypes,
+/// opening tags, decrements on closing tags, and ignores comments, doctypes
 /// processing instructions, self-closing/void elements, and the raw-text
 /// contents of <c>script</c>/<c>style</c>/<c>title</c>/<c>textarea</c>. A
-/// <c>&lt;</c> that does not begin a real tag name (for example <c>&lt; 2</c>,
+/// <c>&lt;</c> that does not begin a real tag name (for example <c>&lt; 2</c>
 /// <c>&lt;=</c>, or <c>&lt;3</c>) is treated as literal text, and <c>&gt;</c>
 /// inside a quoted attribute value does not end the tag. It is deliberately
 /// approximate — a guard, not a parser — so false positives only cost a
@@ -25,7 +24,7 @@ namespace FateAndFridge.Api.Imports;
 /// </para>
 /// <para>
 /// The fallback's own counters (visible-node and text-item caps in
-/// <see cref="HtmlFallbackParser"/>) bound total parse work once it is invoked;
+/// <see cref="HtmlFallbackParser"/>) bound total parse work once it is invoked
 /// this guard only decides whether to invoke it at all.
 /// </para>
 /// </remarks>
@@ -173,7 +172,7 @@ public static class HtmlDepthGuard
 
             if (RawTextElements.Contains(name))
             {
-                // Skip the raw-text body so its '<' characters are not counted;
+                // Skip the raw-text body so its '<' characters are not counted
                 // resume on the matching closing tag so it still decrements.
                 var closeStart = IndexOfCloseTag(html, tagEnd + 1, name);
                 if (closeStart < 0)

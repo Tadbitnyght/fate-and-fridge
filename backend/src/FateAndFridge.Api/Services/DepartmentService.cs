@@ -44,7 +44,7 @@ public abstract record DepartmentReorderResult
 }
 
 /// <summary>
-/// M2-05 departments management (docs/API.md §22): ordered reference data with
+/// Departments management (docs/API.md §22): ordered reference data with
 /// normalized-name uniqueness, retire/delete semantics, and an audit row staged
 /// into the caller's <see cref="AppDbContext"/> for every write.
 /// </summary>

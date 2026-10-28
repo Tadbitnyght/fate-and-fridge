@@ -3,8 +3,8 @@ import { describeBatchUndoError, describeUndoError } from './calendarErrors'
 import { useUndoBatchOperation, useUndoCalendarOperation } from './useCalendar'
 
 /**
- * Dismissible Undo banner shown after a successful reroll (M6-10) or a batch
- * apply (M7-09). Undo restores the prior state; Dismiss hides the banner
+ * Dismissible Undo banner shown after a successful reroll or a batch
+ * apply. Undo restores the prior state; Dismiss hides the banner
  * without undoing. A failed undo (UNDO_CONFLICT/UNDO_EXPIRED/…) reports a
  * non-blocking message and clears the banner rather than crashing.
  */

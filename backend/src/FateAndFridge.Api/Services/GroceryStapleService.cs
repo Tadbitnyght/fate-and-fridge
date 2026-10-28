@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 namespace FateAndFridge.Api.Services;
 
 /// <summary>
-/// One stored household staple (docs/M8_PLAN.md §1.9, §2.3). Timestamps are UTC.
+/// One stored household staple. Timestamps are UTC.
 /// </summary>
 public sealed record GroceryStapleRecord(
     long Id,
@@ -60,10 +60,10 @@ public abstract record GroceryStapleAddOutcome
 }
 
 /// <summary>
-/// Household-wide reusable staple catalog (docs/M8_PLAN.md §1.9, §2.1, §2.2): CRUD
+/// Household-wide reusable staple catalog: CRUD
 /// plus add-to-list. Staples are <b>never auto-added</b> to a grocery list; the
 /// user explicitly adds one, which creates a range-scoped manual item through
-/// <see cref="GroceryManualItemService"/> so range validation, canonicalization,
+/// <see cref="GroceryManualItemService"/> so range validation, canonicalization
 /// the department default, and the response shape stay identical. Adding never
 /// mutates the staple.
 /// </summary>
@@ -122,7 +122,7 @@ public sealed class GroceryStapleService(
         }
 
         // Department default: explicit department_id, else the linked canonical
-        // ingredient's department, else null (docs/M8_PLAN.md §1.9/§1.12).
+        // ingredient's department, else null.
         var departmentId = request.DepartmentId ?? ingredient?.DepartmentId;
 
         var now = timeProvider.GetUtcNow();
@@ -139,7 +139,7 @@ public sealed class GroceryStapleService(
         };
         dbContext.GroceryStaples.Add(staple);
 
-        // Staple and its audit row commit atomically (docs/M12_PLAN.md §2.1).
+        // Staple and its audit row commit atomically.
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         await auditService.WriteAsync(
@@ -254,7 +254,7 @@ public sealed class GroceryStapleService(
 
         staple.UpdatedAt = timeProvider.GetUtcNow();
 
-        // Staple and its audit row commit atomically (docs/M12_PLAN.md §2.1).
+        // Staple and its audit row commit atomically.
         var retired = wasActive && !staple.IsActive;
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -275,7 +275,7 @@ public sealed class GroceryStapleService(
 
     /// <summary>
     /// Adds an <b>active</b> staple to the active range as a manual grocery item
-    /// (docs/M8_PLAN.md §1.9). A missing or inactive staple is not found. The
+    /// A missing or inactive staple is not found. The
     /// staple row is never modified.
     /// </summary>
     public async Task<GroceryStapleAddOutcome> AddToListAsync(

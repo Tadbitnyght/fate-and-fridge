@@ -2,14 +2,14 @@ using System.Text.Json;
 
 namespace FateAndFridge.Api.Services;
 
-/// <summary>Outcome of validating a check/uncheck body (docs/M8_PLAN.md §1.10).</summary>
+/// <summary>Outcome of validating a check/uncheck body.</summary>
 public sealed record GroceryCheckPayloadValidation(
     string? Identity,
     IReadOnlyDictionary<string, string[]> FieldErrors);
 
 /// <summary>
 /// Parses and validates the <c>POST /groceries/check</c> and
-/// <c>/uncheck</c> bodies (docs/M8_PLAN.md §1.10, §2.2). The only accepted value
+/// <c>/uncheck</c> bodies. The only accepted value
 /// is the exact<see cref="GroceryItemIdentity"/> format: 64 lowercase hex
 /// characters.
 /// </summary>

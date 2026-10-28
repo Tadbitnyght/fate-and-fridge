@@ -19,14 +19,14 @@ public sealed class HouseholdSettings
 
     /// <summary>
     /// The last household-local date that was historical under a previous
-    /// timezone (docs/M5_PLAN.md §1.7). A date at or before this boundary is
+    /// timezone. A date at or before this boundary is
     /// historical even if the timezone later moves, so history can never become
     /// editable again. Null until the timezone first changes.
     /// </summary>
     public DateOnly? HistoricalBoundaryDate { get; set; }
 
     /// <summary>
-    /// Randomizer scoring weights and search windows (docs/M6_PLAN.md §1.3).
+    /// Randomizer scoring weights and search windows.
     /// Defaults are provided by the database so existing and freshly set-up
     /// rows start on the documented values.
     /// </summary>

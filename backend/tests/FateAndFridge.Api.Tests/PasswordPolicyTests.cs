@@ -4,7 +4,7 @@ using FluentAssertions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// V1 password policy (docs/SECURITY.md §2): 12–128 characters, no trimming,
+/// V1 password policy (docs/SECURITY.md §2): 12–128 characters, no trimming
 /// no composition rules.
 /// </summary>
 public sealed class PasswordPolicyTests

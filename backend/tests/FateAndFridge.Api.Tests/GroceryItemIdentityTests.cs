@@ -8,10 +8,10 @@ namespace FateAndFridge.Api.Tests;
 
 /// <summary>
 /// Contract tests for the stable grocery identity
-/// (docs/M8_PLAN.md §1.4, §1.10): canonical ingredient + dimension, never
+/// canonical ingredient + dimension, never
 /// quantity, preparation note, or the displayed mass/volume unit; count and
 /// nonconvertible units are unit-specific; the canonical string format and its
-/// SHA-256 hex rendering are pinned so M8-06 stores exactly the same value.
+/// SHA-256 hex rendering are pinned so stores exactly the same value.
 /// </summary>
 public sealed class GroceryItemIdentityTests
 {

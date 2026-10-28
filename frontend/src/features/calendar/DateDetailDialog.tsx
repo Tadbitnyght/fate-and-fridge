@@ -25,9 +25,9 @@ import {
 } from './useCalendar'
 
 /**
- * Date detail editor (M5-11). A modal that creates/replaces, deletes, or
- * locks a date's entry. Historical dates render read-only (M5-12); an Admin can
- * launch the M12-07 historical-correction flow from here. The server enforces
+ * Date detail editor. A modal that creates/replaces, deletes, or
+ * locks a date's entry. Historical dates render read-only; an Admin can
+ * launch the historical-correction flow from here. The server enforces
  * past-date immutability and authorization independently.
  */
 export function DateDetailDialog({

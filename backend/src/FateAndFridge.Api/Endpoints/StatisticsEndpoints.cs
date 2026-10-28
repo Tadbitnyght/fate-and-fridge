@@ -6,7 +6,7 @@ using FateAndFridge.Api.Services;
 
 namespace FateAndFridge.Api.Endpoints;
 
-/// <summary>One household-local statistics window (docs/M11_PLAN.md §2.2).</summary>
+/// <summary>One household-local statistics window.</summary>
 public sealed record StatisticsWindowResponse(string Label, string Start, string End)
 {
     public static StatisticsWindowResponse From(StatisticsWindowRecord window) =>
@@ -24,8 +24,8 @@ public sealed record StatisticsWindowsResponse(
     StatisticsWindowResponse Year);
 
 /// <summary>
-/// One ranked recipe (docs/M11_PLAN.md §2.2). <c>recipe_id</c> is null for a
-/// tombstone; <c>status</c> carries the badge (<c>normal</c>, <c>manual_only</c>,
+/// One ranked recipe. <c>recipe_id</c> is null for a
+/// tombstone; <c>status</c> carries the badge (<c>normal</c>, <c>manual_only</c>
 /// <c>retired</c>, or <c>deleted</c>).
 /// </summary>
 public sealed record RankedRecipeResponse(
@@ -53,7 +53,7 @@ public sealed record ProteinCountResponse(long ProteinId, string Name, int Count
 
 /// <summary>
 /// Recipe occurrences grouped per primary protein, with an explicit
-/// <c>no_primary_protein</c> figure (docs/M11_PLAN.md §1.12).
+/// <c>no_primary_protein</c> figure.
 /// </summary>
 public sealed record ProteinDistributionResponse(
     IReadOnlyList<ProteinCountResponse> Proteins,
@@ -72,7 +72,7 @@ public sealed record SpecialEventCountResponse(string EntryType, int Count)
         new(EnumTextConverters.CalendarEntryTypeToText(count.EntryType), count.Count);
 }
 
-/// <summary>The household statistics overview (docs/M11_PLAN.md §2.2).</summary>
+/// <summary>The household statistics overview.</summary>
 public sealed record StatisticsOverviewResponse(
     StatisticsWindowsResponse Windows,
     IReadOnlyList<RankedRecipeResponse> MostEaten,
@@ -100,8 +100,7 @@ public sealed record StatisticsOverviewResponse(
 }
 
 /// <summary>
-/// The per-recipe metrics (docs/API.md §14, docs/PRODUCT_SPEC.md §12,
-/// docs/M11_PLAN.md §1.2, §1.21): <c>last_eaten</c> and <c>next_planned</c> are
+/// The per-recipe metrics: <c>last_eaten</c> and <c>next_planned</c> are
 /// household-local dates (<c>yyyy-MM-dd</c>) or null, and <c>times_eaten</c> is
 /// the historical occurrence count or null when there is none — never a fake
 /// zero.
@@ -118,7 +117,7 @@ public sealed record RecipeMetricsResponse(
             metrics.TimesEaten);
 }
 
-/// <summary>The applied household-local history range (docs/M11_PLAN.md §1.26).</summary>
+/// <summary>The applied household-local history range.</summary>
 public sealed record MealHistoryRangeResponse(string Start, string End, string Timezone)
 {
     public static MealHistoryRangeResponse From(MealHistoryRangeRecord range) =>
@@ -140,7 +139,7 @@ public sealed record MealHistoryMonthResponse(string Key, string Label, string S
 }
 
 /// <summary>
-/// One day of the meal log (docs/M11_PLAN.md §1.26): the date, entry type, the
+/// One day of the meal log: the date, entry type, the
 /// recipe id (null for a tombstone), the display name, and the primary protein
 /// name (null when the entry carries no recipe or its recipe lists no protein).
 /// </summary>
@@ -162,7 +161,7 @@ public sealed record MealHistoryDayResponse(
 
 /// <summary>
 /// The month cursors, one month per step inside the applied range
-/// (docs/M11_PLAN.md §1.26): <c>newer</c> is the next later month, <c>older</c>
+/// <c>newer</c> is the next later month, <c>older</c>
 /// the next earlier one, and both are null at the range ends.
 /// </summary>
 public sealed record MealHistoryPagingResponse(string? Newer, string? Older)
@@ -171,7 +170,7 @@ public sealed record MealHistoryPagingResponse(string? Newer, string? Older)
         new(paging.Newer, paging.Older);
 }
 
-/// <summary>One month page of the strictly-past meal log (docs/M11_PLAN.md §2.2).</summary>
+/// <summary>One month page of the strictly-past meal log.</summary>
 public sealed record MealHistoryResponse(
     MealHistoryRangeResponse Range,
     MealHistoryMonthResponse Month,
@@ -187,7 +186,7 @@ public sealed record MealHistoryResponse(
 }
 
 /// <summary>
-/// Statistics routes (docs/API.md §14, docs/M11_PLAN.md §2.1, §2.2). The
+/// Statistics routes. The
 /// overview and per-recipe reads are gated by <c>recipes.view</c> and the
 /// meal-history read by <c>calendar.view</c>; the single-user system actor and
 /// Admin have full access and no new permission key is introduced.

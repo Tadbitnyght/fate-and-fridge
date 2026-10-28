@@ -12,7 +12,7 @@ namespace FateAndFridge.Api.Auth;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Package decision (M1-05): <b>Geralt 4.4.0</b>, chosen over Sodium.Core
+/// Package decision: <b>Geralt 4.4.0</b>, chosen over Sodium.Core
 /// and NSec.Cryptography. All three rely on the same native
 /// <c>libsodium</c> 1.0.22 package (linux-x64, linux-arm64, win-x64, osx
 /// binaries bundled, so no Dockerfile or CI changes are required), but only
@@ -24,7 +24,7 @@ namespace FateAndFridge.Api.Auth;
 /// hashing API at all.
 /// </para>
 /// <para>
-/// Production baseline: libsodium interactive preset,
+/// Production baseline: libsodium interactive preset
 /// <c>opslimit = 2</c> (passes) and <c>memlimit = 64 MiB</c>. Parameters are
 /// embedded in every hash, so raising the baseline takes effect through
 /// <see cref="NeedsRehash"/> plus rehash-on-login without invalidating
@@ -69,7 +69,7 @@ public sealed class Argon2idPasswordHasher : IPasswordHasher
     private const int HashBytes = 32;
 
     /// <summary>
-    /// Upper bound <see cref="Verify"/> accepts for the PHC memory parameter:
+    /// Upper bound <see cref="Verify"/> accepts for the PHC memory parameter
     /// 1 GiB, expressed in the PHC string's KiB unit. Hashes above this are
     /// rejected before libsodium runs (untrusted stored values must not let a
     /// login attempt allocate unbounded memory).
@@ -299,7 +299,7 @@ public sealed class Argon2idPasswordHasher : IPasswordHasher
     /// <c>A-Z a-z 0-9 + /</c>, with the character count implied by
     /// <paramref name="expectedBytes"/>. The unused bits of the final quantum
     /// must be zero — checked directly on the last character's index, since
-    /// .NET's base64 decoder rejects unpadded input — which rejects
+    /// NET's base64 decoder rejects unpadded input — which rejects
     /// non-canonical encodings that would decode to the same bytes. Padding
     /// (<c>=</c>), whitespace, base64url characters, and anything else are
     /// rejected.

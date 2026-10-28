@@ -52,7 +52,7 @@ function restoreFailureMessage(error: unknown): string {
 }
 
 /**
- * Clean-install restore (M13-05, docs/API.md §21): upload a `.ffbackup`
+ * Clean-install restore (docs/API.md §21): upload a `.ffbackup`
  * archive, paste the recovery key that belongs to it, and acknowledge the
  * replacement by typing `RESTORE`. The server validates everything, adopts the
  * key, creates a safety backup, and answers `202`; this page then polls
@@ -147,7 +147,7 @@ export function RestoreFromBackupPage({
           try {
             await queryClient.invalidateQueries({ queryKey: sessionQueryKey })
           } catch {
-            // The routing guard surfaces a session error with its own retry;
+            // The routing guard surfaces a session error with its own retry
             // the restore itself is already complete.
           }
           if (!cancelled) {

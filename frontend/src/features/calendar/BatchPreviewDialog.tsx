@@ -22,7 +22,7 @@ export interface BatchAppliedResult {
 }
 
 /**
- * Batch reroll preview wizard (M7-09). Opens for a chosen range, generates a
+ * Batch reroll preview wizard. Opens for a chosen range, generates a
  * persisted preview draft on mount, and shows the per-date diff: proposed dates
  * are highlighted while unchanged/locked/special/vacation dates are muted with
  * their `unchanged_reason`. "Try Another" re-previews with fresh randomness (a

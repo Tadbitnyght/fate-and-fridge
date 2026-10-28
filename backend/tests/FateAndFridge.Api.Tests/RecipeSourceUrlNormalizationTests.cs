@@ -5,7 +5,7 @@ namespace FateAndFridge.Api.Tests;
 
 /// <summary>
 /// Pure matrix for <see cref="RecipeService.BuildNormalizedSourceUrl"/>
-/// (docs/M4_PLAN.md §1.9, §4 "duplicate checks"). The canonical form is shared
+/// The canonical form is shared
 /// by recipe save and import duplicate detection, so these pin the exact
 /// variants that must fold together — and the ones that must stay distinct.
 /// </summary>
@@ -46,9 +46,9 @@ public sealed class RecipeSourceUrlNormalizationTests
     [Fact]
     public void Repeated_keys_are_sorted_as_pairs()
     {
-        // Both orderings collapse onto the same sorted pair order ...
+        // Both orderings collapse onto the same sorted pair order...
         Normalize("https://example.com/r?a=1&a=2").Should().Be("https://example.com/r?a=1&a=2");
-        // ... and a different pairing is not equal.
+        // and a different pairing is not equal.
         Normalize("https://example.com/r?a=2&a=1").Should().Be(Normalize("https://example.com/r?a=1&a=2"));
     }
 }

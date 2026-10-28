@@ -2,7 +2,7 @@ import type { Session } from '../../api/auth'
 
 export const sessionQueryKey = ['auth', 'session'] as const
 
-/** States exposed by `useAuth()` (docs/ARCHITECTURE.md §8). */
+/** States exposed by `useAuth` (docs/ARCHITECTURE.md §8). */
 export type SessionStatus = 'loading' | 'unauthenticated' | 'authenticated' | 'single_user'
 
 export function deriveSessionStatus(

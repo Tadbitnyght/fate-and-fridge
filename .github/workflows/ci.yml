@@ -26,7 +26,7 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
-      # Dependency gate (M14-01). `TreatWarningsAsErrors=true` (Directory.Build.props)
+      # Dependency gate. `TreatWarningsAsErrors=true` (Directory.Build.props)
       # promotes every NuGet audit finding — NU1901/NU1902/NU1903/NU1904, low
       # through critical, direct and transitive (NuGetAuditMode=all) — to an
       # error, so a High/Critical advisory with a fix fails this step. The repo
@@ -81,7 +81,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install dependencies
         run: npm ci
-      # Dependency gate (M14-01): fails on high/critical npm advisories that
+      # Dependency gate: fails on high/critical npm advisories that
       # have a fix. `npm ci` installs the exact locked tree; the audit runs as a
       # separate step so the JSON report survives a failing gate.
       - name: 'Dependency audit (npm: high/critical fail)'
@@ -129,7 +129,7 @@ jobs:
         run: npm ci
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
-      # Gate (M14-02): axe-core over the key routes with the WCAG 2.1 A/AA rule
+      # Gate: axe-core over the key routes with the WCAG 2.1 A/AA rule
       # sets. The spec mocks /api/v1/** (hermetic) and fails on any violation;
       # `best-practice` is not part of the agreed bar. Report artifacts keep the
       # actionable list (rule id, target, help URL) attachable. The project is
@@ -137,7 +137,7 @@ jobs:
       # viewports; the mobile projects run the mobile spec below.
       - name: Run the axe accessibility spec
         run: npx playwright test e2e/a11y.spec.ts --project=chromium
-      # Gate (M14-03): the same hermetic bundle in the Pixel 7 and iPhone 13
+      # Gate: the same hermetic bundle in the Pixel 7 and iPhone 13
       # projects — no horizontal overflow, >= 44 px primary tap targets at phone
       # widths, usable dialogs and sane focus. Any assertion fails the job.
       - name: Run the mobile audit spec (Pixel 7 + iPhone 13)
@@ -173,7 +173,7 @@ jobs:
         run: npm ci
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
-      # Gate (M14 review): the whole hermetic chromium suite — app, calendar,
+      # Gate: the whole hermetic chromium suite — app, calendar,
       # groceries, recipes, import, print, settings, reference data,
       # statistics, audit log and live sync — with `/api/v1/**` mocked and no
       # E2E_BASE_URL, so the `stack` job below only has to own the real-stack
@@ -204,9 +204,9 @@ jobs:
     timeout-minutes: 25
     needs: [backend, frontend]
     env:
-      # Pinned on purpose (M14-01): the scanner is a gate, so its version must
+      # Pinned on purpose: the scanner is a gate, so its version must
       # be reproducible. Never use `latest` here; bump deliberately and record
-      # the change in docs/M14_SECURITY_REPORT.md. The digest pins the exact
+      # the change here. The digest pins the exact
       # scanner image in addition to the tag.
       TRIVY_VERSION: 0.76.1
       TRIVY_IMAGE: aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
@@ -227,7 +227,7 @@ jobs:
           docker save fate-and-fridge:ci-scan -o scan/runtime-image.tar
       # Gate: HIGH/CRITICAL advisories that have a fix fail the job
       # (--ignore-unfixed leaves no-fix advisories to the documented exception
-      # table in docs/M14_SECURITY_REPORT.md).
+      # table).
       - name: Scan the runtime image (HIGH/CRITICAL, fixed only)
         run: |
           docker run --rm \

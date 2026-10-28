@@ -5,7 +5,7 @@ using FluentAssertions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// M1-15 hardening for household settings payloads (issue #19):
+/// Hardening for household settings payloads (issue #19)
 /// duplicate-key semantics, UTF-16 length measurement, and the tzdata walk
 /// fallback that must not poison the lazy timezone map.
 /// </summary>

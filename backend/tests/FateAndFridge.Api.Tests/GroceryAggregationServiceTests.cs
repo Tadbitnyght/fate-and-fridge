@@ -5,8 +5,7 @@ using FluentAssertions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// Aggregation and display battery for M8-02 (docs/M8_PLAN.md §1.4–§1.6, §4;
-/// docs/PRODUCT_SPEC.md §20–§22): compatible-dimension conversion, incompatible
+/// Aggregation and display battery for: compatible-dimension conversion, incompatible
 /// separation, count/unitless combining, largest-present-unit selection, exact
 /// fractions vs two decimals, per-meal attribution, deterministic ordering, and
 /// the defensive unconvertible-contribution path.
@@ -40,7 +39,7 @@ public sealed class GroceryAggregationServiceTests
             recipeName,
             new DateOnly(2026, 10, day));
 
-    // ---- Aggregation ---------------------------------------------------------
+    // Aggregation
 
     [Fact]
     public void Compatible_mass_units_combine_into_the_largest_present_unit()
@@ -166,7 +165,7 @@ public sealed class GroceryAggregationServiceTests
         items.Select(item => item.IdentityHash).Should().OnlyHaveUniqueItems();
     }
 
-    // ---- Display -------------------------------------------------------------
+    // Display
 
     [Fact]
     public void A_single_present_unit_is_used_as_is()
@@ -255,7 +254,7 @@ public sealed class GroceryAggregationServiceTests
         items[0].UnitSymbol.Should().BeNull();
     }
 
-    // ---- Attribution ---------------------------------------------------------
+    // Attribution
 
     [Fact]
     public void Attribution_is_one_row_per_contributing_meal()
@@ -308,7 +307,7 @@ public sealed class GroceryAggregationServiceTests
         items[0].Sources.Should().HaveCount(2);
     }
 
-    // ---- Identity and determinism --------------------------------------------
+    // Identity and determinism
 
     [Fact]
     public void Aggregated_identity_matches_GroceryItemIdentity()
@@ -368,7 +367,7 @@ public sealed class GroceryAggregationServiceTests
         _service.Aggregate([]).Should().BeEmpty();
     }
 
-    // ---- Defensive conversion ------------------------------------------------
+    // Defensive conversion
 
     [Fact]
     public void An_unconvertible_mass_contribution_keeps_its_own_line()
@@ -410,7 +409,7 @@ public sealed class GroceryAggregationServiceTests
         items[0].Sources.Should().HaveCount(2);
     }
 
-    // ---- Non-positive quantities ---------------------------------------------
+    // Non-positive quantities
 
     [Fact]
     public void A_zero_quantity_in_a_different_unit_is_ignored()
@@ -468,7 +467,7 @@ public sealed class GroceryAggregationServiceTests
             .Should().BeEmpty();
     }
 
-    // ---- Nonconvertible numerics ---------------------------------------------
+    // Nonconvertible numerics
 
     [Fact]
     public void Nonconvertible_numeric_quantities_are_retained_and_summed()
@@ -505,7 +504,7 @@ public sealed class GroceryAggregationServiceTests
         items.Select(item => item.IdentityHash).Should().OnlyHaveUniqueItems();
     }
 
-    // ---- Display unit ordering and overflow ----------------------------------
+    // Display unit ordering and overflow
 
     [Fact]
     public void Three_unit_mass_bucket_uses_the_largest_unit_in_any_position()

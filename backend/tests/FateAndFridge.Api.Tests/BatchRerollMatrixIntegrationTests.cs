@@ -19,13 +19,13 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// Issue #98–#101 (M7-04…M7-07): the docs/M7_PLAN.md §4 battery for Fill Empty,
+/// Issue #98–#101: the battery for Fill Empty
 /// lock behavior in a batch, vacation blocking, and batch concurrency, driven at
-/// the HTTP level against PostgreSQL. Each test maps to a §4 bullet:
+/// the HTTP level against PostgreSQL. Each test maps to a §4 bullet
 /// <list type="bullet">
 /// <item>Scope / Fill Empty: only blank dates are proposed and existing
 /// entries are byte-for-byte unchanged (docs/RANDOMIZER.md §12).</item>
-/// <item>Vacation/locks: a vacation date is skipped and never aborts the batch;
+/// <item>Vacation/locks: a vacation date is skipped and never aborts the batch
 /// a locked date is preserved but still counted as occurrence context
 /// (docs/RANDOMIZER.md §4).</item>
 /// <item>Concurrency: two concurrent applies of one draft yield one success and
@@ -33,14 +33,14 @@ namespace FateAndFridge.Api.Tests;
 /// serializes on the same per-date advisory lock; overlapping applies take
 /// their locks in ascending order without deadlocking.</item>
 /// </list>
-/// Selection is made deterministic by the single-Normal-candidate technique:
+/// Selection is made deterministic by the single-Normal-candidate technique
 /// when exactly one recipe has <c>status = Normal</c> the weighted draw must
 /// return it, so proposed ids and the recorded score breakdown become stable
 /// assertions. Helpers mirror the sibling batch tests (they are private there).
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class BatchRerollMatrixIntegrationTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class BatchRerollMatrixIntegrationTests(SetupFixture fixture) : IAsyncLifetime
 {
     private const string CalendarPath = "/api/v1/calendar";
     private const string PreviewPath = "/api/v1/calendar/reroll/preview";
@@ -69,12 +69,10 @@ public sealed class BatchRerollMatrixIntegrationTests(M1SetupFixture fixture) : 
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
-    // ---------------------------------------------------------------------
-    // Fill Empty (#98 / M7-04)
-    // ---------------------------------------------------------------------
+    // Fill Empty (#98)
 
     /// <summary>
-    /// docs/M7_PLAN.md §1.3 / §4 and docs/RANDOMIZER.md §12: Fill Empty proposes
+    /// docs/RANDOMIZER.md §12: Fill Empty proposes
     /// blank dates only. Every existing entry keeps its own unchanged reason and
     /// is left byte-for-byte intact by the apply.
     /// </summary>
@@ -144,7 +142,7 @@ public sealed class BatchRerollMatrixIntegrationTests(M1SetupFixture fixture) : 
     }
 
     /// <summary>
-    /// docs/M7_PLAN.md §4: a fully-occupied Fill Empty range previews with zero
+    /// a fully-occupied Fill Empty range previews with zero
     /// proposals and applies as a no-op (<c>changed_count = 0</c>) without error.
     /// </summary>
     [Fact]
@@ -182,12 +180,10 @@ public sealed class BatchRerollMatrixIntegrationTests(M1SetupFixture fixture) : 
         draft.AppliedAt.Should().NotBeNull("a no-op apply still consumes the draft");
     }
 
-    // ---------------------------------------------------------------------
-    // Lock behavior in a batch (#99 / M7-05)
-    // ---------------------------------------------------------------------
+    // Lock behavior in a batch (#99 /)
 
     /// <summary>
-    /// docs/M7_PLAN.md §1.3 / §4: a locked date is <c>unchanged</c>/<c>locked</c>
+    /// a locked date is <c>unchanged</c>/<c>locked</c>
     /// and is never a write target.
     /// </summary>
     [Fact]
@@ -223,7 +219,7 @@ public sealed class BatchRerollMatrixIntegrationTests(M1SetupFixture fixture) : 
     }
 
     /// <summary>
-    /// docs/RANDOMIZER.md §4 / docs/M7_PLAN.md §4: a locked occurrence is still a
+    /// docs/RANDOMIZER.md §4 : a locked occurrence is still a
     /// planned occurrence, so the single Normal recipe locked on the range start
     /// must contribute the exact-repeat penalty to the next proposed date.
     /// </summary>
@@ -251,7 +247,7 @@ public sealed class BatchRerollMatrixIntegrationTests(M1SetupFixture fixture) : 
     }
 
     /// <summary>
-    /// docs/M7_PLAN.md §1.3 / §4: a locked special entry is preserved exactly;
+    /// a locked special entry is preserved exactly
     /// the lock takes precedence in the reported reason.
     /// </summary>
     [Fact]
@@ -276,12 +272,10 @@ public sealed class BatchRerollMatrixIntegrationTests(M1SetupFixture fixture) : 
         (await SnapshotsAsync([Today])).Should().Equal(before);
     }
 
-    // ---------------------------------------------------------------------
-    // Vacation blocking (#100 / M7-06)
-    // ---------------------------------------------------------------------
+    // Vacation blocking (#100 /)
 
     /// <summary>
-    /// docs/M7_PLAN.md §1.5 / §4: a vacation date inside the range is skipped and
+    /// a vacation date inside the range is skipped and
     /// never written, and it does not abort the rest of the batch.
     /// </summary>
     [Fact]
@@ -317,12 +311,10 @@ public sealed class BatchRerollMatrixIntegrationTests(M1SetupFixture fixture) : 
         history.Should().NotContain(row => row.MealDate == Today.AddDays(2));
     }
 
-    // ---------------------------------------------------------------------
-    // Batch concurrency (#101 / M7-07)
-    // ---------------------------------------------------------------------
+    // Batch concurrency (#101 /)
 
     /// <summary>
-    /// docs/M7_PLAN.md §1.8 / §1.12 / §4: two concurrent applies of the same
+    /// two concurrent applies of the same
     /// draft let exactly one win; the other loses cleanly with
     /// <c>BATCH_DRAFT_EXPIRED</c> or <c>BATCH_CONFLICT</c>, never a 500. The
     /// assertion holds whether or not the requests overlap.
@@ -363,7 +355,7 @@ public sealed class BatchRerollMatrixIntegrationTests(M1SetupFixture fixture) : 
     }
 
     /// <summary>
-    /// docs/M7_PLAN.md §1.12 / §4: an apply racing a single-date reroll on one
+    /// an apply racing a single-date reroll on one
     /// target date serializes on the shared per-date advisory lock; neither
     /// request 500s and the stored calendar stays consistent.
     /// </summary>
@@ -399,7 +391,7 @@ public sealed class BatchRerollMatrixIntegrationTests(M1SetupFixture fixture) : 
     }
 
     /// <summary>
-    /// docs/M7_PLAN.md §1.12 / §4: an apply racing a manual single-date edit
+    /// an apply racing a manual single-date edit
     /// (<c>PUT /calendar/{date}</c>) on one target date never 500s and leaves a
     /// consistent calendar. The target date already has an entry, so both
     /// operations update the same row rather than racing to insert it.
@@ -436,7 +428,7 @@ public sealed class BatchRerollMatrixIntegrationTests(M1SetupFixture fixture) : 
     }
 
     /// <summary>
-    /// docs/M7_PLAN.md §1.12 / §4: two applies whose target ranges overlap take
+    /// two applies whose target ranges overlap take
     /// their per-date locks in ascending order, so neither deadlocks. The
     /// observable outcome is that both requests terminate without a 500 and one
     /// (the loser) reports a clean conflict.
@@ -476,9 +468,7 @@ public sealed class BatchRerollMatrixIntegrationTests(M1SetupFixture fixture) : 
         (await context.CalendarEntryHistory.CountAsync(Ct)).Should().Be(7);
     }
 
-    // ---------------------------------------------------------------------
     // Shared helpers
-    // ---------------------------------------------------------------------
 
     private static void AssertUnchanged(JsonElement root, DateOnly date, string? reason)
     {

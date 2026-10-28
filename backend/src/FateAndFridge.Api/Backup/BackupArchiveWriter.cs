@@ -18,8 +18,8 @@ public sealed record BackupArchiveResult(
 
 /// <summary>
 /// Streaming, append-only writer for a <c>.ffbackup</c> archive
-/// (docs/M13_PLAN.md §1.4). The caller opens the archive with
-/// <see cref="WriteAsync(Stream, ReadOnlyMemory{byte}, BackupManifest, CancellationToken)"/>,
+/// The caller opens the archive with
+/// <see cref="WriteAsync(Stream, ReadOnlyMemory{byte}, BackupManifest, CancellationToken)"/>
 /// appends entries with <see cref="AddEntryAsync"/>, and finalizes it with
 /// <see cref="CompleteAsync"/>. The manifest is generated from the added
 /// entries and written last. Neither the tar stream nor the encrypted records

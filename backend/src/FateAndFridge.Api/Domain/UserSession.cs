@@ -1,7 +1,7 @@
 namespace FateAndFridge.Api.Domain;
 
 /// <summary>
-/// Database-backed opaque session. Only a hash of the session token is stored;
+/// Database-backed opaque session. Only a hash of the session token is stored
 /// timestamps are set by the application and are always UTC.
 /// </summary>
 public sealed class UserSession

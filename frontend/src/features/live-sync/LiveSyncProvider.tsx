@@ -17,7 +17,7 @@ import {
  * the session and the shared `QueryClient`. It connects only for an
  * authenticated multiuser session or the single-user system actor, runs a full
  * invalidation pass on every (re)connect, forces a sign-out on
- * `session.revoked`, and closes on logout (docs/M9_PLAN.md §1.7–§1.9).
+ * `session.revoked`, and closes on logout.
  */
 export function LiveSyncProvider({ children }: { children: ReactNode }) {
   const { status: sessionStatus, refetchSession } = useAuth()
@@ -93,7 +93,7 @@ export function LiveSyncProvider({ children }: { children: ReactNode }) {
         if (stopped) {
           return
         }
-        // Initial-connect failures are not covered by withAutomaticReconnect,
+        // Initial-connect failures are not covered by withAutomaticReconnect
         // so retry with the same backoff until the backend is reachable.
         setConnectionStatus('disconnected')
         attempt += 1

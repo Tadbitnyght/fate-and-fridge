@@ -12,7 +12,7 @@ public sealed record SetupStatus(bool SetupCompleted, string? AuthMode, bool Rec
 /// <summary>
 /// Reads and writes the single-shot setup state kept in
 /// <c>application_settings</c> (docs/DATABASE.md §11) and reports whether the
-/// backup recovery key file exists. Recovery key generation itself is M1-04.
+/// backup recovery key file exists. Recovery key generation is a separate step.
 /// </summary>
 public sealed class SetupStateService(AppDbContext dbContext, IConfiguration configuration)
 {
@@ -52,7 +52,7 @@ public sealed class SetupStateService(AppDbContext dbContext, IConfiguration con
     /// <summary>
     /// Idempotently stores the <c>setup_completed</c> flag and refreshes
     /// <c>updated_at</c>. Uses a single atomic PostgreSQL upsert so concurrent
-    /// callers cannot create duplicate rows (docs/API.md §21, M1-04).
+    /// callers cannot create duplicate rows (docs/API.md §21).
     /// </summary>
     public async Task SetSetupCompletedAsync(
         bool completed = true,

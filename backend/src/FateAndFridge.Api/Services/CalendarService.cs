@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FateAndFridge.Api.Services;
 
-/// <summary>The curated special-event icon catalog (docs/M5_PLAN.md §1.14).</summary>
+/// <summary>The curated special-event icon catalog.</summary>
 public static class CalendarIcons
 {
     /// <summary>Stable icon keys rendered by the frontend inline-SVG set.</summary>
@@ -38,7 +38,7 @@ public static class CalendarIcons
 /// <summary>Minimal recipe summary embedded on a calendar entry.</summary>
 public sealed record CalendarRecipeSummary(long Id, string Name, string? ImageUrl, string Status);
 
-/// <summary>A calendar entry as returned by the API (docs/M5_PLAN.md §2.4).</summary>
+/// <summary>A calendar entry as returned by the API.</summary>
 public sealed record CalendarEntryRecord(
     long Id,
     string EntryType,
@@ -60,7 +60,7 @@ public sealed record CalendarEntryRecord(
 /// <summary>One exact-recipe occurrence inside a repeat window.</summary>
 public sealed record CalendarOccurrence(DateOnly Date, string EntryType);
 
-/// <summary>A non-blocking exact-recipe repeat warning (docs/M5_PLAN.md §1.13).</summary>
+/// <summary>A non-blocking exact-recipe repeat warning.</summary>
 public sealed record CalendarRepeatWarning(
     long RecipeId,
     DateOnly WindowStart,
@@ -103,7 +103,7 @@ public sealed record CalendarWriteRequest(
     string? IconKey);
 
 /// <summary>
-/// The validated, sanitized fields of a calendar write (docs/M5_PLAN.md §1.6).
+/// The validated, sanitized fields of a calendar write.
 /// <see cref="CalendarService.ValidateWriteRequestAsync"/> produces it once, then
 /// <see cref="CalendarService.ApplyFields"/> stores it, so the normal upsert and
 /// the M12 historical correction share exactly one rule set.
@@ -136,12 +136,12 @@ public abstract record CalendarMutationResult
 }
 
 /// <summary>
-/// M5 calendar core service (docs/M5_PLAN.md §2): reads with the household clock,
+/// M5 calendar core service: reads with the household clock
 /// full-replace writes with per-type validation, snapshots (refresh future /
 /// freeze past), lock/unlock, and the manual-selection repeat check. Every write
 /// stages exactly one <see cref="CalendarEntryHistory"/> row and one M12 audit
 /// row with the actor, the date target, and the before/after documents
-/// (docs/M12_PLAN.md §1.3); the entry, its history, and the audit row commit
+/// the entry, its history, and the audit row commit
 /// atomically.
 /// </summary>
 public sealed class CalendarService(
@@ -160,7 +160,7 @@ public sealed class CalendarService(
     /// <summary>See <see cref="RepeatLookbackDays"/>.</summary>
     public const int RepeatLookaheadDays = 14;
 
-    /// <summary>Special types that may carry an icon (docs/M5_PLAN.md §1.14).</summary>
+    /// <summary>Special types that may carry an icon.</summary>
     private static readonly CalendarEntryType[] IconTypes =
     [
         CalendarEntryType.Holiday,
@@ -260,8 +260,7 @@ public sealed class CalendarService(
         }
 
         // Every single-date writer takes the same per-date advisory lock as the
-        // randomizer and the batch apply/undo (docs/M7_PLAN.md §1.12,
-        // docs/M14_PLAN.md §1.9). It is acquired before the blank-date read, so
+        // randomizer and the batch apply/undo. It is acquired before the blank-date read, so
         // two writers can never both observe a blank date and race the unique
         // index (BUG-003). The transaction also owns the entry, history, and
         // audit rows, so a conflict rolls all of them back.
@@ -309,8 +308,7 @@ public sealed class CalendarService(
 
         try
         {
-            // Entry, history, and audit commit atomically (docs/M5_PLAN.md §4,
-            // docs/M12_PLAN.md §2.1).
+            // Entry, history, and audit commit atomically.
             await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             var afterJson = SnapshotJson(entry);
             StageHistoryRow(dbContext, entry.Id, entry.MealDate, beforeJson, afterJson, actorUserId, now);
@@ -399,7 +397,7 @@ public sealed class CalendarService(
 
         try
         {
-            // Entry, history, and audit commit atomically (docs/M12_PLAN.md §2.1).
+            // Entry, history, and audit commit atomically.
             dbContext.CalendarEntries.Remove(entry);
             StageHistory(entryId: null, mealDate, beforeJson, afterJson: null, actorUserId);
             await auditService.WriteAsync(
@@ -482,7 +480,7 @@ public sealed class CalendarService(
 
         try
         {
-            // Entry, history, and audit commit atomically (docs/M12_PLAN.md §2.1).
+            // Entry, history, and audit commit atomically.
             var afterJson = SnapshotJson(entry);
             StageHistory(entry.Id, entry.MealDate, beforeJson, afterJson, actorUserId);
             await auditService.WriteAsync(
@@ -521,7 +519,7 @@ public sealed class CalendarService(
 
     /// <summary>
     /// Refreshes the frozen display snapshot of non-historical entries that
-    /// reference a renamed recipe (docs/M5_PLAN.md §1.5). Historical entries are
+    /// reference a renamed recipe. Historical entries are
     /// untouched. Called by the recipe write path inside its transaction.
     /// </summary>
     public Task RefreshSnapshotsForRecipeAsync(
@@ -842,9 +840,9 @@ public sealed class CalendarService(
     }
 
     /// <summary>
-    /// Validates and sanitizes a calendar write request (docs/M5_PLAN.md §1.6).
-    /// The normal upsert and the M12 historical correction call this one method,
-    /// so the per-type field rules cannot drift (docs/M12_PLAN.md §2.1).
+    /// Validates and sanitizes a calendar write request.
+    /// The normal upsert and the M12 historical correction call this one method
+    /// so the per-type field rules cannot drift.
     /// Returns the resolved fields, or the per-field errors of an invalid request.
     /// </summary>
     internal static async Task<(CalendarWriteFields? Fields, Dictionary<string, string[]> Errors)> ValidateWriteRequestAsync(
@@ -945,7 +943,6 @@ public sealed class CalendarService(
     /// <summary>
     /// Applies validated fields to an entry. The lock state is deliberately not
     /// touched, so a historical correction leaves a locked date locked
-    /// (docs/M12_PLAN.md §1.9).
     /// </summary>
     internal static void ApplyFields(
         CalendarEntry entry,

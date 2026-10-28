@@ -7,7 +7,7 @@ namespace FateAndFridge.Api.Tests;
 
 /// <summary>
 /// Table-driven verification of the pure ingredient-line splitter
-/// (docs/M4_PLAN.md §1.12): every accepted quantity form, raw preservation for
+/// every accepted quantity form, raw preservation for
 /// ranges/multipliers/word quantities, unit-phrase matching, comma preparation
 /// notes, parenthetical package sizes, and total behavior on empty/unicode
 /// input. No database or network is used.

@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 namespace FateAndFridge.Api.Services;
 
 /// <summary>
-/// The household's calendar frame for a request (docs/M5_PLAN.md §1.7):
+/// The household's calendar frame for a request
 /// household-local today, the frozen historical boundary, and the calendar
 /// preferences reads/writes need.
 /// </summary>
@@ -20,7 +20,7 @@ public sealed record HouseholdCalendarContext(
 /// "Today" comes from the injected <see cref="TimeProvider"/>, never the server
 /// wall clock, so tests are deterministic. The frozen boundary prevents a date
 /// that was already historical from becoming editable again after a timezone
-/// change (docs/M5_PLAN.md §1.7).
+/// change.
 /// </summary>
 public sealed class HouseholdClock(AppDbContext dbContext, TimeProvider timeProvider)
 {

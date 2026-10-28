@@ -2,14 +2,12 @@ import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 
 /**
- * Accessibility gate (M14-02, docs/M14_PLAN.md §1.6, §2, §4).
- *
+ * Accessibility gate.
  * Every key route is rendered with the real application bundle, real CSS, and
  * the real DOM, against a hermetic `/api/v1/**` mock (the same pattern as the
  * other e2e specs). axe-core then runs the WCAG 2.1 A/AA rule sets only — the
  * `best-practice` tag is deliberately excluded from the failing set, because
  * those rules are advisory and not part of the agreed bar.
- *
  * A violation fails the test with the rule id, the CSS target, and the help
  * URL so a failure names the exact fix.
  */
@@ -19,7 +17,6 @@ const WCAG_2_1_AA = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']
 
 /**
  * The pinned calendar day shared by the fixtures and the app clock.
- *
  * The outside-month cells are a contrast target (their day numbers use the
  * muted token), and the today cell carries the only entry. Deriving "today"
  * from the real clock meant those cells could silently disappear from the
@@ -726,7 +723,7 @@ async function mockAppApi(page: Page, options: MockOptions = {}): Promise<void> 
   })
 }
 
-/** The route matrix: every key surface from docs/M14_PLAN.md §1.6. */
+/** The route matrix: every key surface from */
 const ROUTES: Array<{
   name: string
   path: string
@@ -835,7 +832,7 @@ const ROUTES: Array<{
     },
   },
   {
-    // Reference data carries the M14-02 label fixes: the department reorder
+    // Reference data carries the label fixes: the department reorder
     // buttons (`Move up Produce` contains the visible label) and the ingredient
     // row editors. Auditing the tab is what proves those fixes hold.
     name: 'settings reference data (departments)',
@@ -1007,7 +1004,7 @@ test.describe('WCAG 2.1 AA — 375 px viewport', () => {
 /**
  * The app honours `prefers-color-scheme: dark` (index.css keeps a full dark
  * token set), so the same AA bar applies to the dark palette. The contrast
- * tokens touched by M14-02 are shared by both schemes.
+ * tokens touched by are shared by both schemes.
  */
 test.describe('WCAG 2.1 AA — dark colour scheme', () => {
   test.use({ colorScheme: 'dark' })

@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// M1-15 review fix: the last-resort exception handler must not turn client
+/// Review fix: the last-resort exception handler must not turn client
 /// disconnects into logged 500s, and real failures must still use the shared
 /// envelope without leaking details.
 /// </summary>

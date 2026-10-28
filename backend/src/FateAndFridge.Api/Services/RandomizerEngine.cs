@@ -23,7 +23,7 @@ public sealed record RandomizerRequest(
     IReadOnlyList<RandomizerNeighbor> Neighbors);
 
 /// <summary>
-/// The score breakdown for the chosen recipe (docs/M6_PLAN.md §2.3). Every phase
+/// The score breakdown for the chosen recipe. Every phase
 /// multiplier is recorded even when neutral so the operation metadata is
 /// reproducible for analysis.
 /// </summary>
@@ -44,9 +44,9 @@ public sealed record RandomizerMetadata(
 public sealed record RandomizerResult(long RecipeId, RandomizerMetadata Metadata);
 
 /// <summary>
-/// Pure randomization engine (docs/M6_PLAN.md §1.5–§1.10, docs/RANDOMIZER.md §7).
+/// Pure randomization engine.
 /// No I/O: the caller supplies the candidate pool, occurrences, and neighbors as
-/// household-local dates. Randomness arrives through <see cref="IRandomSource"/>,
+/// household-local dates. Randomness arrives through <see cref="IRandomSource"/>
 /// so a selection is deterministic for a given source value.
 /// </summary>
 public sealed class RandomizerEngine(IRandomSource randomSource)
@@ -60,7 +60,7 @@ public sealed class RandomizerEngine(IRandomSource randomSource)
     /// Scores every candidate and draws one with a secure weighted roulette wheel.
     /// Throws when the pool is empty. When every final weight is zero (only
     /// possible with a zero special-day multiplier) it falls back to a uniform
-    /// draw, so the small-pool case never fails (docs/M6_PLAN.md §1.10).
+    /// draw, so the small-pool case never fails.
     /// </summary>
     public RandomizerResult Select(RandomizerOptions options, RandomizerRequest request)
     {

@@ -14,13 +14,13 @@ namespace FateAndFridge.Api.Tests;
 /// <summary>
 /// Simulates a container replacement: two hosts share one persistent data
 /// directory and one database, so a session and antiforgery token issued by the
-/// first must resolve on the second (docs/MILESTONES.md M1 decisions). Requires
+/// first must resolve on the second. Requires
 /// a Docker daemon; run with
 /// <c>dotnet test --filter "Category!=Integration"</c> to skip locally.
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class DataProtectionPersistenceTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class DataProtectionPersistenceTests(SetupFixture fixture) : IAsyncLifetime
 {
     private static readonly DateTimeOffset SeedTimestamp =
         new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);

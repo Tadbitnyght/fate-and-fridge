@@ -5,7 +5,7 @@ using FluentAssertions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// M1-07 part 2 lockout policy with the approved defaults from
+/// Part 2 lockout policy with the approved defaults from
 /// docs/SECURITY.md §3: progressive delay from the 5th failure, a 15-minute
 /// lock at 10 consecutive failures, and a 24-hour lock at 5 lockouts inside a
 /// 24-hour window.

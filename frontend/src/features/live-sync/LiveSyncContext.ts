@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react'
 
-/** Observable connection state exposed through `useLiveSync()`. */
+/** Observable connection state exposed through `useLiveSync`. */
 export type LiveSyncStatus = 'connected' | 'connecting' | 'reconnecting' | 'disconnected'
 
 export interface LiveSyncContextValue {

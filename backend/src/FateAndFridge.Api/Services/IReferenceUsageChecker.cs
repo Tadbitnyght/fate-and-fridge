@@ -1,14 +1,14 @@
 namespace FateAndFridge.Api.Services;
 
 /// <summary>
-/// Recipe-usage seam for the reference-data hard deletes (docs/M2_PLAN.md §1.11).
-/// Counts how many recipes reference an entity; M2-06's unit delete consumes
-/// <see cref="CountUnitReferencesAsync"/> and M2-08/M2-10 consume the rest.
+/// Recipe-usage seam for the reference-data hard deletes.
+/// Counts how many recipes reference an entity; 's unit delete consumes
+/// <see cref="CountUnitReferencesAsync"/> and consume the rest.
 /// </summary>
 /// <remarks>
 /// M3 adds the recipe tables and replaces the default zero-returning
 /// implementation with real queries. M2 tests register counting fakes through
-/// the test host. Implementations must not throw for an id that does not exist:
+/// the test host. Implementations must not throw for an id that does not exist
 /// the caller decides 404 versus in-use.
 /// </remarks>
 public interface IReferenceUsageChecker

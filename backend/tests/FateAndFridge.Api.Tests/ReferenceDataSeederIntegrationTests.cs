@@ -11,8 +11,8 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// PostgreSQL-backed verification of the M2-04 idempotent reference-data seeder
-/// (docs/M2_PLAN.md §1.1, §2). Requires a Docker daemon; run with
+/// PostgreSQL-backed verification of the idempotent reference-data seeder
+/// Requires a Docker daemon; run with
 /// <c>dotnet test --filter "Category!=Integration"</c> to skip locally.
 /// </summary>
 [Trait("Category", "Integration")]
@@ -399,7 +399,7 @@ public sealed class ReferenceDataSeederIntegrationTests(ReferenceDataSeederFixtu
         using (var factory = new ApiFactory(fixture.ConnectionString, migrateOnStartup: false, CreateTempDataDir()))
         {
             // Migrations are disabled, but Program must still run the seeder on
-            // every startup (docs/M2_PLAN.md §1.1).
+            // every startup.
             _ = factory.Services;
         }
 

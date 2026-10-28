@@ -69,7 +69,7 @@ function GroceryItemRow({
 
 /**
  * The mobile-first grocery list: departments with sticky headers in server
- * order with the "Other" group last (docs/M8_PLAN.md §1.12). Server order is
+ * order with the "Other" group last. Server order is
  * preserved — checked lines already sit below unchecked ones within a
  * department — and a checked line is dimmed and struck through by CSS.
  */

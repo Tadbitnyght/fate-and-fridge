@@ -257,7 +257,7 @@ describe('statistics overview page', () => {
   })
 })
 
-/* ---------- M11-05: Overview / History tabs ---------- */
+/* Overview / History tabs ---------- */
 
 function sampleHistory(): unknown {
   return {
@@ -380,7 +380,7 @@ describe('statistics tabs', () => {
     expect(screen.queryByRole('tab', { name: 'History' })).not.toBeInTheDocument()
     expect(mock.callsFor('/statistics/history')).toBe(0)
 
-    // Issue #148: without a selectable History tab there is no tablist at all,
+    // Issue #148: without a selectable History tab there is no tablist at all
     // so no `role="tab"` can dangle its `aria-controls` at an absent panel.
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
     expect(screen.queryAllByRole('tab')).toHaveLength(0)
@@ -412,7 +412,7 @@ describe('statistics tabs', () => {
   })
 })
 
-/* ---------- M11-06: edit-implies-view gates (docs/M11_PLAN.md §1.30) ---------- */
+/* Edit-implies-view gates ---------- */
 
 describe('statistics access gates honour edit-implies-view', () => {
   it('shows the nav item and the overview for a member with only recipes.edit', async () => {
@@ -440,7 +440,7 @@ describe('statistics access gates honour edit-implies-view', () => {
   })
 })
 
-/* ---------- #148: ranked references are gated by recipes.edit ---------- */
+/* #148: ranked references are gated by recipes.edit ---------- */
 
 /** Every `/recipes/{id}/edit` link in the rendered output. */
 function recipeEditLinks(): HTMLElement[] {

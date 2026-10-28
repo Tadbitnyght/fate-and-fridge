@@ -19,10 +19,10 @@ using Microsoft.Extensions.Logging;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// HTTP-level verification of the M1-07 part 2 lockout policy and per-IP
+/// HTTP-level verification of the part 2 lockout policy and per-IP
 /// throttle (docs/SECURITY.md §3): the full 10-failure sequence reaches
 /// <c>423 ACCOUNT_LOCKED</c> with an <c>account_locked</c> auth event, the
-/// per-IP threshold answers <c>429 RATE_LIMITED</c> with <c>Retry-After</c>,
+/// per-IP threshold answers <c>429 RATE_LIMITED</c> with <c>Retry-After</c>
 /// other addresses stay unaffected, and a successful login after lock expiry
 /// clears every counter. Concurrency cases cover parallel failures (lost
 /// increments) and parallel throttle reservations (check-then-record bypass).
@@ -31,8 +31,8 @@ namespace FateAndFridge.Api.Tests;
 /// <c>dotnet test --filter "Category!=Integration"</c> to skip locally.
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class LockoutThrottleIntegrationTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class LockoutThrottleIntegrationTests(SetupFixture fixture) : IAsyncLifetime
 {
     private const string Password = "correct horse battery staple";
     private const string WrongPassword = "wrong password entirely";
@@ -451,7 +451,7 @@ public sealed class LockoutThrottleIntegrationTests(M1SetupFixture fixture) : IA
                 options.WindowSeconds = 60;
             }));
 
-        // The successful login must not leave a session cookie on this client:
+        // The successful login must not leave a session cookie on this client
         // authenticated unsafe requests would then require X-CSRF-TOKEN.
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
         {
@@ -510,7 +510,7 @@ public sealed class LockoutThrottleIntegrationTests(M1SetupFixture fixture) : IA
     }
 
     private static WebApplicationFactory<Program> CreateFactory(
-        M1SetupFixture fixture,
+        SetupFixture fixture,
         Action<IServiceCollection>? configureServices = null,
         RecordingLoggerProvider? loggerProvider = null) =>
         fixture.CreateFactory().WithWebHostBuilder(builder =>

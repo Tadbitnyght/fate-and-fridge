@@ -19,16 +19,16 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// HTTP-level verification of the M7 batch undo (docs/M7_PLAN.md §1.10, §2.2):
+/// HTTP-level verification of the M7 batch undo
 /// exact multi-date restore (including a replaced recipe's prior fields and a
 /// blank date returning to blank), one undo history row per restored date sharing
-/// one fresh batch operation id, the later-change conflict, expiry/idempotency,
+/// one fresh batch operation id, the later-change conflict, expiry/idempotency
 /// now-historical dates, malformed ids, the permission matrix, and that undo
 /// writes no audit rows. The clock is injected so "today" is deterministic.
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class BatchUndoIntegrationTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class BatchUndoIntegrationTests(SetupFixture fixture) : IAsyncLifetime
 {
     private const string PreviewPath = "/api/v1/calendar/reroll/preview";
     private const string ApplyPath = "/api/v1/calendar/reroll/apply";
@@ -173,7 +173,7 @@ public sealed class BatchUndoIntegrationTests(M1SetupFixture fixture) : IAsyncLi
 
         (await context.AuditEvents.CountAsync(row => !row.EventType.StartsWith("auth."), Ct)).Should().Be(
             0,
-            "batch undo stages no audit row; M12-01 only mirrors auth events");
+            "batch undo stages no audit row; only auth events are mirrored");
     }
 
     [Fact]

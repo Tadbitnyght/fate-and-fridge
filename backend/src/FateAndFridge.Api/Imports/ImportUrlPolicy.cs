@@ -5,8 +5,7 @@ using FateAndFridge.Api.Services;
 namespace FateAndFridge.Api.Imports;
 
 /// <summary>
-/// Why a candidate import URL was rejected (docs/M4_PLAN.md §1.14,
-/// docs/SECURITY.md §6).
+/// Why a candidate import URL was rejected.
 /// </summary>
 public enum ImportUrlBlockReason
 {
@@ -43,7 +42,7 @@ public readonly record struct ImportUrlPolicyResult(
 
 /// <summary>
 /// Pure, table-driven classification of import URLs and resolved addresses
-/// (docs/M4_PLAN.md §1.14). Shared by <see cref="SafeUrlFetcher"/> and the
+/// Shared by <see cref="SafeUrlFetcher"/> and the
 /// image-from-URL endpoint so both apply the same SSRF rules.
 /// </summary>
 /// <remarks>
@@ -61,8 +60,8 @@ public readonly record struct ImportUrlPolicyResult(
 /// </remarks>
 public static class ImportUrlPolicy
 {
-    // IPv4 ranges that must never be targeted: "this network", RFC1918,
-    // CGNAT, loopback, link-local, IETF protocol assignments, documentation,
+    // IPv4 ranges that must never be targeted: "this network", RFC1918
+    // CGNAT, loopback, link-local, IETF protocol assignments, documentation
     // benchmarking, 6to4 relay anycast, multicast, and reserved space.
     private static readonly IPNetwork[] BlockedV4 =
     [
@@ -83,8 +82,8 @@ public static class ImportUrlPolicy
         IPNetwork.Parse("240.0.0.0/4"),
     ];
 
-    // IPv6 ranges: unspecified/loopback/IPv4-compatible, NAT64, discard-only,
-    // Teredo/6to4 tunneling, benchmarking, documentation, ORCHID, ULA,
+    // IPv6 ranges: unspecified/loopback/IPv4-compatible, NAT64, discard-only
+    // Teredo/6to4 tunneling, benchmarking, documentation, ORCHID, ULA
     // link-local, multicast. IPv4-mapped addresses are normalized to IPv4 first.
     private static readonly IPNetwork[] BlockedV6 =
     [
@@ -107,7 +106,7 @@ public static class ImportUrlPolicy
     ];
 
     // Bare container/orchestrator host names that are not covered by the
-    // .local/.internal suffixes. All are matched after lowercasing and
+    // local/.internal suffixes. All are matched after lowercasing and
     // trailing-dot trimming.
     private static readonly HashSet<string> BlockedContainerHosts =
     [
@@ -254,7 +253,7 @@ public static class ImportUrlPolicy
     }
 
     /// <summary>
-    /// True when the address is loopback, private, link-local, ULA, CGNAT,
+    /// True when the address is loopback, private, link-local, ULA, CGNAT
     /// multicast, reserved, documentation, or cloud metadata. Null is blocked
     /// (fail closed).
     /// </summary>
@@ -282,7 +281,7 @@ public static class ImportUrlPolicy
     }
 
     /// <summary>
-    /// True for <c>localhost</c>, bare or subdomain <c>*.localhost</c>,
+    /// True for <c>localhost</c>, bare or subdomain <c>*.localhost</c>
     /// <c>*.local</c>, <c>*.internal</c>, and known container host names.
     /// </summary>
     public static bool IsBlockedHostName(string? host)
@@ -368,7 +367,7 @@ public static class ImportUrlPolicy
     }
 
     /// <summary>
-    /// True when a raw authority looks like a non-canonical IPv4 literal:
+    /// True when a raw authority looks like a non-canonical IPv4 literal
     /// a single decimal/hex integer, fewer or more than four labels, a hex or
     /// leading-zero (octal) label, or an unparsable dotted form. Such hosts
     /// are rejected rather than treated as routable addresses.

@@ -19,18 +19,17 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// HTTP-level verification of the M7 atomic batch apply (docs/M7_PLAN.md
-/// §1.8–§1.12, §2.2): exact previewed recipes, per-date history grouped by one
-/// batch operation id, conflict detection with full rollback, draft TTL/consumption,
+/// HTTP-level verification of the M7 atomic batch apply: exact previewed recipes, per-date history grouped by one
+/// batch operation id, conflict detection with full rollback, draft TTL/consumption
 /// per-actor isolation, the permission matrix, and the Try Another supersede
-/// semantics of M7-02 (#96). The clock is injected so "today" is deterministic;
+/// semantics of (#96). The clock is injected so "today" is deterministic
 /// most assertions hold regardless of which Normal recipe wins, and the one
 /// Try Another test that needs a specific draw injects a controlled
 /// <see cref="IRandomSource"/>.
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class BatchApplyIntegrationTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class BatchApplyIntegrationTests(SetupFixture fixture) : IAsyncLifetime
 {
     private const string PreviewPath = "/api/v1/calendar/reroll/preview";
     private const string ApplyPath = "/api/v1/calendar/reroll/apply";
@@ -222,7 +221,7 @@ public sealed class BatchApplyIntegrationTests(M1SetupFixture fixture) : IAsyncL
             .Should().Be(ErrorCodes.BatchConflict);
 
         await using var context = fixture.CreateContext();
-        // Atomic rollback: only the manually inserted conflicting entry exists;
+        // Atomic rollback: only the manually inserted conflicting entry exists
         // no earlier proposed date was written.
         var entries = await context.CalendarEntries.AsNoTracking().ToListAsync(Ct);
         entries.Should().ContainSingle();
@@ -429,7 +428,7 @@ public sealed class BatchApplyIntegrationTests(M1SetupFixture fixture) : IAsyncL
         await using var context = fixture.CreateContext();
         (await context.AuditEvents.CountAsync(row => !row.EventType.StartsWith("auth."), Ct)).Should().Be(
             0,
-            "a batch apply stages no audit row; M12-01 only mirrors auth events");
+            "a batch apply stages no audit row; only auth events are mirrored");
     }
 
     [Fact]

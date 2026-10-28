@@ -15,7 +15,6 @@ interface NavItem {
   end?: boolean
   /**
    * Permission keys that reveal the item — any one is enough
-   * (docs/M11_PLAN.md §1.30).
    */
   permissions?: string[]
 }
@@ -107,7 +106,7 @@ export function AppShell() {
       </header>
 
       {/*
-        Update notice (M13-09): only when a newer release is known and this
+        Update notice: only when a newer release is known and this
         device has not dismissed that exact version. It never shifts the shell
         badly because it is a normal block in the shell's flex column.
       */}
@@ -120,7 +119,7 @@ export function AppShell() {
       <footer className="app-footer">
         <p>Self-hosted &middot; no telemetry &middot; your household data stays home</p>
         {/*
-          Version display (M13-08). While loading, or when the version cannot be
+          Version display. While loading, or when the version cannot be
           read, the label renders nothing rather than an error: the footer must
           never make the app look broken.
         */}

@@ -13,7 +13,7 @@ namespace FateAndFridge.Api.Endpoints;
 /// <summary>
 /// Household settings routes (docs/API.md §21). Reads require any
 /// authenticated actor; writes (including the auth-mode switch) require the
-/// system actor or an Admin. Access is enforced by the M1-09 permission filters.
+/// system actor or an Admin. Access is enforced by the permission filters.
 /// </summary>
 public static class SettingsEndpoints
 {
@@ -29,7 +29,7 @@ public static class SettingsEndpoints
         group.MapPatch("/household", PatchHouseholdSettingsAsync).RequireAdmin();
         group.MapPost("/auth-mode", SwitchAuthModeAsync).RequireAdmin();
 
-        // M1-11: Admin-only security settings (IP allowlist and trusted proxies).
+        // Admin-only security settings (IP allowlist and trusted proxies).
         group.MapGet("/security", GetSecuritySettingsAsync).RequireAdmin();
         group.MapPatch("/security", PatchSecuritySettingsAsync).RequireAdmin();
 
@@ -278,7 +278,7 @@ public static class SettingsEndpoints
             return ApiResults.ValidationError(validation.FieldErrors);
         }
 
-        // The spacing fields are coupled (far >= near in docs/M6_PLAN.md §1.3),
+        // The spacing fields are coupled
         // so the cross-field check needs the row the patch is applied to.
         var current = await settingsService.GetAsync(cancellationToken)
             ?? throw new InvalidOperationException(
@@ -316,7 +316,7 @@ public static class SettingsEndpoints
 
     /// <summary>
     /// Single-user → multiuser conversion (docs/API.md §21). Body
-    /// <c>{ auth_mode?: "multiuser", admin: { username, password } }</c>;
+    /// <c>{ auth_mode?: "multiuser", admin: { username, password } }</c>
     /// <c>auth_mode: "single_user"</c> returns
     /// <c>409 AUTH_MODE_DOWNGRADE_NOT_SUPPORTED</c>, and an already-multiuser
     /// household returns <c>409 AUTH_MODE_ALREADY_MULTIUSER</c>. On success the
@@ -422,15 +422,14 @@ public static class SettingsEndpoints
                 // They are aborted without session.revoked so each client
                 // reconnects and authenticates under the new mode instead of
                 // being signed out; the reconnect's full invalidation pass
-                // reconciles anything missed (docs/M9_PLAN.md §1.8).
+                // reconciles anything missed.
                 await liveSync.DisconnectAllAsync(cancellationToken);
 
                 // The caller is the single-user system actor: this route only ever
                 // succeeds during the single→multiuser transition, and it returns
                 // 409 AUTH_MODE_ALREADY_MULTIUSER before this point when the
                 // household is already multiuser. There is therefore no session
-                // user to attribute, so actor_user_id is intentionally null (the
-                // system-actor envelope, docs/M9_PLAN.md §2.2).
+                // user to attribute, so actor_user_id is intentionally null
                 await liveSync.SettingsUpdatedAsync(
                     LiveSyncPublisherExtensions.SettingsEntity,
                     actorUserId: null,

@@ -16,15 +16,15 @@ using Microsoft.Extensions.DependencyInjection;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// HTTP-level verification of the M1-11 IP allowlist and trusted-proxy
-/// forwarded headers (docs/SECURITY.md §5, docs/API.md §21): enforcement,
+/// HTTP-level verification of the IP allowlist and trusted-proxy
+/// forwarded headers (docs/SECURITY.md §5, docs/API.md §21): enforcement
 /// health/loopback exemptions, IPv6, proxy resolution and spoof protection, and
 /// the forwarded-HTTPS Secure-cookie fix. Requires a Docker daemon; run with
 /// <c>dotnet test --filter "Category!=Integration"</c> to skip locally.
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class IpAllowlistIntegrationTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class IpAllowlistIntegrationTests(SetupFixture fixture) : IAsyncLifetime
 {
     private const string Password = "correct horse battery staple";
     private const string AllowedIp = "203.0.113.10";

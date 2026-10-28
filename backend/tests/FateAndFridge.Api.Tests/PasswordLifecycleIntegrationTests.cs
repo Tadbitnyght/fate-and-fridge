@@ -18,15 +18,15 @@ using Microsoft.Extensions.Logging;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// HTTP-level verification of the M1-08 password lifecycle (docs/API.md §5,
+/// HTTP-level verification of the password lifecycle (docs/API.md §5
 /// docs/SECURITY.md §2): change-password validation, session rotation, the
 /// forced-change gate, other-session revocation, and event/log hygiene.
 /// Requires a Docker daemon; run with
 /// <c>dotnet test --filter "Category!=Integration"</c> to skip locally.
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class PasswordLifecycleIntegrationTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class PasswordLifecycleIntegrationTests(SetupFixture fixture) : IAsyncLifetime
 {
     private const string Password = "correct horse battery staple";
     private const string NewPassword = "a much better passphrase";

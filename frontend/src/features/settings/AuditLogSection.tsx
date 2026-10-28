@@ -67,9 +67,7 @@ function buildPruneWarnings(retentionDays: number | undefined): string[] {
 }
 
 /**
- * Admin-only audit viewer (M12-03, docs/API.md §16, docs/M12_PLAN.md §1.5,
- * §1.6, §2.3).
- *
+ * Admin-only audit viewer.
  * A single read-only, newest-first timeline merging `audit_events` rows with
  * the reroll/batch `calendar_entry_history` rows. Filters are server-side; each
  * filter change starts a fresh first page, and "Load more" follows the opaque
@@ -110,7 +108,7 @@ export function AuditLogSection(): JSX.Element {
     from !== '' ||
     to !== ''
 
-  // M12-04: the retention window drives the prune warnings; the export and
+  // The retention window drives the prune warnings; the export and
   // prune affordances are Admin-only, like the rest of this section.
   const securityQuery = useSecuritySettings(isAdmin)
   const pruneMutation = usePruneAuditLog()

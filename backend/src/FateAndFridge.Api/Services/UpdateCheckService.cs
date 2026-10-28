@@ -9,7 +9,6 @@ namespace FateAndFridge.Api.Services;
 
 /// <summary>
 /// The release metadata this application actually needs from GitHub Releases
-/// (docs/M13_PLAN.md §1.13; docs/ARCHITECTURE.md §20).
 /// </summary>
 /// <param name="TagName">The normalized release version, e.g. <c>0.2.0</c>.</param>
 /// <param name="ReleaseUrl">The public release page, when GitHub supplied one.</param>
@@ -33,7 +32,7 @@ public enum ReleaseParseOutcome
 }
 
 /// <summary>
-/// Strict SemVer comparison for the release tag (docs/M13_PLAN.md §1.13).
+/// Strict SemVer comparison for the release tag.
 /// </summary>
 /// <remarks>
 /// Only <c>MAJOR.MINOR.PATCH</c> releases are compared: a leading <c>v</c> is
@@ -49,7 +48,7 @@ public static class UpdateVersion
 
     /// <summary>
     /// Parses a release tag (optionally <c>v</c>-prefixed) into its three
-    /// numeric components. Returns <see langword="false"/> for prereleases,
+    /// numeric components. Returns <see langword="false"/> for prereleases
     /// build metadata, and anything else that is not a release SemVer.
     /// </summary>
     public static bool TryParse(string? value, out Version version)
@@ -164,7 +163,7 @@ public static class ReleaseMetadataParser
             var tag = ReadString(root, "tag_name");
             if (tag is null || !UpdateVersion.TryParse(tag, out _))
             {
-                // An unparseable tag is never an update (docs/M13_PLAN.md §1.13).
+                // An unparseable tag is never an update.
                 return ReleaseParseOutcome.NoRelease;
             }
 
@@ -218,8 +217,7 @@ public static class ReleaseMetadataParser
 }
 
 /// <summary>
-/// The one outbound release-metadata request (docs/M13_PLAN.md §1.13,
-/// docs/SECURITY.md §18, docs/ARCHITECTURE.md §20).
+/// The one outbound release-metadata request.
 /// </summary>
 /// <remarks>
 /// The request is a <c>GET</c> with no body and exactly two headers: a neutral
@@ -329,7 +327,7 @@ public readonly record struct ReleaseFeedResult(int StatusCode, string? Body)
 
 /// <summary>
 /// What the About section and the dashboard banner render
-/// (docs/M13_PLAN.md §2.2; docs/API.md §25). Serialized snake_case.
+/// Serialized snake_case.
 /// </summary>
 public sealed record UpdateStatus(
     string CurrentVersion,
@@ -341,8 +339,8 @@ public sealed record UpdateStatus(
     string? ReleaseUrl);
 
 /// <summary>
-/// Privacy-preserving update check (docs/M13_PLAN.md §1.13–§1.14; docs/API.md
-/// §25). The release metadata is cached in <c>application_settings</c> for
+/// Privacy-preserving update check
+/// The release metadata is cached in <c>application_settings</c> for
 /// 24 hours, the <c>update_check_enabled</c> setup preference is honoured, and
 /// every failure is recorded as a short, non-identifying <c>last_error</c>
 /// instead of surfacing as an application error.
@@ -546,7 +544,7 @@ public sealed class UpdateCheckService(
     }
 
     /// <summary>
-    /// Fire-and-forget startup check (docs/M13_PLAN.md §1.13). The returned
+    /// Fire-and-forget startup check. The returned
     /// task is ignored by <c>Program</c>; it never throws and never delays
     /// startup because every await happens on the thread pool.
     /// </summary>
@@ -598,7 +596,7 @@ public sealed class UpdateCheckService(
             .ConfigureAwait(false);
 
         return new UpdateCheckState(
-            // The setup wizard writes the preference; before setup it is absent,
+            // The setup wizard writes the preference; before setup it is absent
             // and the setup default is "enabled".
             ReadBoolean(stored.GetValueOrDefault(EnabledKey), fallback: true),
             ReadString(stored.GetValueOrDefault(LatestVersionKey)),

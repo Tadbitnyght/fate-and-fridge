@@ -29,7 +29,7 @@ public sealed class CalendarEntry
 
     public string? RestaurantName { get; set; }
 
-    /// <summary>Go To Family Dinner host/location (docs/M5_PLAN.md §1.3).</summary>
+    /// <summary>Go To Family Dinner host/location.</summary>
     public string? LocationText { get; set; }
 
     public string? CustomLabel { get; set; }

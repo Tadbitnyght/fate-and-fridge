@@ -1,9 +1,7 @@
 import { apiDownload, apiRequest, type DownloadedFile } from './client'
 
 /**
- * Typed client for the M12 admin audit contract (docs/API.md §16,
- * docs/M12_PLAN.md §1.5, §2.2).
- *
+ * Typed client for the admin audit contract (`docs/API.md` §16).
  * `GET /admin/audit` is Admin-only: the existing `admin` role (and the
  * single-user system actor, which is an Admin) is the authority — no new
  * permission key. The read is a merged, newest-first timeline of all
@@ -67,10 +65,8 @@ export interface AuditCatalogueOption {
 }
 
 /**
- * Static, documented catalogue mirroring the backend M12-01 event types
- * (docs/M12_PLAN.md §1.3, §2.1; `AuditEventTypes` in
- * `Services/AuditService.cs`). Event types stay open strings server-side, so
- * the picker offers the known set (plus an "All" option in the UI) — it is
+ * Static, documented catalogue mirroring the backend event types. Event
+ * types stay open strings server-side, so the picker offers the known set (plus an "All" option in the UI) — it is
  * never derived from the current page of results. The `calendar.reroll` /
  * `calendar.batch_reroll` / `calendar.fill_empty` / `calendar.undo` entries are
  * the viewer-mapped names for the reroll `calendar_entry_history` rows
@@ -129,8 +125,7 @@ export const AUDIT_EVENT_TYPES: AuditCatalogueOption[] = [
 ]
 
 /**
- * Static catalogue mirroring the backend `AuditEntityTypes` (docs/M12_PLAN.md
- * §2.1). Entity types stay open strings server-side; reroll history rows are
+ * Static catalogue mirroring the backend `AuditEntityTypes`. Entity types stay open strings server-side; reroll history rows are
  * always `calendar_entry`.
  */
 export const AUDIT_ENTITY_TYPES: AuditCatalogueOption[] = [

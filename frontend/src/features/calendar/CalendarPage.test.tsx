@@ -132,7 +132,7 @@ describe('calendar page', () => {
     expect(headers[6]).toBe('Sun')
   })
 
-  it('opens the print view from the toolbar (M10-06)', async () => {
+  it('opens the print view from the toolbar', async () => {
     const printSpy = vi.spyOn(window, 'print').mockImplementation(() => {})
     baseMocks([])
     renderWithProviders(<App />, { route: '/calendar' })

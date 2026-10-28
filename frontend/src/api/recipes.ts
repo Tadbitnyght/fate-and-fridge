@@ -2,7 +2,6 @@ import { apiRequest, apiUpload } from './client'
 
 /**
  * Typed client for the M3 recipe contract (docs/API.md §23).
- *
  * Reads require `recipes.view`; writes require `recipes.edit`; the single-user
  * system actor and Admins hold both. The server enforces all of that — these
  * functions only describe the wire shapes. JSON property names are snake_case.
@@ -39,7 +38,7 @@ export const RECIPE_SORTS: RecipeSort[] = [
   'most_eaten',
 ]
 
-/* ---------- list ---------- */
+/* list ---------- */
 
 export interface RecipeListParams {
   /** Normalized-name substring (server-side). */
@@ -130,7 +129,7 @@ export function listRecipes(params: RecipeListParams = {}): Promise<RecipeListRe
   return apiRequest<RecipeListResponse>(`/recipes${listQuery(params)}`)
 }
 
-/* ---------- detail ---------- */
+/* detail ---------- */
 
 export interface RecipeIngredientReference {
   id: number
@@ -221,7 +220,7 @@ export function getRecipe(id: number): Promise<Recipe> {
   return apiRequest<Recipe>(`/recipes/${id}`)
 }
 
-/* ---------- writes ---------- */
+/* writes ---------- */
 
 export interface RecipeIngredientWrite {
   ingredient_id: number
@@ -273,7 +272,7 @@ export function updateRecipe(id: number, request: RecipeWriteRequest): Promise<R
   return apiRequest<Recipe>(`/recipes/${id}`, { method: 'PATCH', body: request })
 }
 
-/* ---------- hard delete (Admin-only, M12-08) ---------- */
+/* hard delete (Admin-only) ---------- */
 
 /**
  * Body of the irreversible hard delete (docs/API.md §10). `reason` is required
@@ -310,7 +309,7 @@ export function hardDeleteRecipe(
   })
 }
 
-/* ---------- image ---------- */
+/* image ---------- */
 
 export function uploadRecipeImage(id: number, file: File, altText?: string): Promise<RecipeImage> {
   const formData = new FormData()

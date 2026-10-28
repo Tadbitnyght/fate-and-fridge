@@ -6,8 +6,8 @@ namespace FateAndFridge.Api.Tests;
 
 /// <summary>
 /// Unit matrix for the shared statistics occurrence rules
-/// (docs/M11_PLAN.md §1.3, §1.4, §1.20): the strictly-past eaten rule and the
-/// recipe-id-or-normalized-snapshot grouping identity that the overview,
+/// the strictly-past eaten rule and the
+/// recipe-id-or-normalized-snapshot grouping identity that the overview
 /// per-recipe metrics, and history reads all share.
 /// </summary>
 public sealed class MealOccurrenceRulesTests

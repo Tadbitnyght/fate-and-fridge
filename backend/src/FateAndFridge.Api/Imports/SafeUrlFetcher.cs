@@ -7,12 +7,11 @@ using Microsoft.Extensions.Options;
 namespace FateAndFridge.Api.Imports;
 
 /// <summary>
-/// SSRF-hardened fetch pipeline for recipe import (docs/M4_PLAN.md §1.13–§1.14,
-/// docs/SECURITY.md §6–§7).
+/// SSRF-hardened fetch pipeline for recipe import.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The URL is classified by <see cref="ImportUrlPolicy"/> before connecting,
+/// The URL is classified by <see cref="ImportUrlPolicy"/> before connecting
 /// DNS is resolved by the injected <see cref="IDnsResolver"/> and every
 /// resolved address is checked against the blocked-range table, and the
 /// production transport pins the connection to a validated address through
@@ -23,7 +22,7 @@ namespace FateAndFridge.Api.Imports;
 /// The pre-connect resolution in <see cref="ValidateResolutionAsync"/> is a
 /// fail-fast check only. <b>Connect-time revalidation is authoritative:</b>
 /// <see cref="ConnectAsync"/> re-resolves and may only connect to an address
-/// that passes <see cref="ImportUrlPolicy.IsBlockedAddress"/> at connect time,
+/// that passes <see cref="ImportUrlPolicy.IsBlockedAddress"/> at connect time
 /// so a resolver that turns hostile between the pre-check and the socket open
 /// (DNS rebinding) fails closed.
 /// </para>
@@ -284,7 +283,7 @@ public sealed class SafeUrlFetcher : IImportFetcher, IDisposable
 
     /// <summary>
     /// Authoritative connect-time validation for the pinned transport. The
-    /// pre-check in <see cref="ValidateResolutionAsync"/> is fail-fast only;
+    /// pre-check in <see cref="ValidateResolutionAsync"/> is fail-fast only
     /// this re-resolves and connects only to an address that passes
     /// <see cref="ImportUrlPolicy.IsBlockedAddress"/> at connect time.
     /// </summary>

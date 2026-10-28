@@ -131,9 +131,8 @@ function MatchWarning({ matches }: { matches: ImportReference[] }) {
 }
 
 /**
- * Strong duplicate warning for an exact normalized source-URL match (M4-11,
- * docs/M4_PLAN.md §1.9, docs/PRODUCT_SPEC.md §29). Rendered with the shared
- * accessible `Modal`, so the rest of the page is inert until the reviewer picks
+ * Strong duplicate warning for an exact normalized source-URL match. Rendered with the shared
+ * accessible `Modal`, so the rest of the page is inert until the user picks
  * one of the three approved actions: open the existing recipe, import anyway, or
  * cancel. Escape/backdrop also cancel the import, which discards the draft.
  */
@@ -170,9 +169,9 @@ function DuplicateSourceDialog({
 }
 
 /**
- * Editable import draft review (M4-08, docs/M4_PLAN.md §2.3). Mirrors the
- * RecipeFormPage controls: name/description/source/author/prep/cook/notes,
- * flags, ingredient lines (with parsed quantity/unit/name/prep note),
+ * Editable import draft review. Mirrors the
+ * RecipeFormPage controls: name/description/source/author/prep/cook/notes
+ * flags, ingredient lines (with parsed quantity/unit/name/prep note)
  * instruction sections/steps, proteins/tags, and an optional photo preview.
  * Saving reuses the normal `POST /recipes` contract; a chosen image source is
  * downloaded afterwards and a failure is a non-fatal warning.
@@ -225,7 +224,7 @@ export function ImportReview({
   const [unitCreateErrorByRowKey, setUnitCreateErrorByRowKey] = useState<Record<string, string>>({})
   const errorSummaryRef = useRef<HTMLDivElement>(null)
 
-  // Rename-recheck state (M4-12): the name the server last checked, a sequence
+  // Rename-recheck state: the name the server last checked, a sequence
   // number that invalidates a response for a superseded name or candidate, and
   // the pending debounce timer.
   const lastCheckedNameRef = useRef(selected.name)
@@ -236,7 +235,7 @@ export function ImportReview({
     checkImportRef.current = checkImport.mutateAsync
   })
 
-  // Re-seed the editable state when the reviewer picks a different candidate.
+  // Re-seed the editable state when the user picks a different candidate.
   // Adjusting state during render is React's documented derive-from-props
   // pattern and avoids a cascading effect render.
   if (loadedKey !== selected.index) {
@@ -256,7 +255,7 @@ export function ImportReview({
     setNameCheckStatus('idle')
   }
 
-  // Keep the rename-recheck baseline in sync when the reviewer switches
+  // Keep the rename-recheck baseline in sync when the user switches
   // candidate: invalidate any in-flight check and drop a timer left over from
   // the previous candidate. Refs cannot be written during render, so this runs
   // after commit.
@@ -292,7 +291,7 @@ export function ImportReview({
   }
 
   /**
-   * Debounced rename recheck (M4-12). Editing the name re-runs the server's
+   * Debounced rename recheck. Editing the name re-runs the server's
    * similar-name scoring through `POST /import/check` and refreshes the warning.
    * The draft's own matches are the seed, so no request runs until the name
    * actually changes, and a late response for a superseded name is discarded.
@@ -355,8 +354,8 @@ export function ImportReview({
   }
 
   /**
-   * Permission-gated inline creation (M4-09). The draft's
-   * `capabilities.can_create_reference_data` decides whether this is reachable;
+   * Permission-gated inline creation. The draft's
+   * `capabilities.can_create_reference_data` decides whether this is reachable
    * the M2 endpoint still authorises the actor server-side. A duplicate create
    * maps the line to the existing ingredient instead of erroring.
    */
@@ -422,8 +421,8 @@ export function ImportReview({
   }
 
   /**
-   * Permission-gated inline unit creation (M4-10). The draft's
-   * `capabilities.can_create_reference_data` decides whether this is reachable;
+   * Permission-gated inline unit creation. The draft's
+   * `capabilities.can_create_reference_data` decides whether this is reachable
    * the M2 `POST /units` endpoint still authorises the actor server-side. The
    * dimension and base factor are always explicit — package sizes are never
    * guessed. A duplicate create (`UNIT_EXISTS`) maps the line to the existing

@@ -1,8 +1,8 @@
 import { expect, test, type Page } from '@playwright/test'
 
 /**
- * Admin audit viewer (M12-03) against a mocked API, matching the hermetic
- * pattern of the other e2e specs: no real backend, but the real Vite bundle,
+ * Admin audit viewer against a mocked API, matching the hermetic
+ * pattern of the other e2e specs: no real backend, but the real Vite bundle
  * routing, and rendering.
  */
 
@@ -166,7 +166,7 @@ test('reads the admin audit log, expands a detail, and filters it', async ({ pag
   expect(searches.at(-1)).toContain('event_type=calendar.created')
   expect(searches.at(-1)).not.toContain('cursor=')
 
-  // M12-04: the current filtered view exports to CSV/JSON without paging params.
+  // The current filtered view exports to CSV/JSON without paging params.
   await page.getByRole('button', { name: 'Export CSV' }).click()
   await expect.poll(() => exports.at(-1) ?? '').toContain('format=csv')
   expect(exports.at(-1)).toContain('event_type=calendar.created')
@@ -175,7 +175,7 @@ test('reads the admin audit log, expands a detail, and filters it', async ({ pag
   await page.getByRole('button', { name: 'Export JSON' }).click()
   await expect.poll(() => exports.at(-1) ?? '').toContain('format=json')
 
-  // M12-04: the confirmed prune opens the shared dialog and reports its count.
+  // The confirmed prune opens the shared dialog and reports its count.
   await page.getByRole('button', { name: 'Prune audit log' }).click()
   const dialog = page.getByRole('dialog', { name: 'Prune audit log' })
   await expect(dialog).toBeVisible()

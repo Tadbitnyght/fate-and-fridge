@@ -1,7 +1,7 @@
 namespace FateAndFridge.Api.Domain;
 
 /// <summary>
-/// A persisted batch-reroll preview (docs/M7_PLAN.md §1.7, §2.3). A preview
+/// A persisted batch-reroll preview. A preview
 /// generates the proposal and stores it server-side under an opaque
 /// <see cref="Token"/> with a 15-minute TTL; Apply consumes the draft. The
 /// proposal is never applied implicitly and preview persists no calendar state.

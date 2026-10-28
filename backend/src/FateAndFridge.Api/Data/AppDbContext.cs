@@ -5,8 +5,8 @@ using Microsoft.EntityFrameworkCore;
 namespace FateAndFridge.Api.Data;
 
 /// <summary>
-/// Application database context. Entity configuration arrives with each
-/// milestone (docs/MILESTONES.md); snake_case naming is configured through the
+/// Application database context. Entity configuration is grouped by schema
+/// area; snake_case naming is configured through the
 /// Npgsql provider options in Program.cs.
 /// </summary>
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
@@ -82,7 +82,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         modelBuilder.ApplyConfiguration(new AuthEventConfiguration());
         modelBuilder.ApplyConfiguration(new UserSessionConfiguration());
 
-        // M2-01 reference-data and audit baseline (docs/M2_PLAN.md §3).
+        // Reference-data and audit baseline.
         modelBuilder.ApplyConfiguration(new GroceryDepartmentConfiguration());
         modelBuilder.ApplyConfiguration(new IngredientConfiguration());
         modelBuilder.ApplyConfiguration(new IngredientAliasConfiguration());
@@ -92,7 +92,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         modelBuilder.ApplyConfiguration(new TagConfiguration());
         modelBuilder.ApplyConfiguration(new AuditEventConfiguration());
 
-        // M3-01 recipe schema baseline (docs/M3_PLAN.md §2/§3).
+        // Recipe schema baseline.
         modelBuilder.ApplyConfiguration(new RecipeConfiguration());
         modelBuilder.ApplyConfiguration(new RecipeImageConfiguration());
         modelBuilder.ApplyConfiguration(new RecipeIngredientGroupConfiguration());
@@ -102,20 +102,20 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         modelBuilder.ApplyConfiguration(new RecipeProteinConfiguration());
         modelBuilder.ApplyConfiguration(new RecipeTagConfiguration());
 
-        // M5-01 calendar core schema (docs/M5_PLAN.md §2.2–§2.3).
+        // Calendar core schema.
         modelBuilder.ApplyConfiguration(new CalendarEntryConfiguration());
         modelBuilder.ApplyConfiguration(new CalendarEntryHistoryConfiguration());
 
-        // M7-01 batch planning draft schema (docs/M7_PLAN.md §2.3).
+        // Batch planning draft schema.
         modelBuilder.ApplyConfiguration(new CalendarRerollDraftConfiguration());
 
-        // M8-01 grocery schema and per-user preferences (docs/M8_PLAN.md §2.3).
+        // Grocery schema and per-user preferences.
         modelBuilder.ApplyConfiguration(new GroceryStapleConfiguration());
         modelBuilder.ApplyConfiguration(new ManualGroceryItemConfiguration());
         modelBuilder.ApplyConfiguration(new GroceryCheckStateConfiguration());
         modelBuilder.ApplyConfiguration(new UserGroceryPreferenceConfiguration());
 
-        // M13-01 backup archive metadata (docs/M13_PLAN.md §1.7).
+        // Backup archive metadata.
         modelBuilder.ApplyConfiguration(new BackupMetadataConfiguration());
     }
 }

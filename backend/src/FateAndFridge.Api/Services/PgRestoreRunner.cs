@@ -4,12 +4,11 @@ using Npgsql;
 namespace FateAndFridge.Api.Services;
 
 /// <summary>
-/// The two privileged database steps of a restore (docs/M13_PLAN.md §1.9,
-/// §2.1): drop every other session on the target database, then run
+/// The two privileged database steps of a restore: drop every other session on the target database, then run
 /// <c>pg_restore</c> into it. The runner is a seam: the development workstation
 /// ships no PostgreSQL client tools, so the restore orchestration is tested with
 /// a fake runner and the real binary is only exercised in the runtime image
-/// (verified at M13-10).
+/// (verified at).
 /// </summary>
 public interface IPgRestoreRunner
 {
@@ -23,7 +22,7 @@ public interface IPgRestoreRunner
 
     /// <summary>
     /// Restores <paramref name="dumpPath"/> into the application database with
-    /// <c>--clean --if-exists --no-owner --no-privileges --single-transaction</c>,
+    /// <c>--clean --if-exists --no-owner --no-privileges --single-transaction</c>
     /// so a failed restore rolls back atomically. Throws when <c>pg_restore</c>
     /// fails, times out, or cannot be started; the message never contains the
     /// password.
@@ -35,7 +34,7 @@ public interface IPgRestoreRunner
 /// Production <see cref="IPgRestoreRunner"/>: invokes the shipped
 /// <c>pg_restore</c> without a shell, with the password supplied through the
 /// <c>PGPASSWORD</c> environment variable, a bounded timeout, and cancellation
-/// that kills the process tree (docs/SECURITY.md §13, docs/M13_PLAN.md §4). The
+/// that kills the process tree. The
 /// connection-termination query runs over Npgsql, also without a shell.
 /// </summary>
 public sealed class PgRestoreRunner : IPgRestoreRunner
@@ -130,7 +129,7 @@ public sealed class PgRestoreRunner : IPgRestoreRunner
             }
 
             // The application's pool still holds the backends that were just
-            // terminated. Drop the pool so no later step (session revocation,
+            // terminated. Drop the pool so no later step (session revocation
             // the audit insert, or any other query) reuses a dead connection.
             NpgsqlConnection.ClearAllPools();
 
@@ -295,7 +294,7 @@ public sealed class PgRestoreRunner : IPgRestoreRunner
     }
 
     /// <summary>
-    /// The connection string for the maintenance database: same host, port,
+    /// The connection string for the maintenance database: same host, port
     /// credentials, and TLS options, but <c>Database=postgres</c> and no pooling
     /// (a single short-lived session).
     /// </summary>

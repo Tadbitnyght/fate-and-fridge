@@ -4,8 +4,7 @@ using FateAndFridge.Api.Errors;
 namespace FateAndFridge.Api.Services;
 
 /// <summary>
-/// Result of <see cref="DangerousActionGuard.Validate"/> (docs/M12_PLAN.md
-/// §1.11): the trimmed reason on success, or the shared error code plus
+/// Result of <see cref="DangerousActionGuard.Validate"/>: the trimmed reason on success, or the shared error code plus
 /// per-field errors on failure.
 /// </summary>
 public abstract record DangerousActionValidation
@@ -41,9 +40,8 @@ public abstract record DangerousActionValidation
 }
 
 /// <summary>
-/// Server-side guard for dangerous admin actions (docs/M12_PLAN.md §1.11,
-/// docs/SECURITY.md §10): a non-blank, bounded reason and an exact typed
-/// confirmation. The dialog is a convenience only — this runs on every request,
+/// Server-side guard for dangerous admin actions: a non-blank, bounded reason and an exact typed
+/// confirmation. The dialog is a convenience only — this runs on every request
 /// independently of the UI, and is shared by historical correction, hard recipe
 /// delete, audit prune, and M13 restore so the rules cannot drift.
 /// </summary>
@@ -59,8 +57,7 @@ public abstract record DangerousActionValidation
 public static class DangerousActionGuard
 {
     /// <summary>
-    /// Maximum accepted reason length, in UTF-16 code units (locked in
-    /// docs/M12_PLAN.md §1.11). Long enough for a sentence or two, bounded
+    /// Maximum accepted reason length, in UTF-16 code units. Long enough for a sentence or two, bounded
     /// because the reason is stored on every audit row.
     /// </summary>
     public const int MaxReasonLength = 500;
@@ -70,8 +67,7 @@ public static class DangerousActionGuard
 
     /// <summary>
     /// Wire field name of the typed confirmation in details.field_errors.
-    /// Callers whose contract names the request field differently (for example
-    /// the confirm field in docs/M12_PLAN.md §2.2) remap it here.
+    /// Callers whose contract names the request field differently remap it here.
     /// </summary>
     public const string ConfirmationField = "confirmation";
 

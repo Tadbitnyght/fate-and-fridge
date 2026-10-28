@@ -20,9 +20,9 @@ function formatQuantity(staple: GroceryStaple, units: Unit[]): string {
 }
 
 /**
- * Household staple catalog management (docs/API.md §13, docs/M8_PLAN.md §1.9).
+ * Household staple catalog management.
  * Staples are never auto-added; "Add to list" creates a manual item for the
- * active range. Reads need `groceries.view`; every write needs `groceries.edit`,
+ * active range. Reads need `groceries.view`; every write needs `groceries.edit`
  * but `canEdit` here is UI visibility only — the server is the sole gate.
  */
 export function StaplesPanel({

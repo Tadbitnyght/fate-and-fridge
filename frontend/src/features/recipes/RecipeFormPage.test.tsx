@@ -231,7 +231,7 @@ describe('recipe form', () => {
   })
 })
 
-/* ---------- M12-09 hard delete (Admin-only danger zone) ---------- */
+/* Hard delete (Admin-only danger zone) ---------- */
 
 /** A member who may edit recipes but is not an Admin. */
 const memberEditorSession = {

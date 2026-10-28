@@ -12,8 +12,7 @@ using Microsoft.Net.Http.Headers;
 namespace FateAndFridge.Api.Endpoints;
 
 /// <summary>
-/// The active recipe image as embedded in recipe documents (M3-04,
-/// docs/M3_PLAN.md §1.6). <c>url</c> always points at the byte-serving route.
+/// The active recipe image as embedded in recipe documents. <c>url</c> always points at the byte-serving route.
 /// </summary>
 public sealed record RecipeImageResponse(
     long Id,
@@ -34,8 +33,7 @@ public sealed record RecipeImageResponse(
 }
 
 /// <summary>
-/// M3-04 local recipe image routes (docs/M3_PLAN.md §1.6–§1.7,
-/// docs/SECURITY.md §9): multipart upload/replacement, alt-text patch, removal,
+/// Local recipe image routes: multipart upload/replacement, alt-text patch, removal
 /// and byte serving. Reads require <c>recipes.view</c>; writes require
 /// <c>recipes.edit</c> and stage an audit row.
 /// </summary>
@@ -184,7 +182,7 @@ public static class RecipeImageEndpoints
 
     /// <summary>
     /// Downloads an image from a user-supplied URL and replaces the active
-    /// image (M4-07, docs/M4_PLAN.md §1.8/§2.2): SSRF-hardened fetch, M3 content
+    /// image: SSRF-hardened fetch, M3 content
     /// policy on the actual bytes, per-actor image-fetch budget, and a single
     /// atomic replacement. A failed download never modifies the existing image.
     /// </summary>
@@ -404,8 +402,8 @@ public static class RecipeImageEndpoints
     }
 
     /// <summary>
-    /// Serves the active image with the content type detected at upload time,
-    /// an id-derived ETag, and <c>Cache-Control: private, no-cache</c>;
+    /// Serves the active image with the content type detected at upload time
+    /// an id-derived ETag, and <c>Cache-Control: private, no-cache</c>
     /// If-None-Match is answered with a 304.
     /// </summary>
     private static async Task<IResult> GetImageAsync(
@@ -464,7 +462,7 @@ public static class RecipeImageEndpoints
         var actor = await actorProvider.GetCurrentActorAsync(cancellationToken);
         if (actor is null)
         {
-            // The permission filter already rejected unauthenticated requests;
+            // The permission filter already rejected unauthenticated requests
             // keep the defensive envelope so the handler cannot fail open.
             return (null, null, ApiResults.Error(
                 StatusCodes.Status401Unauthorized,

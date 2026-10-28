@@ -8,7 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace FateAndFridge.Api.Services;
 
 /// <summary>
-/// The atomic restore marker (docs/M13_PLAN.md §1.9 step 8): written after a
+/// The atomic restore marker: written after a
 /// successful restore and immediately before the process stops, then read and
 /// cleared on the next start so the operator gets a recorded outcome instead of
 /// a silent restart.
@@ -119,7 +119,7 @@ public static class RestoreMarker
     }
 
     /// <summary>
-    /// The post-restart check (docs/M13_PLAN.md §1.9 step 8): when the marker
+    /// The post-restart check: when the marker
     /// exists, log the recorded outcome, verify the restored database is
     /// reachable, and clear the marker. Idempotent and never fatal: when the
     /// database is still unreachable the marker is kept for the next start.
@@ -173,7 +173,7 @@ public static class RestoreMarker
 
     /// <summary>
     /// Reconciles the restored catalog with the archives on disk exactly once
-    /// after the marker is consumed (docs/M13_PLAN.md §1.9). The restored
+    /// after the marker is consumed. The restored
     /// <c>backup_metadata</c> is a <c>pg_dump</c> snapshot taken while the manual
     /// row was still pending, so it is refreshed from the files. Idempotent and
     /// never fatal for startup.
@@ -256,7 +256,7 @@ public sealed record RestoreMarkerDocument
     public required string SchemaVersion { get; init; }
 
     /// <summary>
-    /// Set when the database restore committed but a later step (the file swap,
+    /// Set when the database restore committed but a later step (the file swap
     /// retention, or the marker itself) failed. The restore still applied, so the
     /// process must restart; the startup check reports the recorded failure.
     /// </summary>

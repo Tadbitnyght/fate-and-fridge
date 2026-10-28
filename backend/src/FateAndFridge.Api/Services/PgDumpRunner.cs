@@ -5,7 +5,7 @@ namespace FateAndFridge.Api.Services;
 
 /// <summary>
 /// Runs one <c>pg_dump --format=custom</c> against the application database
-/// (docs/M13_PLAN.md §1.3, §2.1). The runner is a seam: the development
+/// The runner is a seam: the development
 /// workstation has no <c>pg_dump</c>, so the backup orchestration is tested with
 /// a fake runner and the real binary is only exercised in the runtime image.
 /// </summary>
@@ -23,7 +23,7 @@ public interface IPgDumpRunner
 /// Production <see cref="IPgDumpRunner"/>: invokes the shipped
 /// <c>pg_dump</c> without a shell, with the password supplied through the
 /// <c>PGPASSWORD</c> environment variable, a bounded timeout, and cancellation
-/// that kills the process tree (docs/SECURITY.md §13, docs/M13_PLAN.md §4).
+/// that kills the process tree.
 /// </summary>
 public sealed class PgDumpRunner : IPgDumpRunner
 {

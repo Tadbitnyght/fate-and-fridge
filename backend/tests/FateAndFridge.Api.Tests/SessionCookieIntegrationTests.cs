@@ -15,13 +15,13 @@ namespace FateAndFridge.Api.Tests;
 
 /// <summary>
 /// HTTP-level verification of the opaque session cookie: flags, clearing of
-/// invalid cookies, and how the M1-03 endpoints behave with and without a
-/// session (docs/SECURITY.md §2, docs/API.md §21). Requires a Docker daemon;
+/// invalid cookies, and how the endpoints behave with and without a
+/// session (docs/SECURITY.md §2, docs/API.md §21). Requires a Docker daemon
 /// run with <c>dotnet test --filter "Category!=Integration"</c> to skip locally.
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class SessionCookieIntegrationTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class SessionCookieIntegrationTests(SetupFixture fixture) : IAsyncLifetime
 {
     private static readonly DateTimeOffset SeedTimestamp =
         new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);

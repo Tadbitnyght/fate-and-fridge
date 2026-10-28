@@ -4,6 +4,17 @@ All notable changes to Fate & Fridge are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] - 2026-10-28
+
+Release packaging only: the published tree contains no development-process
+references. No functional change.
+
+### Changed
+
+- Removed development and release-tooling vocabulary, section citations, and
+  release identifiers from source comments, test names, and the published
+  documentation. Public behaviour is unchanged.
+
 ## [1.0.0] - 2026-10-26
 
 The first release: a self-hosted household dinner planner with a randomized
@@ -160,4 +171,5 @@ statistics, printing, multiuser permissions, and encrypted backup/restore.
 - No telemetry. The only outbound request is the optional, identifier-free
   release check.
 
+[1.0.1]: https://github.com/Tadbitnyght/fate-and-fridge/releases/tag/v1.0.1
 [1.0.0]: https://github.com/Tadbitnyght/fate-and-fridge/releases/tag/v1.0.0

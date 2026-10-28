@@ -30,7 +30,6 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 // The Data Protection key ring must live on the persistent volume so opaque
 // sessions and antiforgery tokens survive container replacement
-// (docs/MILESTONES.md M1 decisions, docs/SECURITY.md §2).
 builder.Services
     .AddDataProtection()
     .SetApplicationName("FateAndFridge")
@@ -57,15 +56,15 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 builder.Services.AddScoped<SetupStateService>();
 
-// M1-04: single-shot setup completion and the recovery key file store.
+// Single-shot setup completion and the recovery key file store.
 builder.Services.AddScoped<SetupCompletionService>();
 builder.Services.AddScoped<RecoveryKeyStore>();
 
-// M1-10: user management, last-active-Admin safety, and the auth-mode switch.
+// User management, last-active-Admin safety, and the auth-mode switch.
 builder.Services.AddScoped<UserManagementService>();
 builder.Services.AddScoped<AuthModeService>();
 
-// M1-11: security settings (IP allowlist + trusted proxies) with a short-TTL
+// Security settings (IP allowlist + trusted proxies) with a short-TTL
 // cache so the per-request middleware does not query the database every time.
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<SecuritySettingsService>();
@@ -73,72 +72,72 @@ builder.Services.AddScoped<SecuritySettingsService>();
 builder.Services.AddScoped<HouseholdSettingsService>();
 builder.Services.AddScoped<HouseholdClock>();
 
-// M1-06 session infrastructure: opaque DB-backed cookie sessions resolved by
+// Session infrastructure: opaque DB-backed cookie sessions resolved by
 // the default authentication scheme, with the session-aware actor provider
-// replacing the M1-03 interim provider. M1-07 adds login/logout endpoints and
-// M1-09 re-tests the multiuser permission matrix.
+// replacing the interim provider. adds login/logout endpoints and
+// Re-tests the multiuser permission matrix.
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<SessionService>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<IAuthEventWriter, AuthEventWriter>();
 
-// M2-02: reference-data audit writer. Rows are staged on the caller's
+// Reference-data audit writer. Rows are staged on the caller's
 // AppDbContext so they commit atomically with the change they describe.
 builder.Services.AddScoped<IAuditService, AuditService>();
 
-// M2-04: idempotent startup seeder for the default reference data. It runs
+// Idempotent startup seeder for the default reference data. It runs
 // once after migrations, never overwrites user edits, and serializes
 // concurrent startups with a transaction-scoped PostgreSQL advisory lock.
 builder.Services.AddScoped<ReferenceDataSeeder>();
 
-// M2-05: departments management (ordered reference data with audit).
+// Departments management (ordered reference data with audit).
 builder.Services.AddScoped<DepartmentService>();
 
-// M2-06: units and unit aliases, plus the recipe-usage seam consumed by the
-// reference-data hard deletes (M2-08/M2-10 consume the other methods).
+// Units and unit aliases, plus the recipe-usage seam consumed by the
+// reference-data hard deletes (the other methods consume them).
 builder.Services.AddScoped<UnitService>();
 
-// M2-08: ingredients and their aliases; the canonical name and every alias
+// Ingredients and their aliases; the canonical name and every alias
 // share one global uniqueness namespace.
 builder.Services.AddScoped<IngredientService>();
 
-// M2-10: proteins and tags management, plus the recipe-usage seams consumed
+// Proteins and tags management, plus the recipe-usage seams consumed
 // by their Admin-only hard deletes.
 builder.Services.AddScoped<ProteinService>();
 builder.Services.AddScoped<TagService>();
 
-// M3-06/M3-08: the recipe tables now exist, so the usage seam counts and
+//The recipe tables now exist, so the usage seam counts and
 // reassigns real recipe references instead of the M2 zero-returning stub.
 builder.Services.AddScoped<IReferenceUsageChecker, ReferenceDataUsageChecker>();
 
-// M3-02…M3-09: recipe document CRUD, status lifecycle, and nested slices.
+//Recipe document CRUD, status lifecycle, and nested slices.
 builder.Services.AddScoped<RecipeService>();
 builder.Services.AddScoped<CalendarService>();
 
-// M12-06: the Admin-only historical correction of one past date.
+// The Admin-only historical correction of one past date.
 builder.Services.AddScoped<HistoricalCorrectionService>();
 
-// M12-08: the Admin-only irreversible hard recipe delete.
+// The Admin-only irreversible hard recipe delete.
 builder.Services.AddScoped<RecipeHardDeleteService>();
 
-// M6-08: the single-date reroll orchestrator (context build + atomic history).
+// The single-date reroll orchestrator (context build + atomic history).
 builder.Services.AddScoped<CalendarRandomizer>();
 
-// M7-01: the batch reroll preview service (draft-backed sequential engine pass).
+// The batch reroll preview service (draft-backed sequential engine pass).
 builder.Services.AddScoped<BatchRerollService>();
 
-// M6-02: the pure randomization engine and its injectable secure RNG seam. The
+// The pure randomization engine and its injectable secure RNG seam. The
 // engine scores candidates and performs a weighted roulette draw; SystemRandomSource
 // is the only production source of randomness (docs/RANDOMIZER.md §7 Phase F).
 builder.Services.AddSingleton<IRandomSource, SystemRandomSource>();
 builder.Services.AddSingleton<RandomizerEngine>();
 
-// M3-04: local recipe image storage, content policy, and serving.
+// Local recipe image storage, content policy, and serving.
 builder.Services.AddScoped<RecipeImageService>();
 
-// M4-01: SSRF-hardened outbound fetcher shared by recipe import (M4-04) and
-// the image-from-URL endpoint (M4-07). Stateless; a single HttpClient with a
+// SSRF-hardened outbound fetcher shared by recipe import and
+// the image-from-URL endpoint. Stateless; a single HttpClient with a
 // pinned connect callback is reused.
 builder.Services
     .AddOptions<ImportFetchOptions>()
@@ -158,7 +157,7 @@ builder.Services.AddSingleton<IImportFetcher>(serviceProvider => new SafeUrlFetc
     serviceProvider.GetRequiredService<ILogger<SafeUrlFetcher>>(),
     serviceProvider.GetRequiredService<IOptions<ImportFetchOptions>>(),
     serviceProvider.GetRequiredService<IDnsResolver>()));
-// M4-04: per-user import fetch throttling (30 page / 60 image fetches per
+// Per-user import fetch throttling (30 page / 60 image fetches per
 // hour by default) and the draft-only import orchestration service.
 builder.Services
     .AddOptions<ImportThrottleOptions>()
@@ -173,12 +172,12 @@ builder.Services
 builder.Services.AddSingleton<IImportThrottle, ImportThrottle>();
 builder.Services.AddScoped<RecipeImportService>();
 
-// M4-07: image-from-URL download orchestration. It shares the SSRF-hardened
+// Image-from-URL download orchestration. It shares the SSRF-hardened
 // fetcher and the M3 image storage/content policy instead of reimplementing
 // either.
 builder.Services.AddScoped<RecipeImageImportService>();
 
-// M3-04: bound multipart parsing for image uploads before anything is
+// Bound multipart parsing for image uploads before anything is
 // buffered; the endpoint enforces the exact 5 MiB file cap and the format
 // policy on top of this.
 builder.Services.Configure<FormOptions>(options =>
@@ -186,56 +185,56 @@ builder.Services.Configure<FormOptions>(options =>
     options.MultipartBodyLengthLimit = RecipeImageService.MaxMultipartBodyBytes;
 });
 
-// M2-07: pure, dependency-free conversion between compatible units; stateless,
+// Pure, dependency-free conversion between compatible units; stateless
 // so a singleton. M8 grocery aggregation consumes it via DI.
 builder.Services.AddSingleton<UnitConversionService>();
 
-// M8-02: pure grocery aggregation over supplied recipe ingredients; stateless and
+// Pure grocery aggregation over supplied recipe ingredients; stateless and
 // I/O-free, so a singleton over the conversion service above.
 builder.Services.AddSingleton<GroceryAggregationService>();
 
-// M8-03: the live grocery list projection over calendar, recipe, manual, and
+// The live grocery list projection over calendar, recipe, manual, and
 // check-state rows. Scoped because it reads through the request AppDbContext.
 builder.Services.AddScoped<GroceryListService>();
 
-// M8-04: range-scoped manual grocery CRUD and the per-user (or system-actor)
+// Range-scoped manual grocery CRUD and the per-user (or system-actor)
 // preference store, both scoped over the request AppDbContext.
 builder.Services.AddScoped<GroceryManualItemService>();
 builder.Services.AddScoped<GroceryPreferenceService>();
 
-// M8-05/M8-06: the household staple catalog (add-to-list reuses the manual-item
+//The household staple catalog (add-to-list reuses the manual-item
 // create path) and the household-shared check state, scoped over the request
 // AppDbContext.
 builder.Services.AddScoped<GroceryStapleService>();
 builder.Services.AddScoped<GroceryCheckStateService>();
 
-// M11-01: read-only statistics aggregates over the request AppDbContext
-// (docs/M11_PLAN.md §1.14): on-demand SQL, no cache and no statistics table.
+// Read-only statistics aggregates over the request AppDbContext
+// on-demand SQL, no cache and no statistics table.
 builder.Services.AddScoped<StatisticsService>();
 
-// M11-03: the bounded, month-grouped meal-history read.
+// The bounded, month-grouped meal-history read.
 builder.Services.AddScoped<MealHistoryService>();
 
-// M12-02: the merged, newest-first admin audit read model (audit_events plus
+// The merged, newest-first admin audit read model (audit_events plus
 // the reroll/batch calendar_entry_history rows); bounded, read-only.
 builder.Services.AddScoped<AuditLogQueryService>();
 
-// M13-01: the backup-tooling probe. M13-03 consults the recorded client/server
+// The backup-tooling probe. consults the recorded client/server
 // major check and refuses a backup when the shipped pg_dump is older than the
-// server (docs/M13_PLAN.md §1.3). Probing never fails application startup.
+// server. Probing never fails application startup.
 builder.Services.AddSingleton<IPgDumpVersionReader, PgDumpVersionReader>();
 builder.Services.AddScoped<IPgServerVersionReader, NpgsqlServerVersionReader>();
 builder.Services.AddScoped<PgToolingInfo>();
 
-// M13-03: backup creation, the serialized pg_dump runner, and the
-// backup_metadata lifecycle (docs/M13_PLAN.md §1.3–§1.8, §2.1). The runner is
+// Backup creation, the serialized pg_dump runner, and the
+// backup_metadata lifecycle. The runner is
 // a seam so orchestration is testable without the client tools; the process
 // gate serializes concurrent creates in this instance.
 builder.Services.AddSingleton<IPgDumpRunner, PgDumpRunner>();
 builder.Services.AddSingleton<BackupOperationGate>();
 builder.Services.AddScoped<BackupService>();
 
-// M13-04: the restore orchestration (docs/M13_PLAN.md §1.9). The runner and the
+// The restore orchestration. The runner and the
 // restart/marker/maintenance state are singletons because maintenance mode must
 // be visible to every request and there is exactly one restore lane; the
 // restore itself opens its own scopes so it can use a fresh DbContext after the
@@ -248,19 +247,18 @@ builder.Services.AddSingleton<IRestoreRestartSignal, HostRestartSignal>();
 builder.Services.AddSingleton<IRestoreFileOperations, SystemRestoreFileOperations>();
 builder.Services.AddSingleton<RestoreService>();
 
-// M13-09: the single outbound release-metadata GET (docs/M13_PLAN.md §1.13;
-// docs/ARCHITECTURE.md §20, docs/SECURITY.md §18). The request carries only a
+// The single outbound release-metadata GET. The request carries only a
 // neutral User-Agent and the GitHub media type — no token, no body, no
 // household data, no identifiers.
 builder.Services.AddHttpClient<GitHubReleaseClient>(GitHubReleaseClient.Configure);
 builder.Services.AddScoped<UpdateCheckService>();
 
-// M1-09 permission model: one uncached grant reader plus the evaluator service
+// Permission model: one uncached grant reader plus the evaluator service
 // shared by GET /auth/session and the route enforcement filter.
 builder.Services.AddScoped<IPermissionGrantReader, DbPermissionGrantReader>();
 builder.Services.AddScoped<PermissionService>();
 
-// M1-07 part 2: per-account lockout and progressive delay
+// Part 2: per-account lockout and progressive delay
 // (docs/SECURITY.md §3) plus a process-local, bounded per-IP failure throttle.
 builder.Services
     .AddOptions<LoginThrottleOptions>()
@@ -282,11 +280,11 @@ builder.Services.AddAuthentication(SessionAuthenticationDefaults.Scheme)
 builder.Services.AddAuthorization();
 builder.Services.AddScoped<ICurrentActorProvider, SessionActorProvider>();
 
-// M9-01: live sync. Server-side SignalR ships in the ASP.NET Core shared
+// Live sync. Server-side SignalR ships in the ASP.NET Core shared
 // framework, so no new backend package is added and no backplane is needed
 // (one household, one instance). The hub is a server-to-client-only
 // notification channel; the bounded inbound frame size and disabled detailed
-// errors are the documented guards (docs/M9_PLAN.md §1.11).
+// errors are the documented guards.
 builder.Services
     .AddSignalR(options =>
     {
@@ -316,7 +314,7 @@ if (migrateOnly || app.Configuration.GetValue("Database:MigrateOnStartup", false
     await DatabaseMigrator.MigrateWithRetryAsync(app.Services, app.Logger);
 }
 
-// M2-04: seeding runs on every startup, even when automatic migrations are
+// Seeding runs on every startup, even when automatic migrations are
 // disabled, so the reference defaults exist regardless of deployment config.
 await ReferenceDataSeeder.SeedAtStartupAsync(app.Services, app.Logger);
 
@@ -325,12 +323,12 @@ if (migrateOnly)
     return;
 }
 
-// M13-04: a restore that finished before the last stop wrote a marker; log the
+// A restore that finished before the last stop wrote a marker; log the
 // recorded outcome, verify the restored database is reachable, and clear it
-// (docs/M13_PLAN.md §1.9 step 8). Idempotent and never fatal at startup.
+// Idempotent and never fatal at startup.
 await RestoreMarker.CompleteStartupAsync(app.Configuration, app.Services, app.Logger);
 
-// M13-09: the update check runs once in the background (24-hour cache, and no
+// The update check runs once in the background (24-hour cache, and no
 // call at all when update_check_enabled is false). It is deliberately not
 // awaited: a slow or unreachable GitHub must never delay or fail startup.
 if (app.Configuration.GetValue("Updates:StartupCheckEnabled", true))
@@ -340,9 +338,9 @@ if (app.Configuration.GetValue("Updates:StartupCheckEnabled", true))
 
 // Order matters: the exception handler wraps everything so unexpected failures
 // still use the shared error envelope; restore maintenance mode answers
-// 503 RESTORE_IN_PROGRESS before any other middleware can touch the database;
+// 503 RESTORE_IN_PROGRESS before any other middleware can touch the database
 // the client address (trusted-proxy
-// forwarded headers) resolves next so the allowlist, Secure-cookie decisions,
+// forwarded headers) resolves next so the allowlist, Secure-cookie decisions
 // and antiforgery all see the real client; the allowlist then rejects blocked
 // clients before any authentication or setup state is consulted; setup gating
 // still wins pre-setup (409) for allowed clients; the forced-password-change
@@ -359,11 +357,11 @@ app.UseMiddleware<CsrfMiddleware>();
 app.UseAuthorization();
 
 app.MapHealthEndpoints();
-// M13-08: the authenticated version display behind Settings → About and the
-// shell footer label (docs/M13_PLAN.md §1.12, docs/API.md §24).
+// The authenticated version display behind Settings → About and the
+// shell footer label.
 app.MapAboutEndpoints();
-// M13-09: update status (any authenticated actor) plus the Admin-only forced
-// check and enabled preference (docs/M13_PLAN.md §2.2, docs/API.md §25).
+// Update status (any authenticated actor) plus the Admin-only forced
+// check and enabled preference.
 app.MapUpdateEndpoints();
 app.MapSetupEndpoints();
 app.MapAuthEndpoints();
@@ -385,8 +383,8 @@ app.MapRecoveryKeyEndpoints();
 app.MapOperationEndpoints();
 app.MapImportEndpoints();
 
-// M9-01: the live-sync hub must be mapped before the SPA catch-all so
-// MapFrontend's fallback cannot swallow /hub/live (docs/M9_PLAN.md §1.2).
+// The live-sync hub must be mapped before the SPA catch-all so
+// MapFrontend's fallback cannot swallow /hub/live.
 app.MapHub<LiveSyncHub>(LiveSyncPaths.HubPath);
 
 app.MapFrontend();

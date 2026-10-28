@@ -1,6 +1,6 @@
 namespace FateAndFridge.Api.Services;
 
-/// <summary>Local image formats accepted for recipe images (docs/M3_PLAN.md §1.7).</summary>
+/// <summary>Local image formats accepted for recipe images.</summary>
 public enum RecipeImageFormat
 {
     Jpeg,
@@ -25,7 +25,7 @@ public enum RecipeImageProbeOutcome
 }
 
 /// <summary>
-/// Result of <see cref="RecipeImageFormatDetector.Probe"/>: the detected format,
+/// Result of <see cref="RecipeImageFormatDetector.Probe"/>: the detected format
 /// pixel dimensions, and whether the image is animated or unreadable. Failures
 /// carry no format.
 /// </summary>
@@ -49,8 +49,8 @@ public readonly record struct RecipeImageProbe(
 }
 
 /// <summary>
-/// Dependency-free image signature and dimension reader for the M3-04 content
-/// policy (docs/M3_PLAN.md §1.7, docs/SECURITY.md §9). Only JPEG, PNG, and WebP
+/// Dependency-free image signature and dimension reader for the content
+/// policy. Only JPEG, PNG, and WebP
 /// are recognized; everything else is <see cref="RecipeImageProbeOutcome.UnknownFormat"/>.
 /// Truncated or structurally corrupt supported formats are
 /// <see cref="RecipeImageProbeOutcome.Malformed"/>, and APNG (<c>acTL</c>) and

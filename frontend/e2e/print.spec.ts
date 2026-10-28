@@ -313,7 +313,7 @@ interface AppliedPrintScale {
 /**
  * Reads the first printed month's applied auto-shrink scale and computed font
  * size from the CSS custom properties `index.css` publishes, so the test can
- * assert the shrink never drops below the ≈10pt legibility floor (M10-03).
+ * assert the shrink never drops below the ≈10pt legibility floor.
  */
 async function readAppliedPrintScale(page: Page): Promise<AppliedPrintScale> {
   return page.evaluate(() => {

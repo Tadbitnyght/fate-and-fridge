@@ -3,8 +3,7 @@ using System.Net.Http.Headers;
 namespace FateAndFridge.Api.Imports;
 
 /// <summary>
-/// Outbound limits for recipe import (docs/M4_PLAN.md §1.13,
-/// docs/SECURITY.md §7). Bound from <c>Imports:Fetch</c>.
+/// Outbound limits for recipe import. Bound from <c>Imports:Fetch</c>.
 /// </summary>
 public sealed class ImportFetchOptions
 {

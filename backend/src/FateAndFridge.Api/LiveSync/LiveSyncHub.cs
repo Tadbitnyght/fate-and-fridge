@@ -6,10 +6,10 @@ using Microsoft.AspNetCore.SignalR;
 namespace FateAndFridge.Api.LiveSync;
 
 /// <summary>
-/// Server-to-client live-sync hub (docs/M9_PLAN.md §2.1) mapped at
-/// <see cref="LiveSyncPaths.HubPath"/>. It exposes no client-invokable methods:
+/// Server-to-client live-sync hub mapped at
+/// <see cref="LiveSyncPaths.HubPath"/>. It exposes no client-invokable methods
 /// every write stays on the REST API. The connection is gated in
-/// <see cref="OnConnectedAsync"/> rather than with <c>RequireAuthorization()</c>,
+/// <see cref="OnConnectedAsync"/> rather than with <c>RequireAuthorization</c>
 /// so single-user mode (no cookie, system actor) can connect while multiuser mode
 /// requires a valid session.
 /// </summary>
@@ -21,7 +21,7 @@ public sealed class LiveSyncHub(
     /// <summary>The group every household event is broadcast to.</summary>
     public const string HouseholdGroupName = "household";
 
-    /// <summary>Documented inbound frame cap (docs/M9_PLAN.md §1.11).</summary>
+    /// <summary>Documented inbound frame cap.</summary>
     public const int MaximumInboundMessageBytes = 32 * 1024;
 
     /// <inheritdoc />
@@ -39,7 +39,7 @@ public sealed class LiveSyncHub(
             return;
         }
 
-        // Fail closed: without an HttpContext the same-origin check cannot run,
+        // Fail closed: without an HttpContext the same-origin check cannot run
         // so the connection is refused rather than silently skipping it.
         var httpContext = Context.GetHttpContext();
         if (httpContext is null)
@@ -109,10 +109,10 @@ public sealed class LiveSyncHub(
             : LiveSyncConnectionRegistry.SystemSessionId;
 
     /// <summary>
-    /// Browsers send an <c>Origin</c> header and it must match the request host;
-    /// a missing Origin from non-browser clients may be allowed (a body-less,
+    /// Browsers send an <c>Origin</c> header and it must match the request host
+    /// a missing Origin from non-browser clients may be allowed (a body-less
     /// same-origin, cookie-authenticated upgrade carries no other cross-origin
-    /// signal). Documented decision (docs/M9_PLAN.md §1.11).
+    /// signal). Documented decision.
     /// </summary>
     internal static bool IsSameOrigin(HttpRequest request)
     {

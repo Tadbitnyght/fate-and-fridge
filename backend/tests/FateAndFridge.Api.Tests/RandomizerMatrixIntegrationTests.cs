@@ -17,19 +17,19 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// Issue #91 (M6-11): the exhaustive docs/M6_PLAN.md §4 battery at the
+/// Issue #91: the exhaustive battery at the
 /// endpoint/service level, complementing the deterministic engine matrix in
 /// <see cref="RandomizerEngineTests"/>. These tests drive the real reroll route
 /// against PostgreSQL and then assert the persisted <c>metadata_json</c>.
-/// Selection is made deterministic by the single-Normal-candidate technique:
+/// Selection is made deterministic by the single-Normal-candidate technique
 /// when exactly one recipe has <c>status = Normal</c> the weighted draw must
 /// return it, so the recorded score breakdown becomes a stable assertion of the
 /// context the service built from the stored calendar. Helpers mirror
 /// <see cref="RandomizerEndpointsIntegrationTests"/> (they are private there).
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class RandomizerMatrixIntegrationTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class RandomizerMatrixIntegrationTests(SetupFixture fixture) : IAsyncLifetime
 {
     private const string CalendarPath = "/api/v1/calendar";
     private const string SettingsPath = "/api/v1/settings/household";
@@ -57,7 +57,7 @@ public sealed class RandomizerMatrixIntegrationTests(M1SetupFixture fixture) : I
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
     /// <summary>
-    /// docs/RANDOMIZER.md §4: a locked occurrence is still a planned occurrence,
+    /// docs/RANDOMIZER.md §4: a locked occurrence is still a planned occurrence
     /// so the only Normal recipe locked on D-1 must contribute the exact-repeat
     /// penalty when D is rerolled.
     /// </summary>
@@ -83,8 +83,8 @@ public sealed class RandomizerMatrixIntegrationTests(M1SetupFixture fixture) : I
     }
 
     /// <summary>
-    /// docs/RANDOMIZER.md §5 / docs/M6_PLAN.md §1.5: a special-day occurrence
-    /// (holiday/host-family dinner/misc) contributes the special-day multiplier,
+    /// docs/RANDOMIZER.md §5 : a special-day occurrence
+    /// (holiday/host-family dinner/misc) contributes the special-day multiplier
     /// not the normal repeat multiplier.
     /// </summary>
     [Fact]
@@ -105,7 +105,7 @@ public sealed class RandomizerMatrixIntegrationTests(M1SetupFixture fixture) : I
     }
 
     /// <summary>
-    /// docs/RANDOMIZER.md §6 / docs/M6_PLAN.md §1.6: any recipe-bearing neighbor
+    /// docs/RANDOMIZER.md §6 : any recipe-bearing neighbor
     /// counts for the protein penalty, including a ManualOnly entry that is never
     /// itself a candidate.
     /// </summary>
@@ -184,7 +184,7 @@ public sealed class RandomizerMatrixIntegrationTests(M1SetupFixture fixture) : I
     }
 
     /// <summary>
-    /// docs/RANDOMIZER.md §15 "Small Recipe Pool" / docs/M6_PLAN.md §1.10: a pool
+    /// docs/RANDOMIZER.md §15 "Small Recipe Pool" : a pool
     /// entirely inside the repeat window still yields a result (never
     /// RANDOMIZER_NO_CANDIDATES).
     /// </summary>
@@ -268,7 +268,7 @@ public sealed class RandomizerMatrixIntegrationTests(M1SetupFixture fixture) : I
     }
 
     /// <summary>
-    /// docs/M6_PLAN.md §1.16 / §4 "Timezone": the windows and the historical
+    /// "Timezone": the windows and the historical
     /// boundary use household-local dates via <see cref="HouseholdClock"/>. With
     /// the household on a zone whose local date differs from UTC around the
     /// boundary, the household's yesterday fails CALENDAR_DATE_IN_PAST while its

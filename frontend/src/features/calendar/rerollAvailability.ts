@@ -7,10 +7,10 @@ export interface RerollAvailability {
 }
 
 /**
- * UI-side reroll availability (M6-10). Mirrors docs/M6_PLAN.md §1.11 and
- * docs/API.md "Reroll (M6)": historical dates, locked entries, vacation days,
+ * UI-side reroll availability. Mirrors and
+ * docs/API.md "Reroll (M6)": historical dates, locked entries, vacation days
  * and actors without `calendar.edit` cannot reroll. This is presentation only —
- * the server re-checks every rule (docs/M5_PLAN.md §1.9).
+ * the server re-checks every rule.
  */
 export function rerollAvailability(day: CalendarDay | null, canEdit: boolean): RerollAvailability {
   if (!canEdit) {

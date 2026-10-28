@@ -1,7 +1,7 @@
 namespace FateAndFridge.Api.Auth.Permissions;
 
 /// <summary>
-/// Effective-permission service for the current actor (M1-09): the single
+/// Effective-permission service for the current actor: the single
 /// source of truth shared by <c>GET /auth/session</c> and route enforcement.
 /// Reads grants fresh from <see cref="IPermissionGrantReader"/> on every call —
 /// no cross-request caching — so permission changes apply on the next request.

@@ -12,10 +12,9 @@ type FixedPreset = Exclude<GroceryRangePreset, 'custom'>
 const DEFAULT_DAYS = '7'
 
 /**
- * Range selector (docs/M8_PLAN.md §1.7): one-tap presets plus a Custom
+ * Range selector: one-tap presets plus a Custom
  * start/day-count form. The last choice is persisted server-side through
  * preferences, so the server — not this component — remembers the range.
- *
  * The custom fields seed from the resolved range but are user-editable; local
  * overrides (not effects) keep them in sync so no state is set during render
  * side effects.

@@ -6,7 +6,7 @@ namespace FateAndFridge.Api.Services;
 
 /// <summary>
 /// The household-shared checkbox state for one grocery identity
-/// (docs/M8_PLAN.md §1.10, §2.2): the identity hash plus the resolved flag.
+/// the identity hash plus the resolved flag.
 /// </summary>
 public sealed record GroceryCheckStateRecord(
     string Identity,
@@ -16,7 +16,7 @@ public sealed record GroceryCheckStateRecord(
 
 /// <summary>
 /// Household-shared check/uncheck of a grocery line by its stable
-/// <see cref="GroceryItemIdentity"/> (docs/M8_PLAN.md §1.10, §2.1). One row per
+/// <see cref="GroceryItemIdentity"/>. One row per
 /// identity means any member's check is visible to all and repeated calls are
 /// idempotent. A concurrent first write that loses the unique-hash race is
 /// retried as an update instead of surfacing a 500.

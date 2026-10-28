@@ -9,8 +9,8 @@ namespace FateAndFridge.Api.Endpoints;
 
 /// <summary>
 /// One backup row on the wire (docs/API.md §18). <c>kind</c> and <c>status</c>
-/// are the snake_case storage values (<c>manual</c>/<c>safety</c>,
-/// <c>pending</c>/<c>completed</c>/<c>failed</c>/<c>restored</c>/<c>deleted</c>);
+/// are the snake_case storage values (<c>manual</c>/<c>safety</c>
+/// <c>pending</c>/<c>completed</c>/<c>failed</c>/<c>restored</c>/<c>deleted</c>)
 /// <c>checksum</c> is the lowercase SHA-256 of the encrypted file and is empty
 /// until the create completes.
 /// </summary>
@@ -69,10 +69,10 @@ public sealed record RestoreResponse(
     string SafetyBackupFilename);
 
 /// <summary>
-/// Admin-only backup routes (docs/M13_PLAN.md §2.1–§2.2, docs/API.md §18):
+/// Admin-only backup routes
 /// list, create, download, delete, and restore. Every route is
-/// <c>RequireAdmin()</c> on the existing <c>admin</c> role (and the single-user
-/// system actor); no eighth permission key is introduced. Recovery-key export,
+/// <c>RequireAdmin</c> on the existing <c>admin</c> role (and the single-user
+/// system actor); no eighth permission key is introduced. Recovery-key export
 /// the clean-install restore route, and the UI are later issues.
 /// </summary>
 public static class BackupEndpoints
@@ -261,12 +261,12 @@ public static class BackupEndpoints
     }
 
     /// <summary>
-    /// Starts one restore (docs/M13_PLAN.md §1.9, docs/API.md §18). Accepts
+    /// Starts one restore. Accepts
     /// either JSON <c>{ backup_id, reason, confirmation }</c> or a
-    /// <c>multipart/form-data</c> upload (<c>file</c>, <c>reason</c>,
+    /// <c>multipart/form-data</c> upload (<c>file</c>, <c>reason</c>
     /// <c>confirmation</c>), requires the typed <c>RESTORE</c> confirmation, and
     /// validates the archive plus creates the safety backup **before** the
-    /// <c>202</c>. The rest of the restore (maintenance mode, <c>pg_restore</c>,
+    /// <c>202</c>. The rest of the restore (maintenance mode, <c>pg_restore</c>
     /// session revocation, audit, file swap, marker, restart) runs in the
     /// background.
     /// </summary>

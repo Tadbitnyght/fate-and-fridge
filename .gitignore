@@ -44,7 +44,6 @@ npm-debug.log*
 # --- Playwright artifacts (repo root or frontend/) ---
 test-results/
 playwright-report/
-.playwright-mcp/
 
 # --- OS / editor noise ---
 .DS_Store

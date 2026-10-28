@@ -84,7 +84,7 @@ export function RecipesBrowser() {
   const { canEdit } = useRecipeAccess()
   const location = useLocation()
 
-  // The M12-09 hard delete navigates here with the counts to report, because
+  // The hard delete navigates here with the counts to report, because
   // the deleted recipe's editor no longer exists to show them.
   const notice =
     typeof (location.state as { notice?: unknown } | null)?.notice === 'string'

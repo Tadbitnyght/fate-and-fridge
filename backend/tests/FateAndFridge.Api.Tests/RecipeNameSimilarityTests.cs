@@ -4,7 +4,7 @@ using FluentAssertions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// Pure unit matrix for the M4-12 similar-name scorer (docs/M4_PLAN.md §1.9).
+/// Pure unit matrix for the similar-name scorer.
 /// No database and no network; inputs are already-folded names.
 /// </summary>
 public sealed class RecipeNameSimilarityTests

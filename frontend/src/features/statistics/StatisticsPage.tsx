@@ -24,9 +24,7 @@ const TABS: { id: StatisticsTab; label: string }[] = [
 ]
 
 /**
- * Statistics page (M11-04 overview, M11-05 meal history; docs/M11_PLAN.md
- * §2.3, docs/API.md §14).
- *
+ * Statistics page.
  * Two tabs over one route. The URL (`?tab=history`) is the source of truth so
  * the history browser is deep-linkable; the History tab is offered only with
  * `calendar.view`, and a deep link without it explains that history is
@@ -50,7 +48,7 @@ export function StatisticsPage(): JSX.Element {
   const tabs = canViewHistory ? TABS : TABS.filter((tab) => tab.id !== 'history')
   const requestedTab: StatisticsTab = requestedHistory ? 'history' : 'overview'
   // When the requested History tab is unavailable the tablist is not rendered
-  // at all, so this fallback only keeps `activeTab` a valid member of `tabs`;
+  // at all, so this fallback only keeps `activeTab` a valid member of `tabs`
   // it never selects a tab for the user (see `historyUnavailable` below).
   const activeTab: StatisticsTab = tabs.some((tab) => tab.id === requestedTab)
     ? requestedTab

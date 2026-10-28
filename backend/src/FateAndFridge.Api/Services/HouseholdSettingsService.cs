@@ -47,7 +47,7 @@ public sealed record HouseholdSettingsResponse(
 /// Reads and updates the singleton <c>household_settings</c> row
 /// (docs/DATABASE.md §2). Every write refreshes <c>updated_at</c> in UTC and
 /// stages one <c>settings.household_updated</c> audit row in the same
-/// transaction as the change (docs/M12_PLAN.md §2.1).
+/// transaction as the change.
 /// </summary>
 public sealed class HouseholdSettingsService(
     AppDbContext dbContext,
@@ -60,7 +60,7 @@ public sealed class HouseholdSettingsService(
 
     /// <summary>
     /// Applies the validated partial update and refreshes <c>updated_at</c>.
-    /// The row must exist; setup (M1-04) creates it before gating opens.
+    /// The row must exist; setup creates it before gating opens.
     /// </summary>
     public async Task<HouseholdSettings> ApplyPatchAsync(
         HouseholdSettingsPatch patch,
@@ -79,7 +79,7 @@ public sealed class HouseholdSettingsService(
         if (patch.Timezone is { } timezone
             && !string.Equals(timezone, settings.Timezone, StringComparison.Ordinal))
         {
-            // Freeze the historical boundary (docs/M5_PLAN.md §1.7): the last
+            // Freeze the historical boundary: the last
             // date that was historical under the old timezone must stay
             // historical so a timezone change can never make history editable.
             var previousToday = HouseholdClock.GetLocalDate(
@@ -161,7 +161,7 @@ public sealed class HouseholdSettingsService(
 
         settings.UpdatedAt = timeProvider.GetUtcNow();
 
-        // The change and its audit row commit atomically (docs/M12_PLAN.md §2.1).
+        // The change and its audit row commit atomically.
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         await auditService.WriteAsync(
             new AuditEventEntry(

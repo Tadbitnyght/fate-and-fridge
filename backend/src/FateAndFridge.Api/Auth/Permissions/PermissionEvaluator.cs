@@ -21,7 +21,7 @@ public static class PermissionEvaluator
         });
 
     /// <summary>
-    /// Effective keys for the actor: system/Admin bypass member grants,
+    /// Effective keys for the actor: system/Admin bypass member grants
     /// members are evaluated from their granted keys.
     /// </summary>
     public static IReadOnlyList<string> For(CurrentActor actor, IEnumerable<string>? grantedKeys = null)
@@ -34,7 +34,7 @@ public static class PermissionEvaluator
     }
 
     /// <summary>
-    /// Effective keys for a member: known grants plus edit-implies-view,
+    /// Effective keys for a member: known grants plus edit-implies-view
     /// filtered to known keys and returned in canonical order.
     /// </summary>
     public static IReadOnlyList<string> ForMember(IEnumerable<string>? grantedKeys = null)

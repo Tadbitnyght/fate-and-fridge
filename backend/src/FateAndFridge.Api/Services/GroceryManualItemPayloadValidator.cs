@@ -5,8 +5,8 @@ using System.Text.Json;
 namespace FateAndFridge.Api.Services;
 
 /// <summary>
-/// Parsed <c>POST /groceries/manual</c> body (docs/M8_PLAN.md §1.8, §2.2).
-/// Type/format/range checks are done by the validator; reference-data existence,
+/// Parsed <c>POST /groceries/manual</c> body.
+/// Type/format/range checks are done by the validator; reference-data existence
 /// canonicalization, the household-today check, and the department default run
 /// in <see cref="GroceryManualItemService"/> where the database is available.
 /// </summary>
@@ -21,7 +21,7 @@ public sealed record GroceryManualItemCreateRequest(
     bool SaveForFuture);
 
 /// <summary>
-/// Parsed partial update of a manual grocery item (docs/M8_PLAN.md §2.2). Each
+/// Parsed partial update of a manual grocery item. Each
 /// member carries a "provided" flag so the service can tell an absent field from
 /// an explicit <c>null</c> that clears a nullable value.
 /// </summary>
@@ -66,15 +66,14 @@ public sealed record GroceryManualItemPatchValidation(
     IReadOnlyDictionary<string, string[]> FieldErrors);
 
 /// <summary>
-/// Parses and type-validates the manual grocery item bodies (docs/M8_PLAN.md
-/// §1.8, §2.2). Unknown JSON fields are ignored; a patch body with no known
+/// Parses and type-validates the manual grocery item bodies. Unknown JSON fields are ignored; a patch body with no known
 /// field is rejected. Only the name length/range and the quantity/date/day
 /// format and static ranges are enforced here; a referenced id's existence is
 /// checked in the service.
 /// </summary>
 public static class GroceryManualItemPayloadValidator
 {
-    /// <summary>Maximum manual item name length (docs/M8_PLAN.md §2.2).</summary>
+    /// <summary>Maximum manual item name length.</summary>
     public const int MaxNameLength = 200;
 
     /// <summary>Inclusive lower bound for <c>range_days</c>.</summary>

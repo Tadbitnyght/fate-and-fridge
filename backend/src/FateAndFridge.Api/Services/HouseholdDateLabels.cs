@@ -4,7 +4,7 @@ namespace FateAndFridge.Api.Services;
 
 /// <summary>
 /// The household-local date labels shared by the statistics and meal-history
-/// reads (docs/M11_PLAN.md §2.1). The month names are table-driven so a label
+/// reads. The month names are table-driven so a label
 /// is identical in every deployment: the host may run with globalization
 /// invariant mode, where ICU-backed names are empty and
 /// `CultureInfo`-derived month names are unusable.

@@ -11,7 +11,7 @@ interface StatusPresentation {
 
 /**
  * Presentation for each connection state. The label carries the meaning, so
- * the indicator never relies on colour alone (docs/M9_PLAN.md §1.9).
+ * the indicator never relies on colour alone.
  */
 const PRESENTATION: Record<LiveSyncState, StatusPresentation> = {
   connected: { label: 'Live', icon: '●', detail: 'Live updates are connected.' },
@@ -25,7 +25,7 @@ const PRESENTATION: Record<LiveSyncState, StatusPresentation> = {
 }
 
 /**
- * Accessible, non-blocking live-sync indicator (docs/M9_PLAN.md §1.9). It is
+ * Accessible, non-blocking live-sync indicator. It is
  * announced politely and never blocks the page: REST reads and writes keep
  * working while the socket is down.
  */

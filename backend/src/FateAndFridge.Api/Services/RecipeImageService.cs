@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 namespace FateAndFridge.Api.Services;
 
 /// <summary>
-/// The single active image of a recipe as exposed to the API (M3-04,
+/// The single active image of a recipe as exposed to the API (
 /// docs/DATABASE.md §3). <see cref="StoragePath"/> stays server-side and is
 /// never serialized by the response models.
 /// </summary>
@@ -47,8 +47,7 @@ public abstract record RecipeImageMutationResult
 public sealed record RecipeImageFile(RecipeImageRecord Image, byte[] Bytes, string ContentType);
 
 /// <summary>
-/// Local recipe image storage and content policy (M3-04, docs/M3_PLAN.md
-/// §1.6–§1.7, docs/SECURITY.md §9): format detection from the bytes only,
+/// Local recipe image storage and content policy: format detection from the bytes only
 /// bounded file size and dimensions, rejection of animation, random
 /// server-generated filenames under <c>{DataDir}/images/recipes</c>, and an
 /// audit row staged atomically with every change. Replaced and removed files
@@ -313,7 +312,7 @@ public sealed class RecipeImageService(
     }
 
     /// <summary>
-    /// Removes the active image: the row (and its audit row) is deleted first,
+    /// Removes the active image: the row (and its audit row) is deleted first
     /// then the file is removed best-effort.
     /// </summary>
     public async Task<RecipeImageMutationResult> RemoveAsync(
@@ -352,7 +351,7 @@ public sealed class RecipeImageService(
     /// <summary>
     /// Stages the removal of a recipe's active image row on the caller's unit of
     /// work and returns its stored path, or null when the recipe has no image.
-    /// The M12-08 hard delete owns the transaction and the single
+    /// The hard delete owns the transaction and the single
     /// <c>recipe.hard_deleted</c> audit row, so this helper neither saves nor
     /// audits; the caller deletes the file with <see cref="DeleteStoredFile"/>
     /// only after its transaction commits.
@@ -374,7 +373,7 @@ public sealed class RecipeImageService(
 
     /// <summary>
     /// Best-effort removal of a stored image file after the database row that
-    /// referenced it has committed (the M12-08 hard delete path).
+    /// referenced it has committed (the hard delete path).
     /// </summary>
     public void DeleteStoredFile(string storagePath) =>
         TryDeleteFile(storagePath, "hard-deleted");

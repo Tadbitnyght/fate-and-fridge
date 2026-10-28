@@ -3,7 +3,7 @@ using System.Security.Cryptography;
 namespace FateAndFridge.Api.Auth;
 
 /// <summary>
-/// Generates one-time admin-reset passwords (docs/SECURITY.md §2): CSPRNG,
+/// Generates one-time admin-reset passwords (docs/SECURITY.md §2): CSPRNG
 /// 20 characters, unambiguous alphabet (no <c>0/O/1/I/l</c>), comfortably above
 /// the 12-character minimum. The value is returned to the admin exactly once
 /// and is never persisted in plaintext.

@@ -6,7 +6,7 @@ namespace FateAndFridge.Api.Services;
 
 /// <summary>
 /// Idempotent startup seeder for the default reference data
-/// (docs/M2_PLAN.md §1.1, §2). <c>Program</c> invokes it on every startup (after
+/// <c>Program</c> invokes it on every startup (after
 /// migrations when automatic migration is enabled or <c>--migrate</c> is
 /// passed), and it is a no-op once
 /// <c>application_settings.reference_data_seeded</c> exists. It inserts what is

@@ -3,11 +3,11 @@ using System.Globalization;
 namespace FateAndFridge.Api.LiveSync;
 
 /// <summary>
-/// Typed constructors for the M9 event matrix (docs/M9_PLAN.md §1.5/§2.2) so
+/// Typed constructors for the M9 event matrix so
 /// every write path names the same entity string and populates the optional
 /// <c>entity</c>/<c>id</c>/<c>operation_id</c>/<c>actor_user_id</c> fields
 /// consistently. Each helper publishes immediately; callers invoke them only
-/// after the write has committed successfully (never on a failed, rolled-back,
+/// after the write has committed successfully (never on a failed, rolled-back
 /// or validation-error request).
 /// </summary>
 public static class LiveSyncPublisherExtensions

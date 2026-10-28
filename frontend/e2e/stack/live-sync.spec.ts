@@ -1,30 +1,24 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
 
 /**
- * Real-stack two-device live-sync flow (M9-08, docs/M9_PLAN.md §4 "Two-device",
- * docs/TESTING.md §10).
- *
+ * Real-stack two-device live-sync flow.
  * Runs against a live, disposable stack — never against mocks. The suite is
  * skipped unless E2E_BASE_URL points at that stack, so the hermetic default
  * `npx playwright test` run is unaffected.
- *
- * It is also gated behind E2E_STACK_LIVE_SYNC=1: like the M1-15 acceptance spec
+ * It is also gated behind E2E_STACK_LIVE_SYNC=1: like the acceptance spec
  * (`stack.spec.ts`) it consumes the single-shot first-run setup, and the two
  * suites cannot share one stack. Gating keeps it out of the default
  * `npm run test:e2e` run so the acceptance spec always sees a fresh install; CI
  * gives this flow its own reset stack before running it (see
  * `.github/workflows/ci.yml` and docs/TESTING.md §10).
- *
- * Invocation (needs its own fresh/unconfigured multiuser stack):
- *   E2E_BASE_URL=http://127.0.0.1:50900 E2E_SETUP_MODE=multiuser \
- *     E2E_STACK_LIVE_SYNC=1 npx playwright test e2e/stack/live-sync.spec.ts
- *
+ * Invocation (needs its own fresh/unconfigured multiuser stack)
+ * E2E_BASE_URL=http://127.0.0.1:50900 E2E_SETUP_MODE=multiuser \
+ * E2E_STACK_LIVE_SYNC=1 npx playwright test e2e/stack/live-sync.spec.ts
  * The stack must be fresh/unconfigured (multiuser): setup is single-shot, so a
  * reset is required before a second run. One test owns the whole flow because
  * the stack can only be configured once; the four scenarios inside it are
  * self-contained (each seeds its own data and asserts on the live UI), so none
  * depends on the order of the others.
- *
  * Two browser contexts model the two devices: context A is the Admin, context B
  * is a view-only Member. Every mutation is driven through A's UI and every
  * assertion reads B's rendered UI (roles/text), never internal state.
@@ -97,7 +91,7 @@ test.describe('two-device live sync', () => {
     // month agree between the server and both devices.
     const contextOptions = { baseURL, timezoneId: 'America/Chicago' }
 
-    // --- One-time setup on the fresh stack (consumes it) ------------------
+    // One-time setup on the fresh stack (consumes it)
     const adminContext = await browser.newContext(contextOptions)
     const adminPage = await adminContext.newPage()
 
@@ -122,7 +116,7 @@ test.describe('two-device live sync', () => {
     await adminPage.getByRole('button', { name: /Continue to Fate & Fridge/ }).click()
     await expect(adminPage).toHaveURL(/\/calendar$/)
 
-    // --- Create the view-only member (device B) ---------------------------
+    // Create the view-only member (device B)
     await adminPage.goto(`${baseURL}/settings/users`)
     await adminPage.getByRole('button', { name: 'Add user' }).click()
     await adminPage.getByLabel('Username').fill(memberUsername)
@@ -143,7 +137,7 @@ test.describe('two-device live sync', () => {
     await expect(memberPage).not.toHaveURL(/\/change-password$/)
 
     try {
-      // --- Scenario 1: manual grocery added on A reaches B ----------------
+      // Scenario 1: manual grocery added on A reaches B
       await adminPage.goto(`${baseURL}/groceries`)
       await memberPage.goto(`${baseURL}/groceries`)
       await expect(adminPage.getByRole('heading', { level: 2, name: 'Groceries' })).toBeVisible()
@@ -155,7 +149,7 @@ test.describe('two-device live sync', () => {
       await addManualGrocery(adminPage, addedItem)
       await expect(memberPage.getByText(addedItem)).toBeVisible({ timeout: 15_000 })
 
-      // --- Scenario 2: grocery check on A reaches B -----------------------
+      // Scenario 2: grocery check on A reaches B
       const checkedItem = `Sync Checked ${crypto.randomUUID().slice(0, 6)}`
       await addManualGrocery(adminPage, checkedItem)
       await expect(memberPage.getByText(checkedItem)).toBeVisible({ timeout: 15_000 })
@@ -165,7 +159,7 @@ test.describe('two-device live sync', () => {
         timeout: 15_000,
       })
 
-      // --- Scenario 3: a calendar meal change on A reaches B --------------
+      // Scenario 3: a calendar meal change on A reaches B
       await adminPage.goto(`${baseURL}/calendar`)
       await memberPage.goto(`${baseURL}/calendar`)
       await expect(adminPage.getByRole('grid')).toBeVisible()
@@ -179,7 +173,7 @@ test.describe('two-device live sync', () => {
         timeout: 15_000,
       })
 
-      // --- Scenario 4: a lock change on A reaches B -----------------------
+      // Scenario 4: a lock change on A reaches B
       const lockLabel = `Sync Lock ${crypto.randomUUID().slice(0, 6)}`
       await setTodayMealLabel(adminPage, lockLabel)
       const lockDialog = await openTodayDialog(adminPage)

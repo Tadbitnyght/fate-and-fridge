@@ -18,8 +18,8 @@ using Microsoft.EntityFrameworkCore;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// HTTP-level verification of the M3-04 recipe image lifecycle
-/// (docs/M3_PLAN.md §1.6–§1.7, docs/SECURITY.md §9): multipart upload and
+/// HTTP-level verification of the recipe image lifecycle
+/// multipart upload and
 /// replacement, byte serving with ETag/304, alt-text updates, deletion, the
 /// content policy rejections, the complete route permission matrix, and audit
 /// coverage for every image write. Each test uses its own temporary data
@@ -27,8 +27,8 @@ namespace FateAndFridge.Api.Tests;
 /// with <c>dotnet test --filter "Category!=Integration"</c> to skip locally.
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class RecipeImageEndpointsIntegrationTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class RecipeImageEndpointsIntegrationTests(SetupFixture fixture) : IAsyncLifetime
 {
     private const string RecipesPath = "/api/v1/recipes";
     private const string AdminPassword = "root horse battery staple";
@@ -48,7 +48,7 @@ public sealed class RecipeImageEndpointsIntegrationTests(M1SetupFixture fixture)
         var cancellationToken = TestContext.Current.CancellationToken;
         await fixture.ResetAsync(cancellationToken);
 
-        // M1SetupFixture.ResetAsync deliberately leaves the M3 recipe tables
+        // SetupFixture.ResetAsync deliberately leaves the M3 recipe tables
         // alone (M3 owns them), so clear them here — children first — to keep
         // this suite independent of execution order within the collection.
         await using var context = fixture.CreateContext();
@@ -1096,7 +1096,7 @@ public sealed class RecipeImageEndpointsIntegrationTests(M1SetupFixture fixture)
     {
         await using var context = fixture.CreateContext();
 
-        // M12-01 mirrors login/logout into audit_events; these suites assert the
+        // Mirrors login/logout into audit_events; these suites assert the
         // reference-data/recipe rows they themselves write, so the auth mirror is
         // excluded here.
         return await context.AuditEvents.AsNoTracking()

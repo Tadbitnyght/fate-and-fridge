@@ -4,7 +4,7 @@ using FluentAssertions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// Key registry completeness and canonical ordering (docs/DATABASE.md §2,
+/// Key registry completeness and canonical ordering (docs/DATABASE.md §2
 /// docs/ARCHITECTURE.md §10).
 /// </summary>
 public sealed class PermissionKeysTests
@@ -27,8 +27,8 @@ public sealed class PermissionKeysTests
     [Fact]
     public void Statistics_and_history_reads_introduce_no_eighth_permission_key()
     {
-        // M11-07: the statistics and meal-history reads reuse recipes.view and
-        // calendar.view; no statistics/history key exists (docs/M11_PLAN.md §1.7).
+        // The statistics and meal-history reads reuse recipes.view and
+        // calendar.view; no statistics/history key exists.
         PermissionKeys.All.Should().HaveCount(7);
         PermissionKeys.All.Should().NotContain(key =>
             key.StartsWith("statistics", StringComparison.Ordinal)

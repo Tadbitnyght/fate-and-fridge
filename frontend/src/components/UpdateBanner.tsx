@@ -4,11 +4,10 @@ import { useUpdates } from '../features/settings/useUpdates'
 import { readDismissedVersion, rememberDismissedVersion, safeReleaseUrl } from '../lib/updateNotice'
 
 /**
- * The dashboard notice for a newer release (docs/M13_PLAN.md §1.14). Rendered
+ * The dashboard notice for a newer release. Rendered
  * by the shell above `<main>` for every actor; it only describes what is
  * available and never updates anything. The text carries the meaning, so no
  * colour-only signal is involved, and the dismiss button has its own label.
- *
  * Dismissal is remembered per device and keyed to the latest version, so a
  * newer release shows the banner again (see `lib/updateNotice`).
  */

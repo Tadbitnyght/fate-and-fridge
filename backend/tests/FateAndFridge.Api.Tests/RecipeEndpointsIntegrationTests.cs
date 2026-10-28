@@ -17,16 +17,16 @@ using Microsoft.EntityFrameworkCore;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// HTTP-level verification of the M3-02 recipe base metadata and status
-/// lifecycle (docs/M3_PLAN.md §1.2–§1.4, §1.17–§1.19): create/read/update,
+/// HTTP-level verification of the recipe base metadata and status
+/// lifecycle: create/read/update
 /// name and text validation, source-URL normalization, minutes, status
 /// transitions, list paging, the complete route permission matrix, and audit
 /// coverage for every write. Requires a Docker daemon; run with
 /// <c>dotnet test --filter "Category!=Integration"</c> to skip locally.
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class RecipeEndpointsIntegrationTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class RecipeEndpointsIntegrationTests(SetupFixture fixture) : IAsyncLifetime
 {
     private const string RecipesPath = "/api/v1/recipes";
     private const string AdminPassword = "root horse battery staple";
@@ -48,7 +48,7 @@ public sealed class RecipeEndpointsIntegrationTests(M1SetupFixture fixture) : IA
         var cancellationToken = TestContext.Current.CancellationToken;
         await fixture.ResetAsync(cancellationToken);
 
-        // M1SetupFixture.ResetAsync already clears the M3 recipe tables; the
+        // SetupFixture.ResetAsync already clears the M3 recipe tables; the
         // explicit delete here keeps this suite independent of execution order
         // within the collection.
         await using var context = fixture.CreateContext();
@@ -159,7 +159,7 @@ public sealed class RecipeEndpointsIntegrationTests(M1SetupFixture fixture) : IA
     [Fact]
     public async Task Names_with_braces_round_trip_through_create_and_update()
     {
-        // BUG-008: a recipe name is plain text, never a composite format string,
+        // BUG-008: a recipe name is plain text, never a composite format string
         // so braces must survive validation, storage, and serialization.
         var cancellationToken = TestContext.Current.CancellationToken;
         await SeedHouseholdAsync(AuthMode.Multiuser, cancellationToken);
@@ -706,7 +706,7 @@ public sealed class RecipeEndpointsIntegrationTests(M1SetupFixture fixture) : IA
         Snapshot(rows[1].BeforeJson!)["status"]!.GetValue<string>().Should().Be("normal");
         Snapshot(rows[1].AfterJson!)["status"]!.GetValue<string>().Should().Be("manual_only");
 
-        // M12-01: only the transition into retired is the retire event, and its
+        // Only the transition into retired is the retire event, and its
         // before/after capture the status change.
         Snapshot(rows[2].BeforeJson!)["status"]!.GetValue<string>().Should().Be("manual_only");
         Snapshot(rows[2].AfterJson!)["status"]!.GetValue<string>().Should().Be("retired");
@@ -959,7 +959,7 @@ public sealed class RecipeEndpointsIntegrationTests(M1SetupFixture fixture) : IA
         (await PatchRecipeAsync(session, seeded.Id, """{"notes":"edited"}""", cancellationToken)).StatusCode
             .Should().Be(HttpStatusCode.OK);
 
-        // recipes.edit implies recipes.view (PermissionEvaluator, M1-09).
+        // recipes.edit implies recipes.view (PermissionEvaluator).
         (await session.Client.GetAsync(RecipesPath, cancellationToken)).StatusCode
             .Should().Be(HttpStatusCode.OK);
         (await session.Client.GetAsync($"{RecipesPath}/{seeded.Id}", cancellationToken)).StatusCode
@@ -1307,7 +1307,7 @@ public sealed class RecipeEndpointsIntegrationTests(M1SetupFixture fixture) : IA
     {
         await using var context = fixture.CreateContext();
 
-        // M12-01 mirrors login/logout into audit_events; these suites assert the
+        // Mirrors login/logout into audit_events; these suites assert the
         // reference-data/recipe rows they themselves write, so the auth mirror is
         // excluded here.
         return await context.AuditEvents.AsNoTracking()

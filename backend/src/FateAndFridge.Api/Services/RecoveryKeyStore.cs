@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 namespace FateAndFridge.Api.Services;
 
 /// <summary>
-/// Backup recovery key file (docs/SECURITY.md §11, docs/DATABASE.md §11):
+/// Backup recovery key file (docs/SECURITY.md §11, docs/DATABASE.md §11)
 /// 32 CSPRNG bytes, base64url, stored at <c>{DataDir}/config/recovery.key</c>
 /// with file mode <c>0600</c>. An existing key is validated and reused, never
 /// overwritten, and its permissions are tightened to owner-only on Unix. An
@@ -35,7 +35,7 @@ public sealed class RecoveryKeyStore(IConfiguration configuration, ILogger<Recov
 
     /// <summary>
     /// Reads the validated existing recovery key <em>without creating one</em>
-    /// (docs/M13_PLAN.md §1.3, §1.4): a backup must never mint a key that the
+    /// a backup must never mint a key that the
     /// user has not been shown. Returns null only when the file is absent; an
     /// unreadable or malformed file throws <see cref="InvalidDataException"/>
     /// exactly like <see cref="GetOrCreateAsync"/>.
@@ -117,7 +117,7 @@ public sealed class RecoveryKeyStore(IConfiguration configuration, ILogger<Recov
 
     /// <summary>
     /// Establishes a caller-supplied key as this device's recovery key when no
-    /// key file exists yet (docs/M13_PLAN.md §1.10). The clean-install restore
+    /// key file exists yet. The clean-install restore
     /// uses it: the operator pastes the household key of the device the archive
     /// came from, so that key must be the key this device keeps — otherwise the
     /// mandatory pre-restore safety backup could not be encrypted at all, and

@@ -16,19 +16,19 @@ namespace FateAndFridge.Api.Tests;
 
 /// <summary>
 /// Server-side permission enforcement against representative product routes
-/// (M1-09, docs/API.md §3): the enforced result for every key is compared
+/// (docs/API.md §3): the enforced result for every key is compared
 /// against the spec oracle in <see cref="PermissionMatrix"/>. Covers Admin, a
 /// member with and without each key, unauthenticated requests, the single-user
 /// system actor, immediate effect of grant changes, and forced-change gate
 /// precedence. The exhaustive per-route battery lives in
-/// <see cref="M14RouteRoleMatrixIntegrationTests"/>; this suite keeps the
+/// <see cref="RouteRoleMatrixIntegrationTests"/>; this suite keeps the
 /// evaluator semantics and a representative real route per permission key.
 /// Requires a Docker daemon; run with
 /// <c>dotnet test --filter "Category!=Integration"</c> to skip locally.
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class PermissionMatrixIntegrationTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class PermissionMatrixIntegrationTests(SetupFixture fixture) : IAsyncLifetime
 {
     private const string Password = "correct horse battery staple";
 
@@ -217,7 +217,7 @@ public sealed class PermissionMatrixIntegrationTests(M1SetupFixture fixture) : I
         (await memberSession.Client.GetAsync("/api/v1/recipes", cancellationToken)).StatusCode
             .Should().Be(HttpStatusCode.Forbidden);
 
-        // Grant mid-test through the product's Admin-only permissions route:
+        // Grant mid-test through the product's Admin-only permissions route
         // the next request must observe it.
         (await PatchPermissionsAsync(
             adminSession,

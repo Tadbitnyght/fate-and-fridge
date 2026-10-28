@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 namespace FateAndFridge.Api.Tests.Support;
 
 /// <summary>
-/// A deterministic write gate for the M14-08 concurrency battery. The first
+/// A deterministic write gate for the concurrency battery. The first
 /// command whose text matches <c>commandTextPattern</c> signals
 /// <see cref="Reached"/> and then blocks until <see cref="Release"/> is called.
 /// Register it on an <c>AppDbContext</c> rebuilt with

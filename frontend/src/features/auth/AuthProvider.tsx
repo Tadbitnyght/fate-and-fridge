@@ -28,7 +28,6 @@ function sessionScope(session: Session | null | undefined): string | null {
 
 /**
  * Cache roots the shell itself depends on, kept out of the BUG-007 sweep below.
- *
  * `removeQueries` on a query that still has a mounted observer destroys the
  * cache entry and cancels its in-flight fetch *without* telling the observer, so
  * the re-render rebuilds a fresh, permanently pending query that nothing will
@@ -37,7 +36,7 @@ function sessionScope(session: Session | null | undefined): string | null {
  * the sweep), and the setup-status query is excluded because `RequireSession`
  * gates every route on it for the whole authenticated lifetime: sweeping it left
  * the router on its loading screen so sign-out never reached `/login` (CI run
- * 40145178694). It carries household routing state (`setup_completed`,
+ * 40145178694). It carries household routing state (`setup_completed`
  * `auth_mode`), never user data.
  */
 const SWEEP_EXEMPT_QUERY_ROOTS: ReadonlySet<string> = new Set([
@@ -61,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   })
 
   /**
-   * Drops every cached read that belongs to an identity (BUG-007): groceries,
+   * Drops every cached read that belongs to an identity (BUG-007): groceries
    * recipes, statistics, settings and so on. The session query and the household
    * setup status are deliberately excluded — see `SWEEP_EXEMPT_QUERY_ROOTS`.
    * Logout overwrites the session entry with `null` instead, so no previous-user

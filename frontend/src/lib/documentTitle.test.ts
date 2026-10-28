@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { APP_NAME, documentTitleForPath } from './documentTitle'
 
 /**
- * Browser-tab titles (M15-04). The map is the single source of truth for the
+ * Browser-tab titles. The map is the single source of truth for the
  * tab text, so this table is the specification: one row per product route.
  */
 describe('documentTitleForPath', () => {

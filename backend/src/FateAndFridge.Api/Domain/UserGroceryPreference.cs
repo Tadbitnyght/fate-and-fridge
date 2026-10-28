@@ -1,7 +1,7 @@
 namespace FateAndFridge.Api.Domain;
 
 /// <summary>
-/// Per-user grocery list preferences (docs/M8_PLAN.md §1.7, §1.11, §2.3).
+/// Per-user grocery list preferences.
 /// <see cref="UserId"/> is the primary key, so a user has at most one row and
 /// the "unique user preference" is structural. The last-used range is
 /// remembered so the list reopens where the user left it; the first-open

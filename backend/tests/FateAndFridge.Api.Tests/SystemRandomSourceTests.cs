@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// Contract checks for the M6 secure randomness seam (docs/M6_PLAN.md §1.9):
+/// Contract checks for the M6 secure randomness seam
 /// the OS-backed source stays inside [0, 1), varies across draws, and the exact
 /// production registration in <c>Program.cs</c> wires it as a singleton.
 /// </summary>

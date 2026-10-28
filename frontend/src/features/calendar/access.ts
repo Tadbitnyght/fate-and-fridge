@@ -12,7 +12,7 @@ export interface CalendarAccess {
 
 /**
  * UI visibility only: every calendar write is enforced server-side
- * (docs/M5_PLAN.md §1.9). This hook must never be the sole gate for an action.
+ * This hook must never be the sole gate for an action.
  */
 export function useCalendarAccess(): CalendarAccess {
   const { permissions } = useAuth()

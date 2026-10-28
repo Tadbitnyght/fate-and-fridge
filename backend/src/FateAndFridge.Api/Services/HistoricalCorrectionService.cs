@@ -6,8 +6,7 @@ using Microsoft.EntityFrameworkCore;
 namespace FateAndFridge.Api.Services;
 
 /// <summary>
-/// Outcome of an M12 historical correction (docs/M12_PLAN.md §1.9, §2.2,
-/// docs/SECURITY.md §10).
+/// Outcome of an M12 historical correction.
 /// </summary>
 public abstract record HistoricalCorrectionOutcome
 {
@@ -24,8 +23,7 @@ public abstract record HistoricalCorrectionOutcome
 }
 
 /// <summary>
-/// M12-06 historical correction of one past date (docs/M12_PLAN.md §1.9, §4;
-/// docs/SECURITY.md §10). An Admin may change a single household-local past
+/// Historical correction of one past date. An Admin may change a single household-local past
 /// date's meal-defining fields; the write refreshes the frozen snapshot, leaves
 /// the lock state untouched, and stages one flagged
 /// <c>calendar_entry_history</c> row plus one
@@ -36,7 +34,7 @@ public abstract record HistoricalCorrectionOutcome
 /// </summary>
 /// <remarks>
 /// The caller (the endpoint) has already run the shared
-/// <see cref="DangerousActionGuard"/> (reason and the typed date confirmation);
+/// <see cref="DangerousActionGuard"/> (reason and the typed date confirmation)
 /// the trimmed reason arrives here ready to persist. The ordinary calendar
 /// endpoints keep rejecting past dates (<c>CALENDAR_DATE_IN_PAST</c>); this is
 /// the only path that may change history.
@@ -70,10 +68,9 @@ public sealed class HistoricalCorrectionService(
         var now = timeProvider.GetUtcNow();
 
         // The entry, its history row, and the audit row commit atomically
-        // (docs/M12_PLAN.md §1.9, §4). The per-date transaction-scoped advisory
+        // The per-date transaction-scoped advisory
         // lock is the same one M6/M7 use, so a correction cannot race a batch
-        // apply or a single-date mutation of the same date (docs/M7_PLAN.md
-        // §1.12); it is released on commit or rollback.
+        // apply or a single-date mutation of the same date; it is released on commit or rollback.
         await using var transaction = await dbContext.Database
             .BeginTransactionAsync(cancellationToken)
             .ConfigureAwait(false);
@@ -111,7 +108,7 @@ public sealed class HistoricalCorrectionService(
         }
 
         // Refresh the frozen snapshot from the recipe at correction time, and
-        // leave the lock state as stored (docs/M12_PLAN.md §1.9).
+        // leave the lock state as stored.
         var beforeJson = CalendarService.SnapshotJson(entry);
         CalendarService.ApplyFields(entry, fields, now, actorUserId);
         var afterJson = CalendarService.SnapshotJson(entry);
@@ -143,7 +140,7 @@ public sealed class HistoricalCorrectionService(
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
-        // Reuse the M5 read path so the returned day document (display text,
+        // Reuse the M5 read path so the returned day document (display text
         // recipe summary, repeat warning, is_historical/can_edit) matches every
         // other calendar write exactly.
         var day = await calendar.GetDayAsync(date, cancellationToken).ConfigureAwait(false);
@@ -153,7 +150,7 @@ public sealed class HistoricalCorrectionService(
     /// <summary>
     /// Takes the per-date transaction-scoped advisory lock so concurrent apply
     /// and single-date mutations of the same date serialize
-    /// (docs/M7_PLAN.md §1.12). The lock is released on commit/rollback.
+    /// The lock is released on commit/rollback.
     /// </summary>
     private Task LockDateAsync(DateOnly date, CancellationToken cancellationToken) =>
         AdvisoryLocks.LockDateAsync(dbContext.Database, date, cancellationToken);

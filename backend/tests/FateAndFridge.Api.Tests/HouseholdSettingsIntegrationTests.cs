@@ -17,12 +17,12 @@ namespace FateAndFridge.Api.Tests;
 /// <summary>
 /// PostgreSQL-backed verification of the household settings API
 /// (docs/API.md §21): read, partial update, validation envelope, pre-setup
-/// gating, and the M1-03 authorization seam. Requires a Docker daemon; run
+/// gating, and the authorization seam. Requires a Docker daemon; run
 /// with <c>dotnet test --filter "Category!=Integration"</c> to skip locally.
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class HouseholdSettingsIntegrationTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class HouseholdSettingsIntegrationTests(SetupFixture fixture) : IAsyncLifetime
 {
     private static readonly DateTimeOffset SeedTimestamp =
         new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
@@ -70,7 +70,7 @@ public sealed class HouseholdSettingsIntegrationTests(M1SetupFixture fixture) : 
         payload.RootElement.GetProperty("startup_page").GetString().Should().Be("calendar");
 
         // The seeded row omits the randomizer columns, so the database defaults
-        // (docs/M6_PLAN.md §1.3) must come back on the GET payload.
+        // must come back on the GET payload.
         payload.RootElement.GetProperty("randomizer_repeat_lookback_days").GetInt32().Should().Be(7);
         payload.RootElement.GetProperty("randomizer_repeat_lookahead_days").GetInt32().Should().Be(14);
         payload.RootElement.GetProperty("randomizer_repeat_multiplier").GetDecimal().Should().Be(0.10m);

@@ -7,11 +7,10 @@ import { EventIcon } from './icons'
 import { rerollAvailability } from './rerollAvailability'
 
 /**
- * Accessible month grid (M5-09). An ARIA grid of day buttons with
+ * Accessible month grid. An ARIA grid of day buttons with
  * roving-tabindex arrow-key navigation; today is highlighted, historical days
  * are dimmed, and locked entries show a lock marker.
- *
- * M6-10 adds a compact Reroll affordance as a context menu (right-click,
+ * Adds a compact Reroll affordance as a context menu (right-click
  * `ContextMenu` key, or `Shift+F10`) opened from the focused cell. It is not an
  * inline button because a `gridcell` is itself a button here; nesting another
  * interactive element would be invalid HTML and break the grid's ARIA and
@@ -201,7 +200,7 @@ function cellClassName(day: MonthGridDay, entry: CalendarEntry | null, today: st
 }
 
 function cellLabel(day: MonthGridDay, entry: CalendarEntry | null, today: string): string {
-  // The visible text of a cell begins with the day number (and the entry text),
+  // The visible text of a cell begins with the day number (and the entry text)
   // so the accessible name repeats that exact sequence first, then the spoken
   // date and state. WCAG 2.1 SC 2.5.3 (label-content-name-mismatch) requires
   // the visible text to appear in the accessible name.

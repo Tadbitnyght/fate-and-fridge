@@ -37,8 +37,7 @@ public static class PermissionKeys
     public static readonly IReadOnlyList<string> All = Array.AsReadOnly(AllKeysArray);
 
     /// <summary>
-    /// Default grants for a newly created member (docs/MILESTONES.md M1
-    /// decisions): view-only — <c>calendar.view</c>, <c>groceries.view</c>,
+    /// Default grants for a newly created member: view-only — <c>calendar.view</c>, <c>groceries.view</c>
     /// <c>recipes.view</c> in canonical order.
     /// </summary>
     public static readonly IReadOnlyList<string> MemberViewOnly = Array.AsReadOnly(

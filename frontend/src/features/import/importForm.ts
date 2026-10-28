@@ -16,7 +16,6 @@ import type { FieldErrors } from '../../utils/fieldErrors'
  * {@link RecipeFormState} used by the shared recipe form controls, so the
  * review screen can reuse RecipeFormPage's ingredients/instructions/proteins
  * fieldset components and the same create request builder.
- *
  * Only values the parser produced are carried over — nothing is invented. A
  * line whose quantity stayed raw (ranges, word quantities) renders with an
  * empty quantity field; the raw text is preserved in the preparation note when
@@ -52,7 +51,7 @@ function ingredientRow(ingredient: ImportRecipeDraft['ingredients'][number]): In
 /**
  * When the parser left `quantity` null it kept the original token in `raw`.
  * Show only a *numeric-looking* token (ranges, multipliers, mixed numbers the
- * parser could not resolve) in the preparation note so the reviewer can turn
+ * parser could not resolve) in the preparation note so the user can turn
  * it into a number. Word quantities ("a pinch", "some") are intentionally not
  * surfaced as a prep note — they belong to the raw line, not the note.
  */
@@ -76,15 +75,15 @@ function extractRawQuantityText(raw: string, name: string): string {
 }
 
 /**
- * Per-row import-resolution metadata (M4-09/M4-10). Keyed by the
+ * Per-row import-resolution metadata. Keyed by the
  * {@link IngredientFormRow.key} created by {@link fromImportDraft}, so it
  * survives adding, removing, and reordering rows. An ingredient is surfaced as
  * "needs an ingredient" only while its row has no `ingredientId`; mapping the
  * row clears it naturally. The nested {@link UnknownUnitLine} carries the same
- * treatment for a unit the parser could not recognize (M4-10).
+ * treatment for a unit the parser could not recognize.
  */
 export interface UnknownIngredientLine {
-  /** The original parsed ingredient line, shown verbatim to the reviewer. */
+  /** The original parsed ingredient line, shown verbatim to the user. */
   raw: string
   /** Parsed canonical-name text, offered as the default create name. */
   name: string
@@ -95,8 +94,8 @@ export interface UnknownIngredientLine {
 }
 
 /**
- * Resolution metadata for a raw unit the parser could not match (M4-10). The
- * server only suggests a dimension when it is obvious; otherwise the reviewer
+ * Resolution metadata for a raw unit the parser could not match. The
+ * server only suggests a dimension when it is obvious; otherwise the user
  * must choose one explicitly — package-size conversion is never guessed.
  */
 export interface UnknownUnitLine {
@@ -104,7 +103,7 @@ export interface UnknownUnitLine {
   raw: string
   /** Suggested dimension when obvious, otherwise `null`. */
   suggestedDimension: ImportUnitDimension | null
-  /** Existing units the reviewer can map to in one tap. */
+  /** Existing units the user can map to in one tap. */
   suggestions: Array<{ id: number; symbol: string; display_name: string }>
 }
 
@@ -133,11 +132,10 @@ function unknownUnitLine(
  * rows returned by {@link fromImportDraft} for the same draft, in order. A row
  * is seeded when either its ingredient or its unit is unresolved, so a
  * known-ingredient line with an unknown unit still gets a resolution affordance.
- *
  * Only flat lines are seeded: the import draft contract (docs/API.md §15) has
  * no `ingredient_groups` — groups are a `POST /recipes` (§23) concept — so
  * `fromImportDraft` never produces group rows and there is no parsed group line
- * to seed. Group rows the reviewer adds on the review screen are blank
+ * to seed. Group rows the user adds on the review screen are blank
  * {@link IngredientFormRow}s with no raw unit text. If grouped import drafts
  * are ever introduced, seed their lines here **and** thread the map into the
  * group row list in `IngredientFields` (BUG-002).
@@ -167,12 +165,11 @@ export function seedUnknownLines(
 }
 
 /**
- * Server-aligned validation for unresolved raw units (M4-10). A blank unit is
+ * Server-aligned validation for unresolved raw units. A blank unit is
  * always allowed (M3 nullable unit), and a line whose unit already resolved (or
  * was mapped/created) is fine; only a present-but-unrecognized unit blocks
  * saving. Keys use the same `ingredients[i].unit_id` paths as the server so the
  * message lands on the unit field.
- *
  * Only flat lines can be unresolved: grouped import drafts cannot exist (see
  * {@link seedUnknownLines}), so there is no nested branch to validate. If that
  * contract ever changes, validate the group rows here at the same time as
@@ -215,7 +212,7 @@ export function fromImportDraft(draft: ImportRecipeDraft): RecipeFormState {
     isVegetarian: false,
     ingredients: draft.ingredients.map(ingredientRow),
     // The import draft contract (docs/API.md §15) has no ingredient groups, so
-    // an imported recipe always starts flat; the reviewer can still add groups
+    // an imported recipe always starts flat; the user can still add groups
     // by hand (BUG-002).
     groups: [],
     sections,

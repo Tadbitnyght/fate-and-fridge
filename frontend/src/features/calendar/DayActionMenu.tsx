@@ -2,8 +2,7 @@ import { useEffect, useId, useRef } from 'react'
 import { createPortal } from 'react-dom'
 
 /**
- * Compact desktop affordance for a month-grid day (M6-10).
- *
+ * Compact desktop affordance for a month-grid day.
  * The month grid is an ARIA grid whose `gridcell`s are themselves buttons with
  * roving-tabindex arrow navigation. Nesting an inline Reroll button inside
  * those cells would create invalid nested interactive elements and break the

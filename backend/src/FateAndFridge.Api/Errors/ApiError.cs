@@ -6,5 +6,5 @@ namespace FateAndFridge.Api.Errors;
 /// </summary>
 public sealed record ApiError(string Code, string Message, IReadOnlyDictionary<string, object?> Details);
 
-/// <summary>Shared error envelope: <c>{ "error": { ... } }</c>.</summary>
+/// <summary>Shared error envelope: <c>{ "error": {... } }</c>.</summary>
 public sealed record ApiErrorEnvelope(ApiError Error);

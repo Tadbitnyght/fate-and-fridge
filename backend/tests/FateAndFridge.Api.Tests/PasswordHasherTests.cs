@@ -5,7 +5,7 @@ using FluentAssertions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// Unit tests for the M1-05 Argon2id password hasher (docs/SECURITY.md §2).
+/// Unit tests for the Argon2id password hasher (docs/SECURITY.md §2).
 /// They exercise the real libsodium-backed implementation and need no
 /// database or container, so they carry no Integration category trait.
 /// </summary>

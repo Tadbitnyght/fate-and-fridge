@@ -32,7 +32,7 @@ afterEach(() => {
   window.localStorage.clear()
 })
 
-describe('UpdateBanner (M13-09)', () => {
+describe('UpdateBanner', () => {
   it('appears above main in the shell when a newer release exists', async () => {
     installMockFetch([
       { path: '/setup/status', body: setupCompleteStatus },

@@ -53,8 +53,8 @@ public sealed record LoginAttemptOutcome(
     TimeSpan? DelayAfterFailure);
 
 /// <summary>
-/// Login-attempt policy seam (M1-07). Production injects
-/// <see cref="LockoutLoginAttemptPolicy"/>, which computes failure bookkeeping,
+/// Login-attempt policy seam. Production injects
+/// <see cref="LockoutLoginAttemptPolicy"/>, which computes failure bookkeeping
 /// progressive delay, and lockout windows from docs/SECURITY.md §3 while
 /// <see cref="AuthService"/> owns persistence and auth events.
 /// </summary>

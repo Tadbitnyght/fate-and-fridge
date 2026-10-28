@@ -6,7 +6,7 @@ namespace FateAndFridge.Api.Tests;
 
 /// <summary>
 /// Verification of folded unit resolution and quantity clamping for imported
-/// ingredients (docs/M4_PLAN.md §1.11–§1.12). All logic is deterministic under
+/// ingredients. All logic is deterministic under
 /// invariant globalization: folding is table-driven through
 /// <c>ReferenceDataNormalizer</c> and never <c>String.Normalize</c>.
 /// </summary>

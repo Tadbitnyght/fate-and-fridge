@@ -1,8 +1,7 @@
 namespace FateAndFridge.Api.Backup;
 
 /// <summary>
-/// Stable error codes for the backup archive format (docs/M13_PLAN.md §1.4,
-/// §4). M13-03/M13-04 map these to the API error envelope without parsing
+/// Stable error codes for the backup archive format. map these to the API error envelope without parsing
 /// messages.
 /// </summary>
 public static class BackupArchiveErrorCodes

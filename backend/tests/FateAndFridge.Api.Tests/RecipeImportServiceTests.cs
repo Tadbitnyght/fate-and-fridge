@@ -11,13 +11,13 @@ namespace FateAndFridge.Api.Tests;
 
 /// <summary>
 /// Service-level verification of the draft-only import pipeline
-/// (docs/M4_PLAN.md §2.1–§2.2) with an injected fake fetcher and offline
+/// with an injected fake fetcher and offline
 /// fixtures. A real PostgreSQL container backs the diagnostics reads; no test
 /// touches the public internet.
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class RecipeImportServiceTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class RecipeImportServiceTests(SetupFixture fixture) : IAsyncLifetime
 {
     private static readonly DateTimeOffset SeedTimestamp = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
 
@@ -86,7 +86,7 @@ public sealed class RecipeImportServiceTests(M1SetupFixture fixture) : IAsyncLif
         draft.Source.Site.Should().Be("example.com");
         draft.Source.ParseMethod.Should().Be("json_ld");
         draft.Source.Author.Should().Be("Jane Cook");
-        draft.Source.PageTitle.Should().BeNull("page title enrichment is deferred past M4-04");
+        draft.Source.PageTitle.Should().BeNull("page title enrichment is deferred");
         draft.Source.FetchedAt.Should().BeAfter(DateTimeOffset.UtcNow.AddMinutes(-5));
         draft.Capabilities.CanCreateReferenceData.Should().BeTrue();
         draft.SourceUrlMatch.Should().BeNull();
@@ -227,8 +227,8 @@ public sealed class RecipeImportServiceTests(M1SetupFixture fixture) : IAsyncLif
     public async Task Import_matches_a_legacy_normalized_source_url_via_the_bounded_fallback()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        // Store the pre-M4-11 canonical form directly (trailing slash and
-        // unsorted query retained), bypassing today's BuildNormalizedSourceUrl,
+        // Store the pre- canonical form directly (trailing slash and
+        // unsorted query retained), bypassing today's BuildNormalizedSourceUrl
         // so the exact-canonical query misses and the bounded same-origin
         // re-fold fallback must find the row.
         const string legacyStored = "https://example.com/recipes/lasagna/?b=2&a=1";
@@ -242,7 +242,7 @@ public sealed class RecipeImportServiceTests(M1SetupFixture fixture) : IAsyncLif
 
         var success = result.Should().BeOfType<ImportRecipeUrlResult.Success>().Subject;
         success.Draft.SourceUrlMatch.Should().NotBeNull(
-            "a recipe saved before the M4-11 canonicalization must still warn");
+            "a recipe saved before the canonicalization change must still warn");
         success.Draft.SourceUrlMatch!.Id.Should().Be(seeded.Id);
     }
 
@@ -512,7 +512,7 @@ public sealed class RecipeImportServiceTests(M1SetupFixture fixture) : IAsyncLif
 
     /// <summary>
     /// Inserts one canonical ingredient directly (the production seeder does not
-    /// create ingredients). <see cref="M1SetupFixture.ResetAsync"/> does not
+    /// create ingredients). <see cref="SetupFixture.ResetAsync"/> does not
     /// touch the M2 ingredient tables, so each caller starts by clearing them.
     /// </summary>
     private async Task<long> SeedIngredientAsync(

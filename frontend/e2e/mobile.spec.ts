@@ -1,24 +1,21 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
 
 /**
- * Mobile audit (M14-03, docs/M14_PLAN.md §1.7 and §4).
- *
+ * Mobile audit.
  * The touch flows run in the `Pixel 7` and `iPhone 13` Playwright projects
  * (they are skipped where `isMobile` is false); the 360/375/390/414 px overflow
  * sweep drives its own viewport and runs in every project. Everything renders
  * the real application bundle with `/api/v1/**` mocked — the same hermetic
  * pattern as `a11y.spec.ts`.
- *
  * "Today" is pinned twice so the run is deterministic: the app clock is fixed
  * with `page.clock.setFixedTime` (Date only, timers keep running) and the mock
  * calendar returns the same date as `today`. That keeps the month grid's
  * outside-month cells and the today cell present on every run.
- *
- * Asserted here, per docs/M14_PLAN.md §4:
- * - no horizontal overflow (`scrollWidth <= clientWidth + 1`);
- * - primary tap targets are at least 44×44 CSS px;
- * - dialogs open inside the viewport, take focus, and Escape returns focus;
- * - the main routes hold up at 360/375/390/414 px.
+ * Asserted here
+ * no horizontal overflow (`scrollWidth <= clientWidth + 1`)
+ * primary tap targets are at least 44×44 CSS px
+ * dialogs open inside the viewport, take focus, and Escape returns focus
+ * the main routes hold up at 360/375/390/414 px.
  */
 
 /** The pinned calendar day used by every fixture and by the fixed clock. */
@@ -740,7 +737,7 @@ async function expectFocusInsideDialog(page: Page): Promise<void> {
 
 /**
  * The mobile-specific flows run in the two mobile Playwright projects only
- * (`docs/M14_PLAN.md` §1.7): a desktop viewport is not a touch context, so the
+ * a desktop viewport is not a touch context, so the
  * 44 px tap-target bar does not apply there. The 360–414 px overflow sweep
  * below sets its own viewport and therefore runs in every project.
  */

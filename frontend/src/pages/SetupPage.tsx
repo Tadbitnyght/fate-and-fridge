@@ -3,7 +3,7 @@ import { SetupWizard } from '../features/setup/SetupWizard'
 import { useSetupStatus } from '../features/setup/useSetupStatus'
 
 /**
- * Setup route: loads the public setup status, then hands off to the M1-13
+ * Setup route: loads the public setup status, then hands off to the
  * wizard. The wizard owns the "already completed" redirect so the one-time
  * recovery key screen survives status refreshes.
  */

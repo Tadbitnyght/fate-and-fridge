@@ -5,7 +5,7 @@ using FluentAssertions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// SSRF URL/IP classification matrix (docs/M4_PLAN.md §1.14, §4).
+/// SSRF URL/IP classification matrix.
 /// </summary>
 public sealed class ImportUrlPolicyTests
 {

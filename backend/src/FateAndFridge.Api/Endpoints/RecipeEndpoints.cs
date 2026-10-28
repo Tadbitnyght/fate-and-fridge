@@ -19,7 +19,7 @@ public sealed record RecipeIngredientReferenceResponse(long Id, string Name, boo
 public sealed record RecipeUnitReferenceResponse(long Id, string Symbol, string DisplayName, bool IsActive);
 
 /// <summary>
-/// One ingredient line of the recipe document (M3-06): numeric decimal
+/// One ingredient line of the recipe document: numeric decimal
 /// quantity or null, optional unit, optional preparation note, and sort order.
 /// </summary>
 public sealed record RecipeIngredientResponse(
@@ -51,7 +51,7 @@ public sealed record RecipeIngredientResponse(
             record.SortOrder);
 }
 
-/// <summary>Ordered ingredient group with its nested lines (M3-05/M3-06).</summary>
+/// <summary>Ordered ingredient group with its nested lines.</summary>
 public sealed record RecipeIngredientGroupResponse(
     long Id,
     string? Title,
@@ -66,14 +66,14 @@ public sealed record RecipeIngredientGroupResponse(
             record.Ingredients.Select(RecipeIngredientResponse.From).ToArray());
 }
 
-/// <summary>One ordered instruction step (M3-07).</summary>
+/// <summary>One ordered instruction step.</summary>
 public sealed record RecipeInstructionStepResponse(long Id, string Text, int SortOrder)
 {
     public static RecipeInstructionStepResponse From(RecipeInstructionStepRecord record) =>
         new(record.Id, record.Text, record.SortOrder);
 }
 
-/// <summary>Ordered instruction section with its nested steps (M3-07).</summary>
+/// <summary>Ordered instruction section with its nested steps.</summary>
 public sealed record RecipeInstructionSectionResponse(
     long Id,
     string? Title,
@@ -102,8 +102,8 @@ public sealed record RecipeTagResponse(long Id, string Name)
 }
 
 /// <summary>
-/// History statistics on the recipe detail document (M3-09 placeholder, filled
-/// by M11-02). The keys are always present; each value is null when the recipe
+/// History statistics on the recipe detail document (placeholder, filled
+/// by). The keys are always present; each value is null when the recipe
 /// has no such history (never a fake zero) and otherwise a household-local date
 /// (<c>yyyy-MM-dd</c>) or the historical occurrence count
 /// (docs/PRODUCT_SPEC.md §12, docs/API.md §23).
@@ -125,10 +125,10 @@ public sealed record RecipeStatisticsResponse(
 }
 
 /// <summary>
-/// Recipe list item as returned by <c>GET /api/v1/recipes</c> (M3-09, M11-02).
-/// The image is embedded since M3-04; the three §12 metrics are filled from the
+/// Recipe list item as returned by <c>GET /api/v1/recipes</c>.
+/// The image is embedded since; the three §12 metrics are filled from the
 /// same aggregate query as the page so a card needs no per-card fetch
-/// (docs/M11_PLAN.md §1.27). Each metric is null when the recipe has no such
+/// Each metric is null when the recipe has no such
 /// history (never a fake zero).
 /// </summary>
 public sealed record RecipeListItemResponse(
@@ -162,9 +162,9 @@ public sealed record RecipeListItemResponse(
 }
 
 /// <summary>
-/// Complete recipe detail document (M3-09): every base field is always present,
-/// the active image is embedded (M3-04), and the nested ingredient, instruction,
-/// protein, and tag slices are filled (M3-05 … M3-08).
+/// Complete recipe detail document: every base field is always present
+/// the active image is embedded, and the nested ingredient, instruction
+/// protein, and tag slices are filled.
 /// </summary>
 public sealed record RecipeDetailResponse(
     long Id,
@@ -216,7 +216,7 @@ public sealed record RecipeDetailResponse(
             RecipeStatisticsResponse.From(metrics));
 }
 
-/// <summary>Paged recipe list envelope: <c>{ items, total, limit, offset }</c> (M3-09).</summary>
+/// <summary>Paged recipe list envelope: <c>{ items, total, limit, offset }</c>.</summary>
 public sealed record RecipeListResponse(
     IReadOnlyList<RecipeListItemResponse> Items,
     int Total,
@@ -224,8 +224,7 @@ public sealed record RecipeListResponse(
     int Offset);
 
 /// <summary>
-/// Response of the M12-08 hard recipe delete (docs/M12_PLAN.md §2.2,
-/// docs/API.md §10): the deleted recipe id and the affected counts.
+/// Response of the hard recipe delete: the deleted recipe id and the affected counts.
 /// </summary>
 public sealed record RecipeHardDeleteResponse(
     long RecipeId,
@@ -234,8 +233,8 @@ public sealed record RecipeHardDeleteResponse(
     int RemovedImages);
 
 /// <summary>
-/// M3 recipe document routes (docs/M3_PLAN.md §2): reads gated by
-/// <c>recipes.view</c>, writes by <c>recipes.edit</c>, with the M1-09
+/// M3 recipe document routes: reads gated by
+/// <c>recipes.view</c>, writes by <c>recipes.edit</c>, with the
 /// enforcement helpers and the shared error envelope.
 /// </summary>
 public static class RecipeEndpoints
@@ -246,7 +245,7 @@ public static class RecipeEndpoints
 
     /// <summary>
     /// Request cap for recipe payloads: comfortable room for nested collections
-    /// of 20,000-character text fields at their worst-case UTF-8 expansion,
+    /// of 20,000-character text fields at their worst-case UTF-8 expansion
     /// while still bounding oversized bodies before they are buffered.
     /// </summary>
     private const int MaxBodyBytes = 1024 * 1024;
@@ -262,8 +261,8 @@ public static class RecipeEndpoints
         group.MapGet("/{id:long}", GetRecipeAsync).RequirePermission(PermissionKeys.RecipesView);
         group.MapPatch("/{id:long}", UpdateRecipeAsync).RequirePermission(PermissionKeys.RecipesEdit);
 
-        // M12-08: the irreversible Admin-only hard delete. Admin-only via the
-        // existing role, with no new permission key (docs/M12_PLAN.md §1.1).
+        // The irreversible Admin-only hard delete. Admin-only via the
+        // existing role, with no new permission key.
         group.MapDelete("/{id:long}", HardDeleteRecipeAsync).RequireAdmin();
 
         return app;
@@ -561,8 +560,8 @@ public static class RecipeEndpoints
     }
 
     /// <summary>
-    /// M12-08 irreversible hard delete (docs/M12_PLAN.md §1.10, §2.2, docs/API.md
-    /// §18). Admin-only through <c>RequireAdmin()</c> with no new permission key;
+    /// Irreversible hard delete
+    /// Admin-only through <c>RequireAdmin</c> with no new permission key
     /// the shared dangerous-action guard verifies the reason and the exact
     /// recipe-name confirmation server-side inside the delete service (the name is
     /// only known once the recipe is loaded), and live sync reuses the existing
@@ -1142,7 +1141,7 @@ public static class RecipeEndpoints
         var actor = await actorProvider.GetCurrentActorAsync(cancellationToken);
         if (actor is null)
         {
-            // The permission filter already rejected unauthenticated requests;
+            // The permission filter already rejected unauthenticated requests
             // keep the defensive envelope so the handler cannot fail open.
             return (null, null, ApiResults.Error(
                 StatusCodes.Status401Unauthorized,

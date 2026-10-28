@@ -5,8 +5,7 @@ using System.Text.Json;
 namespace FateAndFridge.Api.Services;
 
 /// <summary>
-/// Parsed partial update of the caller's grocery preferences (docs/M8_PLAN.md
-/// §1.7, §1.11, §2.2). Each member carries a "provided" flag so the service can
+/// Parsed partial update of the caller's grocery preferences. Each member carries a "provided" flag so the service can
 /// tell an absent field from an explicit <c>null</c> that clears the value.
 /// </summary>
 public sealed record GroceryPreferencePatch(
@@ -31,7 +30,7 @@ public sealed record GroceryPreferencePatchValidation(
 
 /// <summary>
 /// Parses and type-validates a <c>PATCH /groceries/preferences</c> body
-/// (docs/M8_PLAN.md §2.2). Only per-field type/format checks live here; the
+/// Only per-field type/format checks live here; the
 /// cross-field range normalization (which preset keeps which fields) runs in
 /// <see cref="GroceryPreferenceService"/> where the stored row and household
 /// today are known. Unknown JSON fields are ignored; a body with no known field
@@ -42,7 +41,7 @@ public static class GroceryPreferencePayloadValidator
     private static readonly IReadOnlyDictionary<string, string[]> NoFieldErrors =
         new ReadOnlyDictionary<string, string[]>(new Dictionary<string, string[]>());
 
-    /// <summary>Preset values accepted by <c>range_preset</c> (docs/M8_PLAN.md §1.7).</summary>
+    /// <summary>Preset values accepted by <c>range_preset</c>.</summary>
     public static readonly IReadOnlyList<string> KnownPresets =
     [
         GroceryListService.PresetNext3Days,

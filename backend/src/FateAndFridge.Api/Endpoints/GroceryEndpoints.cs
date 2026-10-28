@@ -7,7 +7,7 @@ using FateAndFridge.Api.Services;
 
 namespace FateAndFridge.Api.Endpoints;
 
-/// <summary>Resolved grocery range document (docs/M8_PLAN.md §2.2).</summary>
+/// <summary>Resolved grocery range document.</summary>
 public sealed record GroceryRangeResponse(string Preset, string Start, string End, int DayCount)
 {
     public static GroceryRangeResponse From(GroceryRangeResolution range) =>
@@ -28,7 +28,7 @@ public sealed record GroceryItemSourceResponse(long RecipeId, string RecipeName,
             source.MealDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
 }
 
-/// <summary>One grocery line (docs/M8_PLAN.md §2.2).</summary>
+/// <summary>One grocery line.</summary>
 public sealed record GroceryItemResponse(
     string Identity,
     string Name,
@@ -74,7 +74,7 @@ public sealed record GroceryDepartmentResponse(
             department.Items.Select(GroceryItemResponse.From).ToArray());
 }
 
-/// <summary>Full grocery list document (docs/M8_PLAN.md §2.2).</summary>
+/// <summary>Full grocery list document.</summary>
 public sealed record GroceryListResponse(
     GroceryRangeResponse Range,
     IReadOnlyList<GroceryDepartmentResponse> Departments)
@@ -86,7 +86,7 @@ public sealed record GroceryListResponse(
 }
 
 /// <summary>
-/// One stored manual grocery item (docs/M8_PLAN.md §1.8, §2.2). Dates are
+/// One stored manual grocery item. Dates are
 /// household-local <c>YYYY-MM-DD</c>; timestamps are UTC.
 /// </summary>
 public sealed record GroceryManualItemResponse(
@@ -117,7 +117,7 @@ public sealed record GroceryManualItemResponse(
             item.UpdatedAt);
 }
 
-/// <summary>Caller grocery preferences (docs/M8_PLAN.md §1.7, §1.11, §2.2).</summary>
+/// <summary>Caller grocery preferences.</summary>
 public sealed record GroceryPreferenceResponse(
     bool HideChecked,
     string? RangePreset,
@@ -132,7 +132,7 @@ public sealed record GroceryPreferenceResponse(
             preference.RangeDays);
 }
 
-/// <summary>One household staple (docs/M8_PLAN.md §1.9, §2.2).</summary>
+/// <summary>One household staple.</summary>
 public sealed record GroceryStapleResponse(
     long Id,
     string Name,
@@ -157,10 +157,10 @@ public sealed record GroceryStapleResponse(
             staple.UpdatedAt);
 }
 
-/// <summary>The household staple catalog document (docs/M8_PLAN.md §2.2).</summary>
+/// <summary>The household staple catalog document.</summary>
 public sealed record GroceryStaplesResponse(IReadOnlyList<GroceryStapleResponse> Staples);
 
-/// <summary>The household-shared check state of one line (docs/M8_PLAN.md §1.10, §2.2).</summary>
+/// <summary>The household-shared check state of one line.</summary>
 public sealed record GroceryCheckStateResponse(
     string Identity,
     bool Checked,
@@ -172,10 +172,10 @@ public sealed record GroceryCheckStateResponse(
 }
 
 /// <summary>
-/// Grocery routes (docs/M8_PLAN.md §2.2). M8-03 delivers the read projection,
-/// M8-04 adds range-scoped manual items plus the caller's preferences, M8-05 adds
-/// the household staple catalog, and M8-06 adds the household-shared check state.
-/// Reads are gated by <c>groceries.view</c> and writes by <c>groceries.edit</c>;
+/// Grocery routes. delivers the read projection
+/// Adds range-scoped manual items plus the caller's preferences, adds
+/// the household staple catalog, and adds the household-shared check state.
+/// Reads are gated by <c>groceries.view</c> and writes by <c>groceries.edit</c>
 /// the single-user system actor has full access.
 /// </summary>
 public static class GroceryEndpoints
@@ -196,7 +196,7 @@ public static class GroceryEndpoints
         group.MapGet("", GetListAsync).RequirePermission(PermissionKeys.GroceriesView);
 
         // Manual items are range-scoped free text with optional quantity/unit and
-        // an optional canonical ingredient (docs/M8_PLAN.md §1.8, §2.2).
+        // an optional canonical ingredient.
         group.MapPost("/manual", CreateManualItemAsync).RequirePermission(PermissionKeys.GroceriesEdit);
         group.MapPatch("/manual/{id:long}", UpdateManualItemAsync)
             .RequirePermission(PermissionKeys.GroceriesEdit);
@@ -204,12 +204,12 @@ public static class GroceryEndpoints
             .RequirePermission(PermissionKeys.GroceriesEdit);
 
         // Preferences are per-user hide-checked plus the remembered range; both
-        // read and write use groceries.view (docs/M8_PLAN.md §2.2).
+        // read and write use groceries.view.
         group.MapGet("/preferences", GetPreferencesAsync).RequirePermission(PermissionKeys.GroceriesView);
         group.MapPatch("/preferences", UpdatePreferencesAsync).RequirePermission(PermissionKeys.GroceriesView);
 
-        // Staples are a household-wide reusable catalog that is never auto-added;
-        // reads use groceries.view and writes groceries.edit (docs/M8_PLAN.md §1.9, §2.2).
+        // Staples are a household-wide reusable catalog that is never auto-added
+        // reads use groceries.view and writes groceries.edit.
         group.MapGet("/staples", GetStaplesAsync).RequirePermission(PermissionKeys.GroceriesView);
         group.MapPost("/staples", CreateStapleAsync).RequirePermission(PermissionKeys.GroceriesEdit);
         group.MapPatch("/staples/{id:long}", UpdateStapleAsync).RequirePermission(PermissionKeys.GroceriesEdit);
@@ -217,7 +217,7 @@ public static class GroceryEndpoints
             .RequirePermission(PermissionKeys.GroceriesEdit);
 
         // Household-shared check state keyed by the stable GroceryItemIdentity
-        // hash (docs/M8_PLAN.md §1.10, §2.2).
+        // hash.
         group.MapPost("/check", CheckAsync).RequirePermission(PermissionKeys.GroceriesEdit);
         group.MapPost("/uncheck", UncheckAsync).RequirePermission(PermissionKeys.GroceriesEdit);
 
@@ -467,7 +467,7 @@ public static class GroceryEndpoints
         };
     }
 
-    // ---- Staples (M8-05) -------------------------------------------------
+    // Staples
 
     private static async Task<IResult> GetStaplesAsync(
         HttpContext context,
@@ -673,7 +673,7 @@ public static class GroceryEndpoints
         };
     }
 
-    // ---- Check state (M8-06) ---------------------------------------------
+    // Check state
 
     private static Task<IResult> CheckAsync(
         HttpContext context,

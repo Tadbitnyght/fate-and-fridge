@@ -14,12 +14,11 @@ import type { PrintMonth } from './printRange'
 import { useCalendarRange } from './useCalendar'
 
 /**
- * One printable calendar month (M10-01/M10-03/M10-04). A non-interactive table
+ * One printable calendar month. A non-interactive table
  * mirroring the calendar's month grid: a month/year heading plus day cells that
  * carry the day number and the recipe or special-event text. It deliberately
  * omits every interactive affordance and every excluded datum (meal photos, lock
  * icons, notes, diner count, restaurant/location text).
- *
  * The month auto-shrinks to fit one page via a measurement-based font-size
  * scale (see `printScale.ts`); the whole month — month/year heading and grid —
  * is measured and scaled so the heading is part of the fit budget. When it
@@ -61,7 +60,7 @@ export function CalendarPrintMonth({
   const [scale, setScale] = useState(1)
   const [spill, setSpill] = useState(false)
 
-  // Deterministic auto-shrink (M10-03). Measure the whole month's natural
+  // Deterministic auto-shrink. Measure the whole month's natural
   // height once per data change, dividing out the scale already applied so the
   // measurement is independent of it; setting an unchanged value is a no-op for
   // React, so this settles after a single pass. The available height comes from

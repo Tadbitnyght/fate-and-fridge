@@ -20,17 +20,15 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
-    // Mobile audit projects (M14-03, docs/M14_PLAN.md §1.7). They run the
-    // M14-appropriate hermetic specs only: the dedicated mobile audit
+    // Mobile audit projects. They run the
+    // device-appropriate hermetic specs only: the dedicated mobile audit
     // (`e2e/mobile.spec.ts`: no horizontal overflow, 44 px tap targets, dialog
     // focus handling) and the axe matrix re-run at the device viewports.
-    //
     // The older specs stay in the desktop project on purpose: several assert
     // desktop presentation — e.g. `reference-data.spec.ts` requires a visible
     // `columnheader`, which the <= 40rem card layout hides by design — so
     // running them under phone emulation would test the CSS breakpoint, not the
-    // product. Making that whole suite mobile-aware is not M14-03 scope.
-    //
+    // product. Making that whole suite mobile-aware is not scope.
     // Both projects deliberately use the Chromium engine: CI installs only
     // Chromium, and the app's behaviour under test (layout, focus, CSS) is
     // engine-independent here. `iPhone 13` keeps the iOS viewport, device

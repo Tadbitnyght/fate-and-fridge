@@ -18,16 +18,15 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace FateAndFridge.Api.Tests;
 
 /// <summary>
-/// HTTP-level verification of the M6 reroll route (docs/M6_PLAN.md §1.11,
-/// docs/RANDOMIZER.md §13): blank fill, replacement with reset metadata, the
+/// HTTP-level verification of the M6 reroll route: blank fill, replacement with reset metadata, the
 /// single atomic history row with metadata, historical/locked/vacation/
 /// no-candidate failures, and the permission matrix. The clock is injected so
 /// "today" is deterministic; the injected RNG is irrelevant because the valid
 /// assertions never depend on which Normal recipe wins.
 /// </summary>
 [Trait("Category", "Integration")]
-[Collection(M1SetupCollection.Name)]
-public sealed class RandomizerEndpointsIntegrationTests(M1SetupFixture fixture) : IAsyncLifetime
+[Collection(SetupCollection.Name)]
+public sealed class RandomizerEndpointsIntegrationTests(SetupFixture fixture) : IAsyncLifetime
 {
     private const string CalendarPath = "/api/v1/calendar";
     private const string AdminPassword = "root horse battery staple";
